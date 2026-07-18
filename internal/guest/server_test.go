@@ -205,6 +205,41 @@ func TestHandshakeVerifiesManifestIdentityAndRequiresDeadline(t *testing.T) {
 	}
 }
 
+func TestVerifyHelloProtocolMinorNegotiation(t *testing.T) {
+	role := session.RoleWorkstation
+	capabilities, err := Capabilities(role)
+	if err != nil {
+		t.Fatal(err)
+	}
+	protoRole, err := ProtoRole(role)
+	if err != nil {
+		t.Fatal(err)
+	}
+	expected := HandshakeExpectation{
+		Role: role, ImageDigest: "sha256:image", SourceCommit: "source-commit",
+		Capabilities: capabilities,
+	}
+	response := func(minor uint32) *privatevmv1.GuestHelloResponse {
+		return &privatevmv1.GuestHelloResponse{
+			ApiVersion: &privatevmv1.ApiVersion{Major: APIMajor, Minor: minor},
+			Role:       protoRole, ImageDigest: expected.ImageDigest, SourceCommit: expected.SourceCommit,
+			Capabilities: slices.Clone(capabilities),
+			BootNonce:    append([]byte{1}, make([]byte, BootNonceSize-1)...),
+			OsRelease:    "26.05", GuestdVersion: "test",
+		}
+	}
+
+	expected.MinimumProtocolMinor = APIMinor + 1
+	if err := VerifyHello(response(APIMinor), expected); status.Code(err) != codes.FailedPrecondition || !strings.Contains(err.Error(), "GUEST_PROTOCOL_VERSION_MISMATCH") {
+		t.Fatalf("lower guest minor error = %v", err)
+	}
+
+	expected.MinimumProtocolMinor = APIMinor
+	if err := VerifyHello(response(APIMinor+1), expected); err != nil {
+		t.Fatalf("higher guest minor was rejected: %v", err)
+	}
+}
+
 func TestTransferStreamRequiresAuthenticatedBeginContext(t *testing.T) {
 	token := mustToken(t, 0x55)
 	config := testConfig(t, session.RoleWorkstation, token)

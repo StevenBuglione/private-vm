@@ -8,8 +8,18 @@ After `NIX-001` commits `flake.lock`:
 nix develop
 go test ./...
 buf lint
+buf generate
+git diff --exit-code -- gen
+test -z "$(git ls-files --others --exclude-standard -- gen)"
+buf breaking --against '.git#branch=main'
 nix flake check
 ```
+
+`buf generate` removes stale generated files before invoking the immutable
+plugin version/revision pins in `buf.gen.yaml`. A clean checkout must remain
+unchanged after regeneration. When preparing a pull request, replace the branch
+selector `branch=main` with `ref=<exact-base-commit>`, yielding
+`.git#ref=<exact-base-commit>`.
 
 Build a CLI:
 

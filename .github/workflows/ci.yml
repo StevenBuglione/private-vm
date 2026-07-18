@@ -38,14 +38,23 @@ jobs:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
           persist-credentials: false
+          fetch-depth: 0
       - uses: DeterminateSystems/nix-installer-action@ef8a148080ab6020fd15196c2084a2eea5ff2d25 # v22
       - name: Flake evaluation and checks
         run: nix flake check --print-build-logs
+      - name: Protobuf lint, breaking, and generated-code drift
+        env:
+          BUF_BREAKING_AGAINST: ${{ github.event_name == 'pull_request' && format('.git#ref={0}', github.event.pull_request.base.sha) || format('.git#ref={0}', github.event.before) }}
+        run: |
+          nix develop --command buf lint
+          nix develop --command buf generate
+          git diff --exit-code -- gen
+          test -z "$(git ls-files --others --exclude-standard -- gen)"
+          nix develop --command buf breaking --against "$BUF_BREAKING_AGAINST"
       - name: Static and vulnerability analysis
         run: |
           nix develop --command staticcheck ./...
           nix develop --command govulncheck ./...
-          nix develop --command buf lint
           nix develop --command python3 tools/validate_schemas.py
           nix develop --command python3 tools/validate_examples.py
       - name: Secret scan
