@@ -60,6 +60,13 @@ transfer-state/
 
 The host mounting this **outer** filesystem does not mount or parse guest content.
 
+The storage implementation passes the random LUKS key through inherited file
+descriptor 3 to `cryptsetup`; argv and environment contain no key bytes. Loop
+selection is validated before attachment. The outer ext4 mount is
+`nodev,nosuid,noexec`, contains only allowlisted opaque filenames, and is torn
+down in the order mount → mapper → loop → key → ciphertext. A failed cleanup
+step retains the key and ciphertext so the same cleanup owner can retry safely.
+
 ## Small-session tmpfs mode
 
 Allowed only when planner proves:
@@ -74,6 +81,11 @@ guest RAM
 ```
 
 Do not rely on sparse virtual size; use conservative expected allocated bytes.
+
+Small mode uses a per-session tmpfs submount with an explicit byte limit and
+`nodev,nosuid,noexec`; it does not rely on the capacity of the shared `/run`
+mount alone. Planning includes guest RAM, expected allocated writes, and the
+larger of 4 GiB or 20% total RAM as host reserve before selecting this mode.
 
 ## Key handling
 

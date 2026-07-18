@@ -80,8 +80,9 @@ in {
           "/run/private-vm"
           "/var/lib/private-vm"
           "/dev"
-          "/sys"
+          "/sys/fs/cgroup"
         ];
+        Delegate = true;
         CapabilityBoundingSet = [
           "CAP_NET_ADMIN"
           "CAP_SYS_ADMIN"
@@ -89,8 +90,10 @@ in {
           "CAP_DAC_OVERRIDE"
           "CAP_CHOWN"
           "CAP_MKNOD"
+          "CAP_IPC_LOCK"
         ];
         LimitCORE = 0;
+        LimitMEMLOCK = "infinity";
       };
     };
 
