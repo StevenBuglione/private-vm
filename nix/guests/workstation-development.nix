@@ -1,18 +1,10 @@
-{ pkgs, ... }:
+{ guestBundle, ... }:
 {
-  imports = [ ./workstation-office.nix ];
-  environment.systemPackages = with pkgs; [
-    git
-    openssh
-    curl
-    jq
-    go
-    jdk
-    kotlin
-    rustc
-    cargo
-    python3
-    nodejs
-    vscodium
+  imports = [ ./workstation-common.nix ];
+  assertions = [
+    {
+      assertion = guestBundle == "development";
+      message = "workstation-development image requires the development bundle";
+    }
   ];
 }

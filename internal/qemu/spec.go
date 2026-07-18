@@ -188,8 +188,9 @@ func (s Spec) Args() ([]string, error) {
 			"-device", "virtio-vga",
 			"-device", "virtio-keyboard-pci",
 			"-device", "virtio-mouse-pci",
+			"-device", "virtio-serial-pci,id=spice-serial",
 			"-chardev", "spicevmc,id=spiceagent,name=vdagent",
-			"-device", "virtserialport,chardev=spiceagent,name=com.redhat.spice.0",
+			"-device", "virtserialport,bus=spice-serial.0,chardev=spiceagent,name=com.redhat.spice.0",
 		)
 	}
 	args = append(args, diskArgs("root", s.Root)...)

@@ -229,6 +229,11 @@ func (c Config) Validate() error {
 	if c.Desktop.Viewer != "remote-viewer" {
 		return errors.New("only remote-viewer is supported")
 	}
+	switch c.Desktop.Bundle {
+	case "basic", "office", "development":
+	default:
+		return errors.New("desktop bundle must be basic, office, or development")
+	}
 	if c.USB.DefaultFilesystem != "luks2-ext4" {
 		return errors.New("only luks2-ext4 USB output is supported")
 	}

@@ -1,10 +1,10 @@
-{ pkgs, ... }:
+{ guestBundle, ... }:
 {
-  imports = [ ./workstation-basic.nix ];
-  environment.systemPackages = with pkgs; [
-    libreoffice-fresh
-    hunspell
-    hunspellDicts.en_US
-    keepassxc
+  imports = [ ./workstation-common.nix ];
+  assertions = [
+    {
+      assertion = guestBundle == "office";
+      message = "workstation-office image requires the office bundle";
+    }
   ];
 }

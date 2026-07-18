@@ -54,22 +54,46 @@ password: locked
 home: session overlay
 ```
 
-Base applications:
+The role-neutral XFCE module contains the display manager, shell components,
+locked local user, NetworkManager service, and SPICE agent only. It explicitly
+excludes the upstream module's optional media player, image/text viewers,
+terminal, screenshot/task-manager tools, audio controls, thumbnailer, GVFS,
+UDisks integration, and NetworkManager applet. Its screen saver and
+ModemManager are disabled because the locked disposable account has no unlock
+credential and the typed QEMU models expose no modem hardware. Workstation
+applications are selected from the versioned catalog in
+`project/workstation-bundles.json`; downloader and scanner images do not inherit
+Firefox or workstation document viewers.
+
+The catalog's `openssh-client` identifier maps to a client-only pinned OpenSSH
+derivation. The SSH daemon, daemon helpers, SFTP server, server configuration,
+and moduli file are removed from that output; the image also disables the sshd
+unit and SSH-agent startup.
+
+The `basic` bundle contains:
 
 - Firefox
-- VSCodium
-- LibreOffice for office/development bundles
-- XFCE terminal
-- Thunar
+- Git and OpenSSH client
+- curl and jq
+- KeePassXC
+- XFCE Terminal and Thunar
 - Mousepad
 - Evince
 - Ristretto
 - File Roller
-- Git
-- OpenSSH client
-- curl/jq
-- KeePassXC
 - Zenity for guestd status/warnings
+
+The `office` bundle adds LibreOffice, Hunspell, and the US English dictionary.
+The `development` bundle includes the office bundle plus VSCodium, Go, JDK,
+Kotlin, Gradle, Rust/Cargo, Python, Node.js, GCC, GDB, CMake, GNU Make, and
+pkg-config.
+
+Each image embeds the selected, sorted logical package list at
+`/etc/private-vm/workstation-bundle.json`. Nix maps every catalog identifier to
+one pinned package and fails evaluation on an unknown, duplicate, unsorted, or
+wrong-bundle declaration. The catalog is exact for user-facing workstation
+applications; the fixed XFCE shell and support components described above are
+shared infrastructure rather than bundle entries.
 
 No guest should contain user credentials at image-build time.
 
@@ -85,21 +109,16 @@ No guest should contain user credentials at image-build time.
 - no host integration
 - profile destroyed with overlay
 
-## Development bundle
-
-Include:
-
-- Go 1.26 toolchain
-- JDK
-- Kotlin compiler/Gradle tooling as selected by locked Nixpkgs
-- Rust stable
-- Python
-- Node.js
-- common compilers and build tools
-- VSCodium
+NixOS installs these controls through `programs.firefox`, not as an unused
+policy declaration. Managed preferences also disable form/password history,
+telemetry, account sync, profile import, crash-session resume and submission,
+prefetch and network prediction, WebRTC, and post-update/first-run pages. The
+graphical session also sets Mozilla's crash-reporter disable environment flag.
+The policy file and effective session environment are verified during the
+desktop boot test.
 
 Do not bake GitHub tokens, SSH keys, package registry credentials, or mutable
-language caches.
+language caches into any development image.
 
 ## Scanner desktop
 

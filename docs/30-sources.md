@@ -60,5 +60,12 @@ Verified on 2026-07-18.
 - Go downloads; current stable at verification was Go 1.26.5:
   https://go.dev/dl/
 
+## Desktop
+
+- Mozilla Firefox enterprise policy templates:
+  https://mozilla.github.io/policy-templates/
+- Mozilla Firefox crash reporter environment controls:
+  https://firefox-source-docs.mozilla.org/toolkit/crashreporter/crashreporter/
+
 External behavior can change. The implementation must pin dependencies and keep
 source assumptions covered by CI rather than relying on this list indefinitely.

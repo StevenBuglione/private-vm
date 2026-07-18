@@ -55,3 +55,11 @@ func TestDefaultsValidate(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestValidateRejectsUnpublishedDesktopBundle(t *testing.T) {
+	cfg := Defaults()
+	cfg.Desktop.Bundle = "research"
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("expected unpublished workstation bundle to be rejected")
+	}
+}

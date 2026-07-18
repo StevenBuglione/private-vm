@@ -78,9 +78,7 @@
           "enum": [
             "basic",
             "office",
-            "development",
-            "media",
-            "research"
+            "development"
           ],
           "default": "development"
         },

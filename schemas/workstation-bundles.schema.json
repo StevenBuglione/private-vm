@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://private-vm.dev/schema/workstation-bundles-v1.json",
+  "title": "private-vm workstation bundle catalog",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "project": {
+      "const": "private-vm"
+    },
+    "role": {
+      "const": "workstation"
+    },
+    "bundles": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "basic": {
+          "$ref": "#/$defs/packageList"
+        },
+        "office": {
+          "$ref": "#/$defs/packageList"
+        },
+        "development": {
+          "$ref": "#/$defs/packageList"
+        }
+      },
+      "required": [
+        "basic",
+        "office",
+        "development"
+      ]
+    }
+  },
+  "required": [
+    "schema_version",
+    "project",
+    "role",
+    "bundles"
+  ],
+  "$defs": {
+    "packageList": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 64,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z0-9]+([.-][a-z0-9]+)*$"
+      }
+    }
+  }
+}
