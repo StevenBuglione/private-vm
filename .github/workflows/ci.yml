@@ -41,6 +41,15 @@ jobs:
       - uses: DeterminateSystems/nix-installer-action@ef8a148080ab6020fd15196c2084a2eea5ff2d25 # v22
       - name: Flake evaluation and checks
         run: nix flake check --print-build-logs
+      - name: Static and vulnerability analysis
+        run: |
+          nix develop --command staticcheck ./...
+          nix develop --command govulncheck ./...
+          nix develop --command buf lint
+          nix develop --command python3 tools/validate_schemas.py
+          nix develop --command python3 tools/validate_examples.py
+      - name: Secret scan
+        run: nix develop --command gitleaks dir . --redact --no-banner --exit-code 1
 
   repository-policy:
     runs-on: ubuntu-latest
@@ -51,7 +60,7 @@ jobs:
           fetch-depth: 0
       - name: Reject shell product logic
         run: |
-          if find . -path './.git' -prune -o -type f \( -name '*.sh' -o -name '*.bash' \) -print | grep -q .; then
+          if find . -path './.git' -prune -o -path './vendor' -prune -o -type f \( -name '*.sh' -o -name '*.bash' \) -print | grep -q .; then
             echo "Shell product files are prohibited."
             exit 1
           fi

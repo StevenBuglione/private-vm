@@ -89,6 +89,7 @@
               gotools
               gopls
               govulncheck
+              go-tools
               golangci-lint
               gitleaks
               buf
