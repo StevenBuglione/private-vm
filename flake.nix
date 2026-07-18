@@ -69,23 +69,10 @@
         let
           pkgs = pkgsFor system;
         in
-        pkgs.buildGoModule {
-          pname = "private-vm";
+        import ./nix/package.nix {
+          inherit pkgs sourceCommit sourceDirty;
           version = projectVersion;
           src = self;
-          vendorHash = null;
-          subPackages = [
-            "cmd/private-vm"
-            "cmd/private-vmd"
-            "cmd/private-vm-guestd"
-          ];
-          ldflags = [
-            "-s"
-            "-w"
-            "-X github.com/StevenBuglione/private-vm/internal/buildinfo.Version=${projectVersion}"
-            "-X github.com/StevenBuglione/private-vm/internal/buildinfo.Commit=${sourceCommit}"
-            "-X github.com/StevenBuglione/private-vm/internal/buildinfo.Dirty=${sourceDirty}"
-          ];
         };
 
       guestdFor =
@@ -98,6 +85,7 @@
           version = projectVersion;
           src = self;
           vendorHash = null;
+          env.CGO_ENABLED = 0;
           subPackages = [ "cmd/private-vm-guestd" ];
           ldflags = [
             "-s"
@@ -315,6 +303,52 @@
           test -x "${scannerPath}/bin/xfce4-terminal"
           touch "$out"
         '';
+
+      staticBinariesCheckFor =
+        system:
+        let
+          pkgs = pkgsFor system;
+          hostPackage = privateVMFor system;
+          modulePackage =
+            (nixpkgs.lib.nixosSystem {
+              inherit system;
+              modules = [
+                ./nix/modules/host.nix
+                { system.stateVersion = "26.05"; }
+              ];
+            }).config.services.private-vm.package;
+          rolePackages = map (guestdFor system) [
+            "workstation"
+            "downloader"
+            "scanner"
+            "exporter"
+          ];
+          binaries = [
+            "${hostPackage}/bin/private-vm"
+            "${hostPackage}/bin/private-vmd"
+            "${hostPackage}/bin/private-vm-guestd"
+            "${modulePackage}/bin/private-vm"
+            "${modulePackage}/bin/private-vmd"
+            "${modulePackage}/bin/private-vm-guestd"
+          ]
+          ++ map (package: "${package}/bin/private-vm-guestd") rolePackages;
+          verifyBinary = binary: ''
+            test -x "${binary}"
+            ${pkgs.go}/bin/go version -m "${binary}" | grep -F 'CGO_ENABLED=0'
+            if ${pkgs.binutils}/bin/readelf -l "${binary}" | grep -q 'Requesting program interpreter'; then
+              echo "dynamic ELF interpreter found: ${binary}" >&2
+              exit 1
+            fi
+            if ${pkgs.binutils}/bin/readelf -d "${binary}" 2>/dev/null | grep -q '(NEEDED)'; then
+              echo "dynamic dependency found: ${binary}" >&2
+              exit 1
+            fi
+          '';
+        in
+        pkgs.runCommand "private-vm-static-binaries" { } ''
+          ${nixpkgs.lib.concatMapStringsSep "\n" verifyBinary binaries}
+          touch "$out"
+        '';
     in
     {
       packages = forAllSystems (
@@ -433,6 +467,7 @@
             go-race = sourceCheck "private-vm-go-race" ''
               go test -race ./...
             '';
+            static-binaries = staticBinariesCheckFor system;
           };
         in
         baseChecks

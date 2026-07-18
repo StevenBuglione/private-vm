@@ -21,6 +21,25 @@ unchanged after regeneration. When preparing a pull request, replace the branch
 selector `branch=main` with `ref=<exact-base-commit>`, yielding
 `.git#ref=<exact-base-commit>`.
 
+## Go dependencies
+
+Use the exact toolchain declared in `go.mod`; do not permit an automatic
+toolchain download when reproducing CI:
+
+```bash
+GOTOOLCHAIN=local go env GOVERSION
+GOTOOLCHAIN=local go mod verify
+GOTOOLCHAIN=local go mod tidy -diff
+GOTOOLCHAIN=local go mod vendor
+git diff --exit-code -- go.mod go.sum vendor
+test -z "$(git ls-files --others --exclude-standard -- go.mod go.sum vendor)"
+GOTOOLCHAIN=local govulncheck ./...
+```
+
+The first command must print `go1.26.5`. Regeneration must leave `go.mod`,
+`go.sum`, and the committed `vendor/` tree unchanged. Dependency updates commit
+those three inputs together and must pass vulnerability review.
+
 Build a CLI:
 
 ```bash

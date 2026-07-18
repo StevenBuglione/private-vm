@@ -1,19 +1,22 @@
-{ config, lib, pkgs, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 
 let
   cfg = config.services.private-vm;
-in {
+in
+{
   options.services.private-vm = {
     enable = lib.mkEnableOption "private-vm privileged orchestration daemon";
 
     package = lib.mkOption {
       type = lib.types.package;
-      default = pkgs.buildGoModule {
-        pname = "private-vm";
-        version = "0.0.0-dev";
+      default = import ../package.nix {
+        inherit pkgs;
         src = ../..;
-        vendorHash = null;
-        subPackages = [ "cmd/private-vm" "cmd/private-vmd" "cmd/private-vm-guestd" ];
       };
       description = "Package containing private-vm, private-vmd, and guestd.";
     };
@@ -47,7 +50,11 @@ in {
       virt-viewer
     ];
 
-    boot.kernelModules = [ "kvm" "vhost_vsock" "tun" ];
+    boot.kernelModules = [
+      "kvm"
+      "vhost_vsock"
+      "tun"
+    ];
     services.usbguard.enable = true;
     services.usbguard.implicitPolicyTarget = "block";
 
