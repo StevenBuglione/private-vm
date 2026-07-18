@@ -209,12 +209,13 @@ func (m *Manager) run(item *entry) {
 			cmd.response <- commandResult{snapshot: item.session.Snapshot()}
 		case commandCleanup:
 			snapshot, err := m.cleanup(item)
-			cmd.response <- commandResult{snapshot: snapshot, err: err}
 			if err == nil {
 				m.finish(item, snapshot)
 				close(item.done)
+				cmd.response <- commandResult{snapshot: snapshot}
 				return
 			}
+			cmd.response <- commandResult{snapshot: snapshot, err: err}
 		}
 	}
 }
