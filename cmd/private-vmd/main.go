@@ -1,30 +1,103 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
+	"os/exec"
+	"os/signal"
+	"os/user"
+	"path/filepath"
+	"strconv"
+	"syscall"
+	"time"
 
 	"github.com/StevenBuglione/private-vm/internal/buildinfo"
+	"github.com/StevenBuglione/private-vm/internal/config"
+	"github.com/StevenBuglione/private-vm/internal/daemon"
+	"github.com/StevenBuglione/private-vm/internal/session"
 )
 
 func main() {
+	if err := run(); err != nil {
+		fmt.Fprintf(os.Stderr, "private-vmd: %v\n", err)
+		os.Exit(1)
+	}
+}
+
+func run() error {
 	var version bool
 	var configPath string
+	var groupName string
 	flag.BoolVar(&version, "version", false, "print build information")
-	flag.StringVar(&configPath, "config", "/etc/private-vm/config.toml", "configuration file")
+	flag.StringVar(&configPath, "config", config.DefaultSystemPath, "system configuration file")
+	flag.StringVar(&groupName, "group", "private-vm", "authorized daemon socket group")
 	flag.Parse()
 
 	if version {
-		_ = json.NewEncoder(os.Stdout).Encode(buildinfo.Current())
-		return
+		return json.NewEncoder(os.Stdout).Encode(buildinfo.Current())
 	}
-
-	fmt.Fprintf(os.Stderr,
-		"private-vmd starter scaffold: daemon server is not implemented.\n"+
-			"configuration path: %s\n"+
-			"Implement Phase 3 in docs/25-implementation-roadmap.md.\n",
-		configPath)
-	os.Exit(20)
+	if os.Geteuid() != 0 {
+		return errors.New("private-vmd must run as root")
+	}
+	cfg, err := config.LoadDaemon(configPath)
+	if err != nil {
+		return err
+	}
+	group, err := user.LookupGroup(groupName)
+	if err != nil {
+		return fmt.Errorf("resolve daemon group %q: %w", groupName, err)
+	}
+	gid, err := strconv.Atoi(group.Gid)
+	if err != nil || gid < 0 {
+		return fmt.Errorf("daemon group %q has an invalid numeric ID", groupName)
+	}
+	store, err := session.NewStore(cfg.Runtime.Directory)
+	if err != nil {
+		return err
+	}
+	manager, err := session.NewManager(store, 4)
+	if err != nil {
+		return err
+	}
+	pkcheck, err := exec.LookPath("pkcheck")
+	if err != nil {
+		return errors.New("pkcheck is required for destructive USB authorization")
+	}
+	pkcheck, err = filepath.Abs(pkcheck)
+	if err != nil {
+		return fmt.Errorf("resolve pkcheck: %w", err)
+	}
+	service := &daemon.Service{Sessions: manager, Polkit: daemon.PKCheck{Binary: pkcheck}}
+	server, err := daemon.NewServer(daemon.ServerOptions{
+		SocketPath: filepath.Join(cfg.Runtime.Directory, "control.sock"),
+		OwnerUID:   0,
+		GroupGID:   gid,
+		Service:    service,
+		Authorizer: daemon.Authorizer{AllowedGroup: uint32(gid)},
+	})
+	if err != nil {
+		return err
+	}
+	if err := server.Listen(); err != nil {
+		return err
+	}
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+	done := make(chan error, 1)
+	go func() { done <- server.Serve() }()
+	select {
+	case err := <-done:
+		return err
+	case <-ctx.Done():
+		shutdownContext, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		if err := server.Shutdown(shutdownContext); err != nil {
+			return fmt.Errorf("bounded daemon shutdown: %w", err)
+		}
+		return <-done
+	}
 }

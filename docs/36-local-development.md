@@ -21,7 +21,7 @@ nix build .#private-vm
 Build one image:
 
 ```bash
-nix build .#workstation-basic-image
+nix build .#image-workstation-basic
 ```
 
 Do not boot an unreviewed image with host directories, credentials or USB
@@ -69,3 +69,19 @@ PRIVATE_VM_DESTRUCTIVE_TESTS=1 go test -tags=usb_destructive ./integration/usb
 ```
 
 The implementation must verify the test device identity again inside the test.
+
+## Privileged RPC boundary tests
+
+The daemon integration suite uses a temporary Unix socket and requires no root
+privileges. It verifies `SO_PEERCRED` ownership, group authorization behavior,
+socket mode `0660`, API-version rejection, volatile `0700` session records,
+serialized transitions, and retryable idempotent cleanup:
+
+```bash
+nix develop --command go test -race ./internal/daemon ./internal/session
+```
+
+`private-vmd` itself refuses to run without effective UID 0. It loads only the
+system file passed by `--config`; it never layers root's user configuration into
+the privileged service. The production socket is always
+`/run/private-vm/control.sock`, owned by `root:private-vm`.

@@ -16,7 +16,15 @@ The daemon obtains Unix peer credentials from the accepted socket and associates
 the RPC with UID, GID, and PID. The socket is owned by `root:private-vm` and mode
 `0660`.
 
+Authorization is derived from kernel `SO_PEERCRED`. Supplementary group evidence
+is read from the still-connected peer's `/proc/<pid>/status` and rejected if the
+effective UID changed or the evidence is unavailable. Client protobuf fields are
+never trusted as identity. Per-session access is then restricted to the creating
+UID (with UID 0 reserved for recovery administration).
+
 Destructive USB operations also require a Polkit authorization decision.
+The Polkit process subject includes PID, kernel start time, and UID to prevent a
+numeric-PID reuse race.
 
 ### Daemon to guest
 

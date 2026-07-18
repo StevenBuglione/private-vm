@@ -121,6 +121,23 @@ func Load(explicitPath string) (Config, error) {
 	return cfg, cfg.Validate()
 }
 
+// LoadDaemon loads only the system/explicit daemon configuration. A privileged
+// service must never inherit root's per-user configuration layer.
+func LoadDaemon(path string) (Config, error) {
+	if path == "" {
+		path = DefaultSystemPath
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return Config{}, fmt.Errorf("read daemon configuration %q: %w", path, err)
+	}
+	cfg := Defaults()
+	if err := decodeInto(data, &cfg); err != nil {
+		return Config{}, fmt.Errorf("daemon configuration %q: %w", path, err)
+	}
+	return cfg, cfg.Validate()
+}
+
 func Decode(r io.Reader) (Config, error) {
 	data, err := io.ReadAll(io.LimitReader(r, 1<<20+1))
 	if err != nil {

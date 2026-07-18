@@ -1,6 +1,8 @@
 package config
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -20,6 +22,20 @@ require_attestation = true
 	}
 	if cfg.ImageSource.Repository != OfficialRepository || !cfg.Strict {
 		t.Fatalf("unexpected configuration: %#v", cfg)
+	}
+}
+
+func TestLoadDaemonUsesOnlyExplicitFile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "daemon.toml")
+	if err := os.WriteFile(path, []byte("schema_version = 1\nstrict = false\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := LoadDaemon(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Strict {
+		t.Fatal("explicit daemon configuration was not applied")
 	}
 }
 
