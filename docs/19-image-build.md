@@ -28,7 +28,10 @@ packages.x86_64-linux.image-scanner
 packages.x86_64-linux.image-exporter
 nixosModules.default
 checks.x86_64-linux.default
+checks.x86_64-linux.desktop-role-isolation
 checks.x86_64-linux.guest-common
+checks.x86_64-linux.workstation-bundles
+checks.x86_64-linux.workstation-desktop
 devShells.x86_64-linux.default
 ```
 
@@ -104,6 +107,7 @@ It must not contain installation/provisioning scripts.
 nix build .#image-workstation-basic
 nix build .#image-downloader
 nix build .#checks.x86_64-linux.guest-common
+nix build .#checks.x86_64-linux.workstation-desktop
 ```
 
 ## Image tests
@@ -125,3 +129,18 @@ minimal common guest and verifies locked accounts, disabled SSH and sudo,
 tmpfs-backed writable logs/temporary paths, volatile journald, an exact embedded
 role identity, a matching compiled guestd identity, no TCP/UDP listeners, and a
 VSOCK listener on port 4050. The role-specific image tests extend this baseline.
+
+The `workstation-desktop` test forces TCG, supplies a SPICE vdagent channel with
+clipboard and agent file transfer disabled, and proves LightDM autologin reaches
+an XFCE session for the locked `private` user. It also verifies both agent
+processes and the channel, workspace directory permissions, exact basic-bundle
+manifest, exact locked Firefox enterprise policy values and crash-reporter
+environment, client-only OpenSSH output, absence of implicit XFCE applications,
+SSH/sudo services, and TCP/UDP listeners. The separate
+`workstation-bundles` check evaluates and compares the embedded manifests for
+all three official workstation variants.
+
+The `desktop-role-isolation` check builds the downloader and scanner system
+paths, proves their role-required tools are installed, and rejects workstation
+viewers, preview helpers, NetworkManager applet, and other implicit XFCE
+applications from those roles.

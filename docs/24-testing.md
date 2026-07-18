@@ -74,6 +74,28 @@ not use a production capability or any VPN credential. NixOS test
 instrumentation may add its own control channel; that channel is not present in
 the canonical image derivations.
 
+The workstation desktop gate is run with:
+
+```bash
+nix build .#checks.x86_64-linux.workstation-desktop
+```
+
+It boots with explicit TCG and no test VLAN, waits for LightDM autologin and the
+XFCE session, verifies both SPICE agent processes and the virtio channel,
+validates the exact versioned basic-bundle manifest, installed/forbidden desktop
+applications, locked Firefox policy values, and crash-reporter environment, and
+repeats the no-SSH-server/sudo and no-TCP/UDP checks. The pure
+`workstation-bundles` check compares all three embedded bundle manifests to the
+catalog. NixOS VM instrumentation uses its own test machine and devices, so this
+is an image boot gate rather than a production launch-spec proof. Host QEMU
+argument tests separately prove that the only SPICE transport is the session
+Unix socket and that clipboard, agent file transfer, USB redirection, and TCP
+fallback are absent.
+
+`checks.x86_64-linux.desktop-role-isolation` separately evaluates the downloader
+and scanner system paths so an implicit XFCE application cannot silently leak
+across role boundaries.
+
 ### KVM acceptance
 
 Run locally and optionally on a public documented volunteer/self-hosted runner:

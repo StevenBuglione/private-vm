@@ -4,6 +4,7 @@
   networking.hostName = "scanner";
 
   environment.systemPackages = with pkgs; [
+    xfce4-terminal
     clamav
     file
     binutils

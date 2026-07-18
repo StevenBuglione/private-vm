@@ -1,5 +1,5 @@
 {
-  config,
+  guestRole,
   lib,
   pkgs,
   ...
@@ -8,7 +8,25 @@
 {
   services.xserver.enable = true;
   services.xserver.desktopManager.xfce.enable = true;
+  services.xserver.desktopManager.xfce.enableScreensaver = false;
   services.xserver.displayManager.lightdm.enable = true;
+
+  # The upstream XFCE module includes several convenience applications. Keep
+  # the shared role layer to the desktop shell; each role declares its own
+  # user-facing tools explicitly.
+  environment.xfce.excludePackages = with pkgs; [
+    mousepad
+    networkmanagerapplet
+    parole
+    pavucontrol
+    ristretto
+    xfce4-power-manager
+    xfce4-pulseaudio-plugin
+    xfce4-screenshooter
+    xfce4-taskmanager
+    xfce4-terminal
+    xfce4-volumed-pulse
+  ];
 
   services.displayManager.autoLogin = {
     enable = true;
@@ -16,44 +34,36 @@
   };
 
   services.spice-vdagentd.enable = true;
+  services.gnome.gcr-ssh-agent.enable = false;
+  services.gnome.gnome-keyring.enable = guestRole == "workstation";
+  programs.thunar.enable = lib.mkForce (builtins.elem guestRole [
+    "workstation"
+    "scanner"
+  ]);
+  services.gvfs.enable = lib.mkForce false;
+  services.tumbler.enable = lib.mkForce false;
+  services.udisks2.enable = lib.mkForce false;
+
+  # XFCE manages its own optional SSH agent independently of the NixOS and GCR
+  # agent settings. Keep its system default disabled for every graphical role.
+  environment.etc."xdg/xfce4/xfconf/xfce-perchannel-xml/xfce4-session.xml".text = ''
+    <?xml version="1.0" encoding="UTF-8"?>
+    <channel name="xfce4-session" version="1.0">
+      <property name="startup" type="empty">
+        <property name="ssh-agent" type="empty">
+          <property name="enabled" type="bool" value="false" locked="private"/>
+        </property>
+      </property>
+    </channel>
+  '';
 
   users.users.private = {
     isNormalUser = true;
     createHome = true;
+    homeMode = "0700";
     hashedPassword = "!";
-    extraGroups = [ "networkmanager" ];
   };
 
   networking.networkmanager.enable = true;
-
-  environment.systemPackages = with pkgs; [
-    firefox
-    xfce4-terminal
-    thunar
-    ristretto
-    mousepad
-    evince
-    file-roller
-  ];
-
-  # Desktop policy is additionally enforced by private-vm-guestd on first boot.
-  programs.firefox.policies = {
-    DisableAppUpdate = true;
-    DisableFirefoxAccounts = true;
-    DisableFirefoxStudies = true;
-    DisableFormHistory = true;
-    DisablePasswordReveal = true;
-    DisablePocket = true;
-    DisableTelemetry = true;
-    DontCheckDefaultBrowser = true;
-    OfferToSaveLogins = false;
-    PasswordManagerEnabled = false;
-    Preferences = {
-      "browser.privatebrowsing.autostart" = true;
-      "browser.download.useDownloadDir" = true;
-      "browser.download.dir" = "/home/private/Downloads";
-      "dom.security.https_only_mode" = true;
-      "media.peerconnection.ice.proxy_only_if_behind_proxy" = true;
-    };
-  };
+  networking.modemmanager.enable = false;
 }

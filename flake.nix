@@ -20,6 +20,7 @@
       sourceCommit = self.rev or (self.dirtyRev or "unknown");
       sourceDirty = if self ? rev then "false" else "true";
       flakeLockSHA256 = builtins.hashFile "sha256" ./flake.lock;
+      workstationBundleCatalog = builtins.fromJSON (builtins.readFile ./project/workstation-bundles.json);
 
       capabilitiesFor =
         role:
@@ -130,11 +131,20 @@
           ];
         };
 
+      testTokenFor =
+        system: (pkgsFor system).writeText "private-vm-test-capability" "0123456789abcdef0123456789abcdef";
+
+      tcgQEMUOptionsFor = system: [
+        "-machine"
+        "accel=tcg"
+        "-fw_cfg"
+        "name=opt/private-vm/session-capability,file=${testTokenFor system}"
+      ];
+
       commonGuestTestFor =
         system:
         let
           pkgs = pkgsFor system;
-          testToken = pkgs.writeText "private-vm-test-capability" "0123456789abcdef0123456789abcdef";
         in
         pkgs.testers.runNixOSTest {
           name = "private-vm-common-guest";
@@ -151,12 +161,7 @@
             virtualisation.memorySize = 1024;
             virtualisation.cores = 2;
             virtualisation.vlans = [ ];
-            virtualisation.qemu.options = [
-              "-machine"
-              "accel=tcg"
-              "-fw_cfg"
-              "name=opt/private-vm/session-capability,file=${testToken}"
-            ];
+            virtualisation.qemu.options = tcgQEMUOptionsFor system;
           };
           testScript = ''
             machine.wait_for_unit("multi-user.target")
@@ -178,6 +183,138 @@
             machine.succeed("ss -H -l -A vsock | grep -E '(^|:)4050([[:space:]]|$)'")
           '';
         };
+
+      workstationDesktopTestFor =
+        system:
+        let
+          pkgs = pkgsFor system;
+          bundleManifest = builtins.toJSON {
+            schema_version = workstationBundleCatalog.schema_version;
+            project = workstationBundleCatalog.project;
+            role = workstationBundleCatalog.role;
+            bundle = "basic";
+            packages = workstationBundleCatalog.bundles.basic;
+          };
+          bundleManifestSHA256 = builtins.hashString "sha256" bundleManifest;
+        in
+        pkgs.testers.runNixOSTest {
+          name = "private-vm-workstation-desktop";
+          requiredFeatures.kvm = false;
+          # The reduced qemu_test package intentionally omits SPICE. This gate
+          # exercises the production Unix-SPICE configuration, so use the
+          # pinned host-only QEMU build while retaining TCG acceleration.
+          qemu.package = pkgs.qemu_kvm;
+          node.specialArgs = guestArgsFor system "workstation" "basic";
+          nodes.machine = { lib, ... }: {
+            imports = [
+              ./nix/guests/image-base.nix
+              ./nix/guests/workstation-basic.nix
+            ];
+            users.users.root.hashedPasswordFile = lib.mkForce null;
+            virtualisation.memorySize = 2048;
+            virtualisation.cores = 2;
+            virtualisation.vlans = [ ];
+            virtualisation.qemu.options = tcgQEMUOptionsFor system ++ [
+              "-spice"
+              "unix=on,addr=spice.sock,disable-ticketing=on,disable-copy-paste=on,disable-agent-file-xfer=on"
+              "-device"
+              "virtio-serial-pci,id=spice-serial"
+              "-chardev"
+              "spicevmc,id=spiceagent,name=vdagent"
+              "-device"
+              "virtserialport,bus=spice-serial.0,chardev=spiceagent,name=com.redhat.spice.0"
+            ];
+          };
+          testScript = ''
+            machine.wait_for_unit("graphical.target")
+            machine.wait_for_unit("display-manager.service")
+            machine.wait_for_x()
+            machine.wait_until_succeeds("loginctl list-sessions --no-legend | grep -E '[[:space:]]private[[:space:]]'")
+            machine.succeed("test -x /run/current-system/sw/bin/startxfce4")
+            machine.wait_until_succeeds("loginctl user-status private --no-pager | grep -F xfce4-session")
+            machine.wait_until_succeeds("loginctl user-status private --no-pager | grep -F spice-vdagent")
+            machine.succeed("systemctl is-active spice-vdagentd.service")
+            machine.succeed("test -c /dev/virtio-ports/com.redhat.spice.0")
+            machine.succeed("spice_root=$(dirname $(dirname $(readlink -f $(command -v spice-vdagent)))); test -e $spice_root/etc/xdg/autostart/spice-vdagent.desktop")
+            machine.succeed("grep -Eq '^private:![^:]*:' /etc/shadow")
+            machine.succeed("test $(stat -c '%U:%G:%a' /home/private) = private:users:700")
+            machine.succeed("test $(stat -c '%U:%G:%a' /home/private/Downloads) = private:users:700")
+            machine.succeed("test $(stat -c '%U:%G:%a' /home/private/Inbox) = private:users:700")
+            machine.succeed("test $(stat -c '%U:%G:%a' /home/private/Export) = private:users:700")
+            machine.succeed("test $(sha256sum /etc/private-vm/workstation-bundle.json | cut -d ' ' -f 1) = ${bundleManifestSHA256}")
+            machine.succeed("jq -e '.policies.DisableTelemetry == true and .policies.DisableFirefoxStudies == true and .policies.DownloadDirectory == \"''${home}/Downloads\" and .policies.NetworkPrediction == false and .policies.Preferences[\"browser.crashReports.unsubmittedCheck.autoSubmit2\"] == {Status: \"locked\", Value: false} and .policies.Preferences[\"browser.crashReports.unsubmittedCheck.enabled\"] == {Status: \"locked\", Value: false} and .policies.Preferences[\"browser.privatebrowsing.autostart\"] == {Status: \"locked\", Value: true} and .policies.Preferences[\"browser.tabs.crashReporting.sendReport\"] == {Status: \"locked\", Value: false} and .policies.Preferences[\"media.peerconnection.enabled\"] == {Status: \"locked\", Value: false} and .policies.Preferences[\"network.prefetch-next\"] == {Status: \"locked\", Value: false}' /etc/firefox/policies/policies.json")
+            machine.succeed("test -x /run/current-system/sw/bin/firefox")
+            machine.succeed("xfce_pid=$(loginctl user-status private --no-pager | grep -F xfce4-session | grep -oE '[0-9]+' | head -n1); test -n \"$xfce_pid\"; tr '\\0' '\\n' < /proc/$xfce_pid/environ | grep -Fx MOZ_CRASHREPORTER_DISABLE=1")
+            machine.succeed("for command in curl evince file-roller firefox git jq keepassxc mousepad ristretto ssh thunar xfce4-terminal zenity; do command -v $command >/dev/null || exit 1; done")
+            machine.succeed("for command in gvfsd nm-applet parole pavucontrol tumblerd udisksctl xfce4-screenshooter xfce4-taskmanager; do ! command -v $command >/dev/null || exit 1; done")
+            machine.succeed("! systemctl is-enabled sshd.service")
+            machine.succeed("! systemctl --global is-enabled gcr-ssh-agent.service; ! systemctl --global is-enabled gcr-ssh-agent.socket")
+            machine.succeed("su -s /bin/sh private -c 'xfconf-query -c xfce4-session -p /startup/ssh-agent/enabled | grep -Fx false'")
+            machine.succeed("su -s /bin/sh private -c 'xfconf-query -c xfce4-session -p /startup/ssh-agent/enabled -s true; xfconf-query -c xfce4-session -p /startup/ssh-agent/enabled | grep -Fx false'")
+            machine.succeed("! loginctl user-status private --no-pager | grep -E '(ssh-agent|gcr-ssh-agent)'")
+            machine.succeed("test ! -e /run/current-system/sw/bin/sshd")
+            machine.succeed("ssh_root=$(dirname $(dirname $(readlink -f $(command -v ssh)))); test ! -e $ssh_root/etc/ssh/sshd_config; test ! -e $ssh_root/libexec/sftp-server; test ! -e $ssh_root/libexec/sshd-auth; test ! -e $ssh_root/libexec/sshd-session")
+            machine.succeed("test ! -e /run/current-system/sw/bin/sudo")
+            listeners = machine.succeed("ss -H -lntu")
+            assert listeners.strip() == "", f"unexpected TCP/UDP listeners: {listeners}"
+          '';
+        };
+
+      workstationBundlesCheckFor =
+        system:
+        let
+          pkgs = pkgsFor system;
+          modules = {
+            basic = ./nix/guests/workstation-basic.nix;
+            office = ./nix/guests/workstation-office.nix;
+            development = ./nix/guests/workstation-development.nix;
+          };
+          compareBundle =
+            bundle:
+            let
+              configuration = guest system "workstation" bundle modules.${bundle};
+              expected = builtins.toJSON {
+                schema_version = workstationBundleCatalog.schema_version;
+                project = workstationBundleCatalog.project;
+                role = workstationBundleCatalog.role;
+                inherit bundle;
+                packages = workstationBundleCatalog.bundles.${bundle};
+              };
+              actual = configuration.config.environment.etc."private-vm/workstation-bundle.json".text;
+            in
+            "cmp ${pkgs.writeText "workstation-${bundle}-expected.json" expected} ${pkgs.writeText "workstation-${bundle}-actual.json" actual}";
+        in
+        pkgs.runCommand "private-vm-workstation-bundles" { } ''
+          ${nixpkgs.lib.concatMapStringsSep "\n" compareBundle [
+            "basic"
+            "office"
+            "development"
+          ]}
+          touch "$out"
+        '';
+
+      desktopRoleIsolationCheckFor =
+        system:
+        let
+          pkgs = pkgsFor system;
+          downloaderPath = (guest system "downloader" null ./nix/guests/downloader.nix).config.system.path;
+          scannerPath = (guest system "scanner" null ./nix/guests/scanner.nix).config.system.path;
+        in
+        pkgs.runCommand "private-vm-desktop-role-isolation" { } ''
+          for command in firefox file-roller gvfsd libreoffice mousepad nm-applet parole pavucontrol ristretto thunar tumblerd udisksctl xfce4-screenshooter xfce4-taskmanager xfce4-terminal; do
+            test ! -e "${downloaderPath}/bin/$command"
+          done
+          test -x "${downloaderPath}/bin/qbittorrent"
+          test -x "${downloaderPath}/bin/wg"
+
+          for command in evince file-roller firefox gvfsd mousepad nm-applet parole pavucontrol qbittorrent ristretto tumblerd udisksctl xfce4-screenshooter xfce4-taskmanager; do
+            test ! -e "${scannerPath}/bin/$command"
+          done
+          test -x "${scannerPath}/bin/clamscan"
+          test -x "${scannerPath}/bin/thunar"
+          test -x "${scannerPath}/bin/xfce4-terminal"
+          touch "$out"
+        '';
     in
     {
       packages = forAllSystems (
@@ -300,7 +437,10 @@
         in
         baseChecks
         // nixpkgs.lib.optionalAttrs (system == "x86_64-linux") {
+          desktop-role-isolation = desktopRoleIsolationCheckFor system;
           guest-common = commonGuestTestFor system;
+          workstation-bundles = workstationBundlesCheckFor system;
+          workstation-desktop = workstationDesktopTestFor system;
         }
       );
 

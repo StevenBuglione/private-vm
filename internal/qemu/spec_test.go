@@ -35,12 +35,22 @@ func TestWorkstationArgsUseOnlyUnixDisplayAndExpectedDevices(t *testing.T) {
 		t.Fatal(err)
 	}
 	joined := strings.Join(args, " ")
-	for _, required := range []string{"disable-copy-paste=on", "disable-agent-file-xfer=on", "vhost-vsock-pci", "virtio-rng-pci", "virtio-net-pci"} {
+	for _, required := range []string{
+		"unix=on,addr=" + spec.SPICESocket,
+		"disable-copy-paste=on",
+		"disable-agent-file-xfer=on",
+		"spicevmc",
+		"virtio-serial-pci,id=spice-serial",
+		"virtserialport,bus=spice-serial.0,chardev=spiceagent,name=com.redhat.spice.0",
+		"vhost-vsock-pci",
+		"virtio-rng-pci",
+		"virtio-net-pci",
+	} {
 		if !strings.Contains(joined, required) {
 			t.Fatalf("missing required argument %q: %s", required, joined)
 		}
 	}
-	for _, forbidden := range []string{"virtiofs", "9p", "usb-redir", "-daemonize"} {
+	for _, forbidden := range []string{"virtiofs", "9p", "usb-redir", "usb-host", "-daemonize", "port="} {
 		if strings.Contains(joined, forbidden) {
 			t.Fatalf("forbidden argument %q present", forbidden)
 		}

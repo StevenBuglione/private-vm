@@ -11,6 +11,7 @@ pairs = [
     ("schemas/guest-image-identity.schema.json", "examples/guest-image-identity.example.json"),
     ("schemas/image-manifest.schema.json", "examples/image-manifest.example.json"),
     ("schemas/scan-report.schema.json", "examples/scan-report.example.json"),
+    ("schemas/workstation-bundles.schema.json", "project/workstation-bundles.json"),
 ]
 
 for schema_rel, example_rel in pairs:

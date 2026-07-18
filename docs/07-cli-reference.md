@@ -68,7 +68,7 @@ Produces the complete resource and security plan without launching QEMU.
 ### Desktop
 
 ```text
-private-vm desktop start [--bundle basic|office|development|media|research]
+private-vm desktop start [--bundle basic|office|development]
                          [--audio] [--memory SIZE] [--cpus N]
 private-vm desktop connect [--session ID]
 private-vm desktop status [--session ID]
