@@ -137,6 +137,18 @@ Use pidfds where available. Store:
 Never kill a PID solely by numeric value after a daemon restart without verifying
 identity.
 
+The supervisor requires pidfd support, records the kernel process start time and
+the executable device/inode, and places QEMU in a delegated child of the
+daemon's cgroups-v2 scope with memory, swap, CPU, and PID limits. Shutdown uses
+QMP `system_powerdown` followed by bounded TERM/KILL escalation. One goroutine
+owns `Wait`; cgroup and pidfd cleanup run from that owner after expected and
+unexpected exits.
+
+The argument renderer is role-aware. Exporter specs reject SPICE, GPU, network,
+audio, and quarantine devices. Scanner scan specs require `-nic none` and one
+read-only quarantine disk. Workstation and downloader specs require a TAP and
+cannot receive devices outside their role matrix.
+
 ## CPU and memory
 
 Defaults:
