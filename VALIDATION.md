@@ -1,6 +1,12 @@
-# Blueprint validation report
+# Historical blueprint validation report
 
 Generated on 2026-07-18.
+
+> This report records the original handoff environment and is retained as
+> provenance. It is superseded by the current CI results, task issue evidence,
+> and executable workflows documented under `docs/`. Statements below about
+> missing dependencies, unavailable Nix, or future GO-001/NIX-001 work describe
+> only that historical handoff and are not current project status.
 
 ## Completed successfully
 

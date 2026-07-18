@@ -2,17 +2,19 @@
 
 ## Toolchain
 
-Initial baseline:
+Frozen v1 baseline:
 
-- Go 1.26
-- modules and vendoring for releases
-- `CGO_ENABLED=0` where possible
+- `go 1.26.0` language and module baseline
+- exact `toolchain go1.26.5` with `GOTOOLCHAIN=local` in CI
+- committed `go.sum` and `vendor/` dependency closure
+- `CGO_ENABLED=0` for all product binaries
 - race tests on Linux
 - reproducible build flags
 - version information injected through `-ldflags`
 
 Guest graphical applications may require cgo only if a future native UI is
-introduced. The initial guest daemon remains static.
+introduced. Such a change requires an ADR; the host binaries and role-compiled
+guest daemons are currently statically linked.
 
 ## Binary responsibilities
 
@@ -68,9 +70,15 @@ and request-context interceptors, exact role service registration, and verified
 Hello handshake. Linux dialing uses a cancellable socket connect directly;
 there is no detached dial goroutine.
 
-## Dependency recommendations
+## Dependency policy
 
-Pin current stable releases in `go.mod` during Phase 0:
+Direct and indirect module versions are pinned in `go.mod` and `go.sum`. The
+committed `vendor/` tree is the release and Nix build input; Nix sets
+`vendorHash = null` so it cannot silently fetch or substitute a different
+module closure. CI verifies the exact Go release, module checksums, a clean
+`go mod tidy -diff`, and byte-for-byte vendor regeneration before tests.
+
+Current and planned narrowly scoped dependencies include:
 
 - Cobra for CLI
 - gRPC-Go and protobuf
@@ -83,8 +91,9 @@ Pin current stable releases in `go.mod` during Phase 0:
 - `golang.org/x/term`
 - Prometheus is not required; no telemetry server
 
-The starter scaffold has no third-party dependencies so it can compile before
-dependency pinning.
+Dependency changes update `go.mod`, `go.sum`, and `vendor/` together in a
+reviewed pull request. `govulncheck ./...` is blocking for unresolved applicable
+findings; a suppression requires a documented risk decision and expiry.
 
 ## External command wrappers
 

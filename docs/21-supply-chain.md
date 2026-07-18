@@ -88,7 +88,14 @@ registry is user-configured.
 
 ## Dependency policy
 
-- Go modules pinned in `go.mod` and vendored for release
+- Go uses the `go 1.26.0` language baseline and exact `toolchain go1.26.5`;
+  CI sets `GOTOOLCHAIN=local` and rejects any other resolved release
+- Go modules are pinned in `go.mod` and `go.sum`; the complete `vendor/` tree is
+  committed and is the only dependency source used by Nix/release builds
+- CI runs `go mod verify`, requires `go mod tidy -diff` to be empty,
+  regenerates `vendor/`, and rejects modified, deleted, or untracked output
+- `govulncheck ./...` blocks unresolved applicable findings; any temporary
+  exception requires a documented owner, justification, remediation and expiry
 - Nix dependencies pinned in `flake.lock`
 - GitHub actions pinned by full SHA
 - Renovate/Dependabot opens reviewed PRs
