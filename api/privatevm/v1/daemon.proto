@@ -6,19 +6,22 @@ option go_package = "github.com/StevenBuglione/private-vm/gen/privatevm/v1;priva
 
 import "privatevm/v1/common.proto";
 
-service PrivateVMDaemon {
+service PrivateVMDaemonService {
   rpc GetVersion(Empty) returns (VersionResponse);
   rpc Doctor(DoctorRequest) returns (DoctorResponse);
-  rpc Plan(PlanRequest) returns (PlanResponse);
+  rpc PlanSession(PlanSessionRequest) returns (PlanSessionResponse);
   rpc CreateSession(CreateSessionRequest) returns (Session);
   rpc GetSession(GetSessionRequest) returns (Session);
-  rpc WatchSession(GetSessionRequest) returns (stream SessionEvent);
-  rpc StartSession(StartSessionRequest) returns (Session);
-  rpc StopSession(StopSessionRequest) returns (Session);
+  rpc ListSessions(ListSessionsRequest) returns (ListSessionsResponse);
+  rpc StartRole(StartRoleRequest) returns (Session);
+  rpc StopRole(StopRoleRequest) returns (Session);
   rpc AbortSession(AbortSessionRequest) returns (Session);
-  rpc ImportWorkspace(stream ImportChunk) returns (TransferReceipt);
-  rpc ExportWorkspace(ExportWorkspaceRequest) returns (stream ExportChunk);
-  rpc EnrollUSB(EnrollUSBRequest) returns (USBEnrollment);
+  rpc CleanupSession(CleanupSessionRequest) returns (Session);
+  rpc StreamEvents(GetSessionRequest) returns (stream SessionEvent);
+  rpc ImportWorkspaceFile(stream TransferFrame) returns (TransferReceipt);
+  rpc ExportWorkspaceFile(ExportWorkspaceRequest) returns (stream TransferFrame);
+  rpc ClaimUSB(ClaimUSBRequest) returns (USBClaim);
+  rpc ReleaseUSB(ReleaseUSBRequest) returns (Empty);
 }
 
 message VersionResponse {
@@ -44,7 +47,7 @@ message ResourceRequest {
   uint64 scratch_bytes = 4;
 }
 
-message PlanRequest {
+message PlanSessionRequest {
   RequestContext context = 1;
   GuestRole role = 2;
   string image_bundle = 3;
@@ -52,7 +55,7 @@ message PlanRequest {
   string policy_name = 5;
 }
 
-message PlanResponse {
+message PlanSessionResponse {
   repeated Diagnostic diagnostics = 1;
   ResourceRequest resolved_resources = 2;
   string image_digest = 3;
@@ -67,15 +70,12 @@ message CreateSessionRequest {
   ResourceRequest resources = 5;
 }
 
-message GetSessionRequest {
-  RequestContext context = 1;
-}
+message GetSessionRequest { RequestContext context = 1; }
+message ListSessionsRequest { RequestContext context = 1; }
+message ListSessionsResponse { repeated Session sessions = 1; }
+message StartRoleRequest { RequestContext context = 1; }
 
-message StartSessionRequest {
-  RequestContext context = 1;
-}
-
-message StopSessionRequest {
+message StopRoleRequest {
   RequestContext context = 1;
   bool discard_unexported = 2;
   bool require_clean = 3;
@@ -83,61 +83,46 @@ message StopSessionRequest {
 
 message AbortSessionRequest {
   RequestContext context = 1;
-  string reason = 2;
+  string reason_code = 2;
 }
+
+message CleanupSessionRequest { RequestContext context = 1; }
 
 message Session {
   string id = 1;
-  GuestRole role = 2;
-  SessionPhase phase = 3;
-  string image_digest = 4;
-  string display_socket = 5;
-  repeated Diagnostic diagnostics = 6;
+  uint32 owner_uid = 2;
+  GuestRole role = 3;
+  SessionPhase phase = 4;
+  string workflow_state = 5;
+  string image_digest = 6;
+  repeated Diagnostic diagnostics = 7;
 }
 
 message SessionEvent {
   uint64 sequence = 1;
-  Session session = 2;
-  Progress progress = 3;
-  Diagnostic diagnostic = 4;
-}
-
-message ImportChunk {
-  RequestContext context = 1;
-  FileDescriptor descriptor = 2;
-  uint64 offset = 3;
-  bytes data = 4;
-  bool final = 5;
-}
-
-message TransferReceipt {
-  FileDescriptor descriptor = 1;
-  Hash receiver_digest = 2;
+  string event_code = 2;
+  Session session = 3;
+  Progress progress = 4;
+  Diagnostic diagnostic = 5;
+  int64 unix_nanos = 6;
 }
 
 message ExportWorkspaceRequest {
   RequestContext context = 1;
-  string relative_path = 2;
+  string output_id = 2;
 }
 
-message ExportChunk {
-  FileDescriptor descriptor = 1;
-  uint64 offset = 2;
-  bytes data = 3;
-  bool final = 4;
-}
-
-message EnrollUSBRequest {
+message ClaimUSBRequest {
   RequestContext context = 1;
-  string sysfs_path = 2;
-  bool prepare = 3;
+  string enrollment_id = 2;
 }
 
-message USBEnrollment {
-  string enrollment_id = 1;
-  string vendor_id = 2;
-  string product_id = 3;
-  string serial = 4;
-  repeated string interfaces = 5;
-  uint64 capacity_bytes = 6;
+message USBClaim {
+  string claim_id = 1;
+  string enrollment_id = 2;
+}
+
+message ReleaseUSBRequest {
+  RequestContext context = 1;
+  string claim_id = 2;
 }

@@ -1,0 +1,32 @@
+name: Bug report
+description: Report a reproducible private-vm defect without sensitive data.
+title: "bug: "
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: Do not include VPN material, magnets, filenames, hashes, USB identifiers, or session content. Report security issues privately as described in SECURITY.md.
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Redacted reproduction
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: observed
+    attributes:
+      label: Observed behavior and safe error code
+    validations:
+      required: true

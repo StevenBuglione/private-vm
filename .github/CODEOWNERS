@@ -1,0 +1,12 @@
+* @StevenBuglione
+/api/ @StevenBuglione
+/docs/ @StevenBuglione
+/docs/adrs/ @StevenBuglione
+/nix/ @StevenBuglione
+/internal/network/ @StevenBuglione
+/internal/storage/ @StevenBuglione
+/internal/qemu/ @StevenBuglione
+/internal/scan/ @StevenBuglione
+/internal/usb/ @StevenBuglione
+/internal/attestation/ @StevenBuglione
+/.github/workflows/ @StevenBuglione

@@ -25,3 +25,23 @@ func TestUnknownCommand(t *testing.T) {
 		t.Fatalf("code=%d", code)
 	}
 }
+
+func TestDocumentedCommandSurface(t *testing.T) {
+	root := newRootCommand(&globalOptions{}, &bytes.Buffer{}, &bytes.Buffer{})
+	for _, name := range []string{"init", "plan", "desktop", "workspace", "torrent", "scan", "vpn", "usb", "images", "session", "policy", "config", "system", "run", "completion"} {
+		if command, _, err := root.Find([]string{name}); err != nil || command == root {
+			t.Fatalf("missing command %s: %v", name, err)
+		}
+	}
+}
+
+func TestMagnetArgvFlagDoesNotExist(t *testing.T) {
+	root := newRootCommand(&globalOptions{}, &bytes.Buffer{}, &bytes.Buffer{})
+	command, _, err := root.Find([]string{"torrent", "add"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if command.Flags().Lookup("magnet") != nil {
+		t.Fatal("magnet argv flag must not exist")
+	}
+}

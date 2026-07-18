@@ -8,62 +8,56 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   go:
     runs-on: ubuntu-latest
     steps:
-      # Deliberately avoids mutable third-party actions. The runner fetches the
-      # exact event SHA directly. Replace this with actions/checkout pinned to a
-      # full reviewed commit SHA if preferred.
-      - name: Fetch exact source revision
-        env:
-          REPOSITORY: ${{ github.repository }}
-          REVISION: ${{ github.sha }}
-        run: |
-          git init .
-          git remote add origin "https://github.com/${REPOSITORY}.git"
-          git fetch --depth=1 origin "${REVISION}"
-          git checkout --detach FETCH_HEAD
-
-      - name: Tool versions
-        run: |
-          go version
-          python3 --version
-
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version: 1.26.5
+          cache: true
       - name: Format
+        run: test -z "$(gofmt -l cmd internal)"
+      - name: Unit and race tests
         run: |
-          test -z "$(gofmt -l cmd internal)"
-
-      - name: Test
-        run: |
+          go test ./...
           go test -race ./...
-          go vet ./...
-          python3 tools/validate_schemas.py
+      - name: Vet
+        run: go vet ./...
+
+  nix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          persist-credentials: false
+      - uses: DeterminateSystems/nix-installer-action@ef8a148080ab6020fd15196c2084a2eea5ff2d25 # v22
+      - name: Flake evaluation and checks
+        run: nix flake check --print-build-logs
 
   repository-policy:
     runs-on: ubuntu-latest
     steps:
-      - name: Fetch exact source revision
-        env:
-          REPOSITORY: ${{ github.repository }}
-          REVISION: ${{ github.sha }}
-        run: |
-          git init .
-          git remote add origin "https://github.com/${REPOSITORY}.git"
-          git fetch --depth=1 origin "${REVISION}"
-          git checkout --detach FETCH_HEAD
-
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          persist-credentials: false
+          fetch-depth: 0
       - name: Reject shell product logic
         run: |
           if find . -path './.git' -prune -o -type f \( -name '*.sh' -o -name '*.bash' \) -print | grep -q .; then
             echo "Shell product files are prohibited."
             exit 1
           fi
-
-      - name: Reject obvious generated secrets
+      - name: Reject credentials and torrent identifiers
         run: |
-          if grep -RInE --exclude-dir=.git \
-            '(PrivateKey[[:space:]]*=[[:space:]]*[A-Za-z0-9+/=]{20,}|BEGIN (RSA|OPENSSH|EC) PRIVATE KEY)' .; then
-            echo "Potential secret or torrent identifier committed."
+          if git grep -nEI '(PrivateKey[[:space:]]*=[[:space:]]*[A-Za-z0-9+/=]{20,}|BEGIN (RSA|OPENSSH|EC) PRIVATE KEY|magnet:\?xt=urn:btih:)'; then
+            echo "Potential credential or torrent identifier committed."
             exit 1
           fi

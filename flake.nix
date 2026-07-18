@@ -53,20 +53,21 @@
           downloader = guest system ./nix/guests/downloader.nix;
           scanner = guest system ./nix/guests/scanner.nix;
           exporter = guest system ./nix/guests/exporter.nix;
-        in {
+          binaryPackages = {
           default = privateVMFor system;
           private-vm = privateVMFor system;
-
-          # NIX-001 must confirm the exact 26.05 image output name. The design
-          # target is config.system.build.images.qcow. Keeping this expression
-          # here makes the expected contract explicit for the coding agent.
-          workstation-basic-image = workstationBasic.config.system.build.images.qcow;
-          workstation-office-image = workstationOffice.config.system.build.images.qcow;
-          workstation-development-image = workstationDevelopment.config.system.build.images.qcow;
-          downloader-image = downloader.config.system.build.images.qcow;
-          scanner-image = scanner.config.system.build.images.qcow;
-          exporter-image = exporter.config.system.build.images.qcow;
-        });
+          private-vmd = privateVMFor system;
+          private-vm-guestd = privateVMFor system;
+          };
+          imagePackages = nixpkgs.lib.optionalAttrs (system == "x86_64-linux") {
+            image-workstation-basic = workstationBasic.config.system.build.images.qemu-efi;
+            image-workstation-office = workstationOffice.config.system.build.images.qemu-efi;
+            image-workstation-development = workstationDevelopment.config.system.build.images.qemu-efi;
+            image-downloader = downloader.config.system.build.images.qemu-efi;
+            image-scanner = scanner.config.system.build.images.qemu-efi;
+            image-exporter = exporter.config.system.build.images.qemu-efi;
+          };
+        in binaryPackages // imagePackages);
 
       apps = forAllSystems (system: {
         default = {
@@ -87,12 +88,17 @@
               go
               gotools
               gopls
+              govulncheck
+              golangci-lint
+              gitleaks
               buf
               protobuf
               protoc-gen-go
               protoc-gen-go-grpc
               qemu
               cryptsetup
+              e2fsprogs
+              util-linux
               nftables
               iproute2
               usbguard
@@ -102,23 +108,37 @@
               cosign
               zstd
               jq
+              (python3.withPackages (ps: [ ps.jsonschema ]))
             ];
           };
         });
 
-      checks = forAllSystems (system: {
-        go-test = (pkgsFor system).runCommand "private-vm-go-test" {
-          nativeBuildInputs = [ (pkgsFor system).go ];
-        } ''
-          export HOME="$TMPDIR/home"
-          mkdir -p "$HOME"
-          cp -R ${self} source
-          chmod -R u+w source
-          cd source
-          go test ./...
-          touch "$out"
-        '';
-      });
+      checks = forAllSystems (system:
+        let
+          pkgs = pkgsFor system;
+          python = pkgs.python3.withPackages (ps: [ ps.jsonschema ]);
+          sourceCheck = name: commands: pkgs.runCommand name {
+            nativeBuildInputs = [ pkgs.go pkgs.stdenv.cc python ];
+          } ''
+            export HOME="$TMPDIR/private-vm-home"
+            mkdir -p "$HOME"
+            cp -R ${self} source
+            chmod -R u+w source
+            cd source
+            ${commands}
+            touch "$out"
+          '';
+        in {
+          default = sourceCheck "private-vm-source-check" ''
+            go test ./...
+            go vet ./...
+            python3 tools/validate_schemas.py
+            python3 tools/validate_examples.py
+          '';
+          go-race = sourceCheck "private-vm-go-race" ''
+            go test -race ./...
+          '';
+        });
 
       nixosModules.default = import ./nix/modules/host.nix;
     };

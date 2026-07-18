@@ -5,7 +5,7 @@
   "type": "object",
   "additionalProperties": false,
   "properties": {
-    "version": {
+    "schema_version": {
       "const": 1
     },
     "strict": {
@@ -108,14 +108,6 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "profile_store": {
-          "enum": [
-            "none",
-            "systemd-credential",
-            "secret-service"
-          ],
-          "default": "none"
-        },
         "profile_name": {
           "type": "string"
         },
@@ -157,7 +149,7 @@
     }
   },
   "required": [
-    "version",
+    "schema_version",
     "image_source"
   ]
 }

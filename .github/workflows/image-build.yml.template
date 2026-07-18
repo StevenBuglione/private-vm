@@ -43,14 +43,16 @@ jobs:
           - exporter
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@FULL_COMMIT_SHA_REQUIRED
-      - uses: DeterminateSystems/nix-installer-action@FULL_COMMIT_SHA_REQUIRED
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          persist-credentials: false
+      - uses: DeterminateSystems/nix-installer-action@ef8a148080ab6020fd15196c2084a2eea5ff2d25 # v22
       - name: Free workspace and report capacity
         run: |
           df -h
           free -h
       - name: Build one image
-        run: nix build ".#${{ matrix.image }}-image" --print-build-logs
+        run: nix build ".#image-${{ matrix.image }}" --print-build-logs
       - name: Boot smoke test under TCG
         run: go run ./cmd/private-vm images test --role "${{ matrix.image }}" --backend tcg
       - name: Package, SBOM, push and attest

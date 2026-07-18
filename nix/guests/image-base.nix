@@ -7,13 +7,12 @@
 
   system.stateVersion = "26.05";
 
-  # NIX-001: validate these image options against the pinned NixOS 26.05
-  # build-image interface before considering this module production-ready.
-  image.format = "qcow";
-  image.fileName = "private-vm-${config.networking.hostName}.qcow2";
-
-  boot.loader.grub.enable = true;
-  boot.loader.grub.device = "/dev/vda";
+  # NixOS 26.05 exposes disk images as variants under system.build.images.
+  # qemu-efi supplies GPT/UEFI and the official disk-image builder.
+  image.modules.qemu-efi = {
+    image.format = "qcow2";
+    image.baseName = "private-vm-${config.networking.hostName}";
+  };
   boot.initrd.availableKernelModules = [ "virtio_pci" "virtio_blk" "virtio_scsi" "vsock" ];
   boot.kernelModules = [ "vmw_vsock_virtio_transport" ];
 
@@ -24,6 +23,7 @@
   security.sudo.enable = false;
 
   users.mutableUsers = false;
+  users.allowNoPasswordLogin = true;
   users.users.root.hashedPassword = "!";
 
   services.journald.extraConfig = ''

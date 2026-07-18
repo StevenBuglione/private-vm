@@ -95,7 +95,7 @@ in {
     };
 
     environment.etc."private-vm/config.toml".text = ''
-      version = 1
+      schema_version = 1
       strict = ${if cfg.strict then "true" else "false"}
 
       [image_source]

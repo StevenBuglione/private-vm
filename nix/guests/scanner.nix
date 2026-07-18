@@ -14,7 +14,7 @@
     exiftool
     imagemagick
     libreoffice-fresh
-    poppler_utils
+    poppler-utils
     ghostscript
   ];
 

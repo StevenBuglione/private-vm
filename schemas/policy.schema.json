@@ -5,7 +5,7 @@
   "type": "object",
   "additionalProperties": false,
   "properties": {
-    "version": {
+    "schema_version": {
       "const": 1
     },
     "name": {
@@ -106,7 +106,7 @@
     }
   },
   "required": [
-    "version",
+    "schema_version",
     "name",
     "mode",
     "limits",

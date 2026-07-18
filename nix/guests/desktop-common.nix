@@ -24,9 +24,9 @@
 
   environment.systemPackages = with pkgs; [
     firefox
-    xfce.xfce4-terminal
-    xfce.thunar
-    xfce.ristretto
+    xfce4-terminal
+    thunar
+    ristretto
     mousepad
     evince
     file-roller

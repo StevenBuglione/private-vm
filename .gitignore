@@ -1,8 +1,6 @@
 /result
 /result-*
 /dist
-/gen
-/vendor
 /.direnv
 /.devenv
 *.qcow2
@@ -13,3 +11,12 @@
 *.sock
 coverage.out
 .DS_Store
+
+# User-supplied credentials must never enter the repository.  Product fixtures
+# use generated keys and live under explicitly named testdata directories.
+/*.conf
+/*.key
+/.env
+/.env.*
+/.secrets/
+/.private/

@@ -4,6 +4,13 @@ modules:
 lint:
   use:
     - STANDARD
+  except:
+    # Streaming uses one explicitly discriminated TransferFrame wire type in
+    # both directions. Session and status envelopes are deliberately shared to
+    # keep their security validation identical across semantic RPCs.
+    - RPC_REQUEST_STANDARD_NAME
+    - RPC_RESPONSE_STANDARD_NAME
+    - RPC_REQUEST_RESPONSE_UNIQUE
 breaking:
   use:
     - FILE

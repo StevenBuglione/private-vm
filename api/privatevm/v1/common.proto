@@ -17,15 +17,12 @@ enum SessionPhase {
   SESSION_PHASE_CREATED = 1;
   SESSION_PHASE_PREFLIGHTED = 2;
   SESSION_PHASE_IMAGES_VERIFIED = 3;
-  SESSION_PHASE_BOOTING = 4;
-  SESSION_PHASE_READY = 5;
-  SESSION_PHASE_RUNNING = 6;
-  SESSION_PHASE_STOPPING = 7;
-  SESSION_PHASE_SUCCEEDED = 8;
-  SESSION_PHASE_REJECTED = 9;
-  SESSION_PHASE_ABORTING = 10;
-  SESSION_PHASE_DESTROYED = 11;
-  SESSION_PHASE_FAILED = 12;
+  SESSION_PHASE_STORAGE_READY = 4;
+  SESSION_PHASE_ACTIVE = 5;
+  SESSION_PHASE_STOPPING = 6;
+  SESSION_PHASE_ABORTING = 7;
+  SESSION_PHASE_DESTROYING = 8;
+  SESSION_PHASE_DESTROYED = 9;
 }
 
 message ApiVersion {
@@ -67,9 +64,53 @@ message Diagnostic {
   bool overridable = 5;
 }
 
+message ErrorDetail {
+  string code = 1;
+  string safe_message = 2;
+  string remediation = 3;
+  bool retryable = 4;
+  string session_state = 5;
+  repeated FieldViolation field_violations = 6;
+}
+
+message FieldViolation {
+  string field = 1;
+  string description = 2;
+}
+
 message Progress {
   string operation = 1;
   uint64 completed = 2;
   uint64 total = 3;
   string unit = 4;
+}
+
+message TransferBegin {
+  RequestContext context = 1;
+  string transfer_id = 2;
+  FileDescriptor descriptor = 3;
+}
+
+message TransferChunk {
+  uint64 sequence = 1;
+  bytes data = 2;
+}
+
+message TransferEnd {
+  uint64 total_size = 1;
+  Hash digest = 2;
+}
+
+message TransferFrame {
+  oneof frame {
+    TransferBegin begin = 1;
+    TransferChunk chunk = 2;
+    TransferEnd end = 3;
+  }
+}
+
+message TransferReceipt {
+  string transfer_id = 1;
+  FileDescriptor descriptor = 2;
+  Hash receiver_digest = 3;
 }

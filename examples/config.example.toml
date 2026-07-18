@@ -1,4 +1,4 @@
-version = 1
+schema_version = 1
 strict = true
 
 [image_source]
@@ -22,7 +22,6 @@ memory_bytes = 17179869184
 vcpus = 8
 
 [vpn]
-profile_store = "none"
 profile_name = "proton-p2p"
 disable_ipv6_if_not_tunneled = true
 

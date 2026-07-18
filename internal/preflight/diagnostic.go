@@ -17,6 +17,7 @@ type Diagnostic struct {
 }
 
 type Report struct {
-	Runnable    bool         `json:"runnable"`
-	Diagnostics []Diagnostic `json:"diagnostics"`
+	SchemaVersion int          `json:"schema_version"`
+	Runnable      bool         `json:"runnable"`
+	Diagnostics   []Diagnostic `json:"diagnostics"`
 }
