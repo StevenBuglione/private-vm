@@ -1,4 +1,9 @@
-{ config, lib, pkgs, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 
 {
   services.xserver.enable = true;
@@ -11,7 +16,6 @@
   };
 
   services.spice-vdagentd.enable = true;
-  services.qemuGuest.enable = true;
 
   users.users.private = {
     isNormalUser = true;

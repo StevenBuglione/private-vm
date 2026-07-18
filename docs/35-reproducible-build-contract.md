@@ -12,7 +12,10 @@ may introduce nondeterminism.
 - Go module and toolchain versions are pinned.
 - `flake.lock` is committed.
 - GitHub Actions use full commit SHAs or no external actions.
-- image manifests include source commit, workflow, NixOS version and lock digest.
+- embedded image identities include source commit, NixOS version, lock digest,
+  protocol version, role, and exact capabilities.
+- published image manifests add workflow identity, output digests, sizes, SBOM,
+  and provenance-related metadata.
 - OCI artifacts are addressed by digest.
 - SBOMs enumerate included packages.
 - provenance attestations bind artifacts to the release workflow.
@@ -22,10 +25,10 @@ may introduce nondeterminism.
 ## Independent rebuild modes
 
 ```bash
-nix build .#workstation-basic-image
-nix build .#downloader-image
-nix build .#scanner-image
-nix build .#exporter-image
+nix build .#image-workstation-basic
+nix build .#image-downloader
+nix build .#image-scanner
+nix build .#image-exporter
 go build -trimpath ./cmd/private-vm
 ```
 

@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "project": "private-vm",
+  "role": "workstation",
+  "bundle": "basic",
+  "architecture": "x86_64",
+  "nixos_version": "26.05",
+  "source_repository": "StevenBuglione/private-vm",
+  "source_commit": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "flake_lock_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "guest_api_major": 1,
+  "guest_api_minor": 0,
+  "guestd_version": "0.0.0-dev",
+  "capabilities": [
+    "desktop",
+    "guest-events",
+    "guest-shutdown",
+    "guest-status",
+    "network-warning",
+    "workspace-export",
+    "workspace-import"
+  ]
+}

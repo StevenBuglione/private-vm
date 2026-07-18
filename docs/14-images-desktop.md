@@ -31,9 +31,12 @@ aarch64 variants
 - no reusable password
 - no sudo for desktop user
 - volatile journald
-- volatile `/tmp`
+- tmpfs-backed `/tmp`, `/var/tmp`, and `/var/log`
+- no swap or resume device and no sleep, suspend, or hibernation targets
+- no coredumps or unattended Nix garbage collection
 - automatic guestd startup
 - guestd listens only on VSOCK
+- guestd has a strict systemd sandbox and device allowlist
 - no cloud-init
 - no host keys baked in
 - role and build metadata in `/etc/private-vm/image.json`
@@ -130,22 +133,34 @@ Applications are intentionally limited:
 - USB storage/filesystem drivers
 - checksum tools
 
-## Image manifest
+## Image identity and published manifest
 
-Every image includes and publishes:
+Every guest embeds `/etc/private-vm/image.json`, validated by
+`schemas/guest-image-identity.schema.json`. The embedded identity contains only
+facts available inside the immutable image:
 
 ```text
 schema version
-role
-bundle
+role and optional bundle
 architecture
 NixOS release
 flake lock SHA-256
-source repository
-source commit
-build workflow
-guest protocol
+source repository and commit
+guest protocol version
 guestd version
+exact sorted capability set
+```
+
+The role-specific `private-vm-guestd --version` record repeats its compiled
+role, exact capabilities, protocol version, source commit, and binary version.
+A generic packaging build reports `uncompiled` and refuses to serve.
+
+The separately published artifact manifest, validated by
+`schemas/image-manifest.schema.json`, adds release facts that cannot be embedded
+before the image exists:
+
+```text
+build workflow
 virtual disk format
 virtual size
 compressed/uncompressed digest
@@ -155,9 +170,9 @@ forbidden devices
 package/SBOM references
 ```
 
-The manifest capability set must exactly equal the compiled role map in
-`docs/09-rpc-protocol.md`. Extra, missing, or duplicate capabilities are a fatal
-handshake mismatch; capabilities do not silently negotiate across roles.
+Both identity records' capability sets must exactly equal the compiled role map
+in `docs/09-rpc-protocol.md`. Extra, missing, or duplicate capabilities are a
+fatal handshake mismatch; capabilities do not silently negotiate across roles.
 
 ## Update model
 

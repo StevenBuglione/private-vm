@@ -62,6 +62,18 @@ Use QEMU TCG in public CI for:
 - scanner no-network specialization
 - exporter headless behavior
 
+The checked-in common-guest boot test is run with:
+
+```bash
+nix build .#checks.x86_64-linux.guest-common
+```
+
+It injects a non-secret 32-byte test capability through an `fw_cfg` file,
+boots guestd, and verifies the common hardening and identity invariants. It does
+not use a production capability or any VPN credential. NixOS test
+instrumentation may add its own control channel; that channel is not present in
+the canonical image derivations.
+
 ### KVM acceptance
 
 Run locally and optionally on a public documented volunteer/self-hosted runner:

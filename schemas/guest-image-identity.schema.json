@@ -1,0 +1,199 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://private-vm.dev/schema/guest-image-identity-v1.json",
+  "title": "private-vm embedded guest image identity",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "project": {
+      "const": "private-vm"
+    },
+    "role": {
+      "enum": [
+        "workstation",
+        "downloader",
+        "scanner",
+        "exporter"
+      ]
+    },
+    "bundle": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "architecture": {
+      "enum": [
+        "x86_64",
+        "aarch64"
+      ]
+    },
+    "nixos_version": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64
+    },
+    "source_repository": {
+      "const": "StevenBuglione/private-vm"
+    },
+    "source_commit": {
+      "type": "string",
+      "pattern": "^(unknown|[0-9a-f]{40}(-dirty)?)$"
+    },
+    "flake_lock_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "guest_api_major": {
+      "const": 1
+    },
+    "guest_api_minor": {
+      "const": 0
+    },
+    "guestd_version": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64
+    },
+    "capabilities": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "uniqueItems": true
+    }
+  },
+  "required": [
+    "schema_version",
+    "project",
+    "role",
+    "bundle",
+    "architecture",
+    "nixos_version",
+    "source_repository",
+    "source_commit",
+    "flake_lock_sha256",
+    "guest_api_major",
+    "guest_api_minor",
+    "guestd_version",
+    "capabilities"
+  ],
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "role": {
+            "const": "workstation"
+          }
+        },
+        "required": [
+          "role"
+        ]
+      },
+      "then": {
+        "properties": {
+          "capabilities": {
+            "const": [
+              "desktop",
+              "guest-events",
+              "guest-shutdown",
+              "guest-status",
+              "network-warning",
+              "workspace-export",
+              "workspace-import"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "role": {
+            "const": "downloader"
+          }
+        },
+        "required": [
+          "role"
+        ]
+      },
+      "then": {
+        "properties": {
+          "capabilities": {
+            "const": [
+              "guest-events",
+              "guest-shutdown",
+              "guest-status",
+              "quarantine-seal",
+              "torrent-download",
+              "torrent-metadata",
+              "vpn-verification",
+              "wireguard-config"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "role": {
+            "const": "scanner"
+          }
+        },
+        "required": [
+          "role"
+        ]
+      },
+      "then": {
+        "properties": {
+          "capabilities": {
+            "const": [
+              "approved-export",
+              "definitions-update",
+              "guest-events",
+              "guest-shutdown",
+              "guest-status",
+              "inventory",
+              "offline-verification",
+              "reconstruct",
+              "scan",
+              "scan-report"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "role": {
+            "const": "exporter"
+          }
+        },
+        "required": [
+          "role"
+        ]
+      },
+      "then": {
+        "properties": {
+          "capabilities": {
+            "const": [
+              "guest-events",
+              "guest-shutdown",
+              "guest-status",
+              "usb-finalize",
+              "usb-inspect",
+              "usb-prepare",
+              "usb-verify",
+              "usb-write"
+            ]
+          }
+        }
+      }
+    }
+  ]
+}
