@@ -8,6 +8,7 @@ from jsonschema import Draft202012Validator
 
 ROOT = Path(__file__).resolve().parents[1]
 pairs = [
+    ("schemas/guest-image-identity.schema.json", "examples/guest-image-identity.example.json"),
     ("schemas/image-manifest.schema.json", "examples/image-manifest.example.json"),
     ("schemas/scan-report.schema.json", "examples/scan-report.example.json"),
 ]

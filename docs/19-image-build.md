@@ -28,6 +28,7 @@ packages.x86_64-linux.image-scanner
 packages.x86_64-linux.image-exporter
 nixosModules.default
 checks.x86_64-linux.default
+checks.x86_64-linux.guest-common
 devShells.x86_64-linux.default
 ```
 
@@ -36,14 +37,10 @@ compiled role and refuses to serve. Each image consumes only its matching
 role-specific guestd output, which prevents a boot-time argument from changing
 the API surface.
 
-The initial Nix task must choose and lock one of the supported NixOS 26.05 image
-interfaces:
-
-- `system.build.images` / `nixos-rebuild build-image`
-- or a project wrapper around the official `image/repart.nix` plus deterministic
-  `qemu-img` conversion
-
-Do not use the archived `nixos-generators` project as a long-term dependency.
+Images use the NixOS 26.05 `image.modules.qemu-efi` configuration and
+`system.build.images.qemu-efi` output. This produces the canonical GPT/UEFI
+QCOW2 derivations without an external image generator. Do not use the archived
+`nixos-generators` project as a long-term dependency.
 
 ## Image properties
 
@@ -55,9 +52,14 @@ Do not use the archived `nixos-generators` project as a long-term dependency.
 - no mutable machine ID
 - no SSH host keys
 - no package manager credentials
-- role manifest embedded
+- versioned role identity embedded at `/etc/private-vm/image.json`
 - guestd enabled
 - base disk expected read-only at runtime
+
+The embedded identity follows `schemas/guest-image-identity.schema.json`. It is
+distinct from the post-build release artifact manifest in
+`schemas/image-manifest.schema.json`, which adds output digests, sizes, SBOM,
+workflow identity, and build timestamp.
 
 ## Reproducibility
 
@@ -101,6 +103,7 @@ It must not contain installation/provisioning scripts.
 ```bash
 nix build .#image-workstation-basic
 nix build .#image-downloader
+nix build .#checks.x86_64-linux.guest-common
 ```
 
 ## Image tests
@@ -116,3 +119,9 @@ Each image must prove:
 - no desktop/network in exporter
 - scanner scan specialization has no NIC
 - QEMU device allowlist compatibility
+
+The `guest-common` NixOS VM test is the first executable boot gate. It boots a
+minimal common guest and verifies locked accounts, disabled SSH and sudo,
+tmpfs-backed writable logs/temporary paths, volatile journald, an exact embedded
+role identity, a matching compiled guestd identity, no TCP/UDP listeners, and a
+VSOCK listener on port 4050. The role-specific image tests extend this baseline.

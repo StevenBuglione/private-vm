@@ -29,7 +29,7 @@ func main() {
 	}
 
 	if version {
-		_ = json.NewEncoder(os.Stdout).Encode(buildinfo.Current())
+		_ = json.NewEncoder(os.Stdout).Encode(currentVersion())
 		return
 	}
 
@@ -87,6 +87,28 @@ func main() {
 			fatal("GUESTD_SERVE_FAILED", err.Error(), "Destroy the guest and retry with a verified image and VSOCK device.")
 		}
 	}
+}
+
+type versionRecord struct {
+	buildinfo.Info
+	GuestRole    string   `json:"guestRole"`
+	Capabilities []string `json:"capabilities"`
+	APIMajor     uint32   `json:"guestApiMajor"`
+	APIMinor     uint32   `json:"guestApiMinor"`
+}
+
+func currentVersion() versionRecord {
+	record := versionRecord{
+		Info: buildinfo.Current(), GuestRole: "uncompiled", Capabilities: []string{},
+		APIMajor: guest.APIMajor, APIMinor: guest.APIMinor,
+	}
+	role, err := guest.CompiledSessionRole()
+	if err != nil {
+		return record
+	}
+	record.GuestRole = string(role)
+	record.Capabilities, _ = guest.Capabilities(role)
+	return record
 }
 
 func osRelease() string {
