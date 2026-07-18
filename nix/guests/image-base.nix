@@ -52,7 +52,7 @@
     description = "private-vm guest control daemon";
     wantedBy = [ "multi-user.target" ];
     serviceConfig = {
-      ExecStart = "${privateVMPackage}/bin/private-vm-guestd --role ${config.networking.hostName}";
+      ExecStart = "${privateVMPackage}/bin/private-vm-guestd";
       Restart = "on-failure";
       RestartSec = "1s";
       NoNewPrivileges = true;

@@ -3,7 +3,8 @@
 ## Transport selection
 
 - CLI to daemon: gRPC over Unix-domain socket.
-- Daemon to guest: gRPC over AF_VSOCK.
+- Daemon to guest: gRPC over AF_VSOCK on fixed guest port `4050` and a
+  daemon-allocated numeric CID. The dialer has no DNS or TCP fallback.
 - QEMU lifecycle: QMP JSON over Unix-domain socket.
 
 The protobuf files in `api/privatevm/v1/` are the source of truth.
@@ -40,6 +41,24 @@ For every boot:
 
 Token is never persisted in image or disk.
 
+The raw `fw_cfg` item is exactly 32 bytes. guestd opens its sysfs `raw` node
+with `O_NOFOLLOW`, rejects shorter or longer input, and holds the result in the
+locked-memory secret type. Metadata carries exactly one unpadded base64url
+encoding. Missing, duplicated, malformed, or incorrect metadata returns the
+same `GUEST_AUTHENTICATION_FAILED` response before a handler runs. Comparison
+is constant-time.
+
+Authentication proves possession of the per-boot capability; it does not make
+an unverified image trustworthy. The first bounded `Hello` call additionally
+checks the planned role, exact image digest, source commit, capability set,
+protocol version, 32-byte nonzero boot nonce, OS release, and guestd version
+against the already verified image manifest. Any mismatch destroys the guest.
+
+Every unary request must carry a syntactically valid request ID, internal
+`pvm-...` session ID, supported API version, and the running role. Server and
+client streams are authenticated before their handler runs. Streaming transfer
+handlers additionally require a contextual `TransferBegin` as the first frame.
+
 ## Versioning
 
 ```text
@@ -51,6 +70,11 @@ protocol_minor
 - Guest minor lower than required capability: refuse.
 - Unknown optional fields: ignore according to protobuf behavior.
 - Every capability is explicit.
+
+The current protocol is `1.0`. Guest messages default to 2 MiB and configuration
+may never raise a single protobuf message above 16 MiB. Transfer chunks remain
+bounded to 1 MiB by the transfer layer. Header lists are capped at 8 KiB, a
+guest accepts at most 32 concurrent streams, and transport setup is bounded.
 
 ## Streaming
 
@@ -156,6 +180,22 @@ Exporter:
 - `VerifyFile`
 - `FinalizeUSB`
 
+guestd registers `GuestCommonService` plus exactly one role service selected at
+build time. A generic host build has no compiled role and refuses to start as a
+guest daemon. The official Nix outputs build four distinct guestd derivations;
+there is no runtime role flag. Calling a service for another role therefore
+returns gRPC `Unimplemented` because that service is absent.
+
+The advertised v1 capability map is exact and sorted:
+
+| Scope | Capabilities |
+|---|---|
+| common | `guest-events`, `guest-shutdown`, `guest-status` |
+| workstation | `desktop`, `network-warning`, `workspace-export`, `workspace-import` |
+| downloader | `quarantine-seal`, `torrent-download`, `torrent-metadata`, `vpn-verification`, `wireguard-config` |
+| scanner | `approved-export`, `definitions-update`, `inventory`, `offline-verification`, `reconstruct`, `scan`, `scan-report` |
+| exporter | `usb-finalize`, `usb-inspect`, `usb-prepare`, `usb-verify`, `usb-write` |
+
 ## Error model
 
 gRPC status is accompanied by typed `ErrorDetail`:
@@ -171,3 +211,8 @@ field_violations[]
 
 Never return a private key, magnet link, full sensitive path, or unredacted file
 content in an error.
+
+Guest-boundary failures use typed `ErrorDetail` with stable codes including
+`GUEST_AUTHENTICATION_FAILED`, `GUEST_PROTOCOL_VERSION_MISMATCH`,
+`GUEST_ROLE_MISMATCH`, `GUEST_IMAGE_IDENTITY_MISMATCH`,
+`GUEST_CAPABILITY_MISMATCH`, and `TRANSFER_BEGIN_REQUIRED`.
