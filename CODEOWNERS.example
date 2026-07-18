@@ -1,0 +1,9 @@
+# Rename to .github/CODEOWNERS and replace placeholders before enabling.
+* @StevenBuglione
+/docs/ @StevenBuglione
+/nix/ @StevenBuglione
+/internal/network/ @StevenBuglione
+/internal/storage/ @StevenBuglione
+/internal/usb/ @StevenBuglione
+/internal/attestation/ @StevenBuglione
+/.github/workflows/ @StevenBuglione

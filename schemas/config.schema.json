@@ -1,0 +1,163 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://private-vm.dev/schema/config-v1.json",
+  "title": "private-vm host configuration",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "const": 1
+    },
+    "strict": {
+      "type": "boolean",
+      "default": true
+    },
+    "image_source": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "registry": {
+          "type": "string",
+          "default": "ghcr.io"
+        },
+        "repository": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"
+        },
+        "channel": {
+          "enum": [
+            "stable",
+            "edge"
+          ],
+          "default": "stable"
+        },
+        "require_attestation": {
+          "type": "boolean",
+          "const": true
+        }
+      },
+      "required": [
+        "repository",
+        "require_attestation"
+      ]
+    },
+    "runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "directory": {
+          "type": "string",
+          "default": "/run/private-vm"
+        },
+        "image_cache": {
+          "type": "string",
+          "default": "/var/lib/private-vm/images"
+        },
+        "scratch_directory": {
+          "type": "string",
+          "default": "/var/lib/private-vm/scratch"
+        },
+        "small_scratch_max_bytes": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 17179869184
+        },
+        "cleanup_timeout_seconds": {
+          "type": "integer",
+          "minimum": 5,
+          "maximum": 300,
+          "default": 30
+        }
+      }
+    },
+    "desktop": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "bundle": {
+          "enum": [
+            "basic",
+            "office",
+            "development",
+            "media",
+            "research"
+          ],
+          "default": "development"
+        },
+        "viewer": {
+          "enum": [
+            "remote-viewer"
+          ],
+          "default": "remote-viewer"
+        },
+        "audio": {
+          "type": "boolean",
+          "default": false
+        },
+        "memory_bytes": {
+          "type": "integer",
+          "minimum": 2147483648
+        },
+        "vcpus": {
+          "type": "integer",
+          "minimum": 2
+        }
+      }
+    },
+    "vpn": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "profile_store": {
+          "enum": [
+            "none",
+            "systemd-credential",
+            "secret-service"
+          ],
+          "default": "none"
+        },
+        "profile_name": {
+          "type": "string"
+        },
+        "disable_ipv6_if_not_tunneled": {
+          "type": "boolean",
+          "const": true
+        }
+      }
+    },
+    "usb": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "require_usbguard": {
+          "type": "boolean",
+          "default": true
+        },
+        "default_filesystem": {
+          "enum": [
+            "luks2-ext4"
+          ],
+          "default": "luks2-ext4"
+        }
+      }
+    },
+    "logging": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "persistent_lifecycle_metadata": {
+          "type": "boolean",
+          "default": false
+        },
+        "telemetry": {
+          "type": "boolean",
+          "const": false
+        }
+      }
+    }
+  },
+  "required": [
+    "version",
+    "image_source"
+  ]
+}

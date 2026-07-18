@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "project": "private-vm",
+  "role": "workstation",
+  "bundle": "development",
+  "architecture": "x86_64",
+  "source_repository": "StevenBuglione/private-vm",
+  "source_commit": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "source_ref": "refs/tags/v0.1.0",
+  "workflow": ".github/workflows/release.yml",
+  "image_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "uncompressed_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "compressed_size_bytes": 2147483648,
+  "virtual_size_bytes": 85899345920,
+  "nixos_version": "26.05",
+  "flake_lock_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "guest_api_major": 1,
+  "guest_api_minor": 0,
+  "minimum_qemu_version": "9.2",
+  "capabilities": [
+    "desktop",
+    "vpn",
+    "workspace-import",
+    "workspace-export"
+  ],
+  "sbom_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "built_at": "2026-07-18T12:00:00Z"
+}

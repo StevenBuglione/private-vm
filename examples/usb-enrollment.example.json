@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "enrollment_id": "usb-7d4bb35b",
+  "label": "PRIVATE_VM_TRANSFER",
+  "vendor_id": "1234",
+  "product_id": "5678",
+  "serial": "EXAMPLE-SERIAL-REPLACE",
+  "port_path": "1-2.3",
+  "interfaces": [
+    "08:06:50"
+  ],
+  "capacity_bytes": 137438953472,
+  "filesystem": "luks2-ext4"
+}

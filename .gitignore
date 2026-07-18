@@ -1,0 +1,15 @@
+/result
+/result-*
+/dist
+/gen
+/vendor
+/.direnv
+/.devenv
+*.qcow2
+*.qcow2.zst
+*.luks
+*.img
+*.iso
+*.sock
+coverage.out
+.DS_Store

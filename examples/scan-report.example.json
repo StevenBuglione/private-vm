@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "session_id": "7e01de42-f753-4aba-898c-1f5715d034e7",
+  "policy": "safe",
+  "started_at": "2026-07-18T12:00:00Z",
+  "completed_at": "2026-07-18T12:05:00Z",
+  "scanner_image_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "clamav_database_version": "example-20260718",
+  "input": {
+    "logical_name": "untrusted-document.pdf",
+    "size_bytes": 123456,
+    "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "detected_mime": "application/pdf"
+  },
+  "findings": [
+    {
+      "code": "PDF_ACTIVE_CONTENT_REMOVED",
+      "severity": "info",
+      "path": "untrusted-document.pdf",
+      "detail": "Output was rasterized and rebuilt."
+    }
+  ],
+  "sanitized_outputs": [
+    {
+      "logical_name": "untrusted-document.safe.pdf",
+      "size_bytes": 234567,
+      "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "detected_mime": "application/pdf",
+      "transformation": "pdf-raster-rebuild-v1"
+    }
+  ],
+  "result": "approved",
+  "complete": true
+}

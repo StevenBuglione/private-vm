@@ -1,0 +1,976 @@
+# Machine-readable implementation backlog. YAML 1.2 / JSON-compatible structure.
+{
+  "version": 1,
+  "project": "private-vm",
+  "execution_rules": [
+    "Implement tasks in dependency order unless a task explicitly says otherwise.",
+    "One pull request should normally contain one task.",
+    "A task is incomplete until every listed acceptance criterion passes.",
+    "Security-boundary changes require threat-model and ADR review.",
+    "No shell scripts may implement product logic."
+  ],
+  "epics": [
+    {
+      "id": "FOUNDATION",
+      "title": "Repository and build foundation",
+      "tasks": [
+        {
+          "id": "GO-001",
+          "title": "Pin Go 1.26.5 and dependency policy",
+          "depends_on": [],
+          "deliverables": [
+            "Update go.mod go directive and toolchain policy",
+            "Add go.sum after approved dependencies",
+            "Document vendoring and vulnerability scanning"
+          ],
+          "acceptance": [
+            "go version used in CI is exactly approved release",
+            "go test ./... passes",
+            "govulncheck has no unresolved applicable findings"
+          ]
+        },
+        {
+          "id": "CLI-001",
+          "title": "Implement command framework and structured output",
+          "depends_on": [
+            "GO-001"
+          ],
+          "deliverables": [
+            "Cobra command tree matching docs/07-cli-reference.md",
+            "JSON and human renderers",
+            "stable exit-code package",
+            "non-echoing sensitive input"
+          ],
+          "acceptance": [
+            "Every documented command exists",
+            "unknown options return usage code 2",
+            "JSON output has golden tests",
+            "magnet and VPN material never appear in argv by default"
+          ]
+        },
+        {
+          "id": "CFG-001",
+          "title": "Implement typed configuration and policy loading",
+          "depends_on": [
+            "GO-001"
+          ],
+          "deliverables": [
+            "TOML loader",
+            "layering: defaults, system, user, CLI",
+            "schema-version migration hooks",
+            "strict validation"
+          ],
+          "acceptance": [
+            "unknown fields rejected",
+            "secrets rejected from config files",
+            "example files load",
+            "schema conformance tests pass"
+          ]
+        },
+        {
+          "id": "PROTO-001",
+          "title": "Generate and pin protobuf APIs",
+          "depends_on": [
+            "GO-001"
+          ],
+          "deliverables": [
+            "Generated Go code from api/privatevm/v1",
+            "Buf lint/breaking CI",
+            "API version negotiation"
+          ],
+          "acceptance": [
+            "buf lint passes",
+            "buf breaking passes against main",
+            "daemon and guest compile against generated APIs"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "NIX",
+      "title": "Nix packages and guest images",
+      "tasks": [
+        {
+          "id": "NIX-001",
+          "title": "Validate NixOS 26.05 image-building contract",
+          "depends_on": [
+            "GO-001"
+          ],
+          "deliverables": [
+            "Committed flake.lock pinned to NixOS 26.05",
+            "Correct QCOW image output expression",
+            "documented local build commands"
+          ],
+          "acceptance": [
+            "nix flake check passes on x86_64-linux",
+            "all six official image outputs evaluate",
+            "workstation-basic QCOW builds locally"
+          ]
+        },
+        {
+          "id": "NIX-002",
+          "title": "Build common hardened guest module",
+          "depends_on": [
+            "NIX-001",
+            "PROTO-001"
+          ],
+          "deliverables": [
+            "volatile logging/temp",
+            "locked accounts",
+            "no SSH or sudo",
+            "guestd system service",
+            "VirtIO/VSOCK support"
+          ],
+          "acceptance": [
+            "no listening TCP/UDP services before role networking",
+            "root and user password login fail",
+            "journal is volatile",
+            "guestd reports manifest role"
+          ]
+        },
+        {
+          "id": "NIX-003",
+          "title": "Build XFCE workstation bundles",
+          "depends_on": [
+            "NIX-002"
+          ],
+          "deliverables": [
+            "basic, office, development images",
+            "Firefox enterprise policy",
+            "ephemeral private user",
+            "SPICE agent"
+          ],
+          "acceptance": [
+            "LightDM autologin reaches XFCE under TCG",
+            "clipboard and SPICE file transfer disabled by host launch spec",
+            "bundle package manifests match documentation"
+          ]
+        },
+        {
+          "id": "NIX-004",
+          "title": "Build downloader image",
+          "depends_on": [
+            "NIX-002"
+          ],
+          "deliverables": [
+            "XFCE",
+            "qBittorrent",
+            "WireGuard",
+            "runtime nftables templates"
+          ],
+          "acceptance": [
+            "qBittorrent cannot start before guestd marks VPN ready",
+            "qBittorrent network interface is proton0",
+            "no personal-work applications or credentials"
+          ]
+        },
+        {
+          "id": "NIX-005",
+          "title": "Build scanner image",
+          "depends_on": [
+            "NIX-002"
+          ],
+          "deliverables": [
+            "XFCE",
+            "ClamAV",
+            "bounded archive tools",
+            "document/media reconstruction toolchain"
+          ],
+          "acceptance": [
+            "freshclam works in update phase",
+            "scan phase boots without NIC",
+            "all tool versions appear in image SBOM"
+          ]
+        },
+        {
+          "id": "NIX-006",
+          "title": "Build headless exporter image",
+          "depends_on": [
+            "NIX-002"
+          ],
+          "deliverables": [
+            "guestd exporter role",
+            "cryptsetup/ext4 tools",
+            "no desktop or NIC"
+          ],
+          "acceptance": [
+            "image has no graphical stack",
+            "image boots with zero NICs",
+            "only exporter RPC capability is advertised"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "DAEMON",
+      "title": "Privileged daemon and lifecycle",
+      "tasks": [
+        {
+          "id": "D-001",
+          "title": "Implement Unix gRPC daemon and authorization",
+          "depends_on": [
+            "PROTO-001",
+            "CFG-001"
+          ],
+          "deliverables": [
+            "Unix socket server",
+            "SO_PEERCRED validation",
+            "Polkit authorization adapter",
+            "request IDs and redaction"
+          ],
+          "acceptance": [
+            "unauthorized user rejected",
+            "socket mode/ownership correct",
+            "no secret in logs",
+            "RPC fuzz tests do not panic"
+          ]
+        },
+        {
+          "id": "D-002",
+          "title": "Implement session state machine and ownership",
+          "depends_on": [
+            "D-001"
+          ],
+          "deliverables": [
+            "serialized transition owner",
+            "event stream",
+            "per-user quotas",
+            "single cleanup owner"
+          ],
+          "acceptance": [
+            "illegal transitions rejected",
+            "duplicate cleanup is harmless",
+            "client disconnect does not orphan VM",
+            "concurrency race tests pass"
+          ]
+        },
+        {
+          "id": "D-003",
+          "title": "Implement QEMU argument model and QMP client",
+          "depends_on": [
+            "D-002",
+            "NIX-003"
+          ],
+          "deliverables": [
+            "typed launch spec",
+            "absolute executable resolution",
+            "QMP handshake/events",
+            "SPICE Unix socket"
+          ],
+          "acceptance": [
+            "no shell invocation",
+            "TCP display rejected",
+            "shared filesystem devices rejected",
+            "QEMU process death triggers cleanup"
+          ]
+        },
+        {
+          "id": "D-004",
+          "title": "Implement VSOCK guest channel",
+          "depends_on": [
+            "D-003",
+            "PROTO-001"
+          ],
+          "deliverables": [
+            "unique CID allocator",
+            "session capability via fw_cfg",
+            "authenticated gRPC VSOCK client",
+            "role capability map"
+          ],
+          "acceptance": [
+            "CID collision blocked",
+            "wrong token rejected",
+            "wrong role method rejected",
+            "protocol mismatch blocks session"
+          ]
+        },
+        {
+          "id": "D-005",
+          "title": "Implement crash recovery and startup reconciliation",
+          "depends_on": [
+            "D-002",
+            "STOR-003",
+            "NET-003"
+          ],
+          "deliverables": [
+            "orphan QEMU discovery",
+            "orphan namespace cleanup",
+            "orphan mapper closure",
+            "safe ciphertext deletion"
+          ],
+          "acceptance": [
+            "SIGKILL CLI cleanup test passes",
+            "SIGKILL daemon recovery test passes",
+            "host reboot leaves no usable session key",
+            "base images remain unchanged"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "STORAGE",
+      "title": "Ephemeral storage and secrets",
+      "tasks": [
+        {
+          "id": "SEC-001",
+          "title": "Implement volatile secret type",
+          "depends_on": [
+            "GO-001"
+          ],
+          "deliverables": [
+            "memfd-backed secrets where supported",
+            "mlock best effort",
+            "redacted formatters",
+            "explicit destroy"
+          ],
+          "acceptance": [
+            "secret never serializes",
+            "secret absent from argv/env",
+            "destroy zeroes current mapped bytes",
+            "limitations documented"
+          ]
+        },
+        {
+          "id": "STOR-001",
+          "title": "Implement QCOW root overlays",
+          "depends_on": [
+            "D-002"
+          ],
+          "deliverables": [
+            "read-only base enforcement",
+            "tmpfs overlay path",
+            "qemu-img wrapper",
+            "capacity calculation"
+          ],
+          "acceptance": [
+            "base write bit rejected",
+            "overlay deleted on all exits",
+            "qemu-img never touches running image"
+          ]
+        },
+        {
+          "id": "STOR-002",
+          "title": "Implement RAM scratch",
+          "depends_on": [
+            "SEC-001"
+          ],
+          "deliverables": [
+            "tmpfs capacity detection",
+            "sparse raw disk",
+            "resource reservation"
+          ],
+          "acceptance": [
+            "run blocks before overcommitting memory",
+            "scratch removed after teardown",
+            "host swap policy checked"
+          ]
+        },
+        {
+          "id": "STOR-003",
+          "title": "Implement ephemeral-key LUKS scratch",
+          "depends_on": [
+            "SEC-001",
+            "D-002"
+          ],
+          "deliverables": [
+            "random key generation",
+            "outer filesystem/container lifecycle",
+            "mapper lifecycle",
+            "backup/snapshot exclusion checks"
+          ],
+          "acceptance": [
+            "key only in volatile protected path",
+            "ciphertext unusable after key destruction",
+            "close/delete is idempotent",
+            "host never mounts inner guest filesystem"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "NETWORK",
+      "title": "VPN-only networking",
+      "tasks": [
+        {
+          "id": "VPN-001",
+          "title": "Parse and validate Proton WireGuard profiles",
+          "depends_on": [
+            "SEC-001",
+            "CFG-001"
+          ],
+          "deliverables": [
+            "strict parser",
+            "endpoint resolver",
+            "profile storage adapters",
+            "rotation status"
+          ],
+          "acceptance": [
+            "private key never converted to string in logs",
+            "invalid AllowedIPs rejected",
+            "stale endpoint gives actionable failure"
+          ]
+        },
+        {
+          "id": "NET-001",
+          "title": "Create per-session namespace and TAP topology",
+          "depends_on": [
+            "D-002"
+          ],
+          "deliverables": [
+            "netns",
+            "veth",
+            "TAP",
+            "address allocation",
+            "teardown"
+          ],
+          "acceptance": [
+            "namespace isolated from host services",
+            "address collisions prevented",
+            "all interfaces removed after cleanup"
+          ]
+        },
+        {
+          "id": "NET-002",
+          "title": "Apply host endpoint allowlist",
+          "depends_on": [
+            "NET-001",
+            "VPN-001"
+          ],
+          "deliverables": [
+            "nftables transaction",
+            "DNS bootstrap strategy",
+            "default-drop forwarding",
+            "rule handles"
+          ],
+          "acceptance": [
+            "guest clear interface reaches only Proton endpoint",
+            "host LAN and metadata addresses blocked",
+            "rule failure prevents QEMU start"
+          ]
+        },
+        {
+          "id": "NET-003",
+          "title": "Implement guest VPN and leak tests",
+          "depends_on": [
+            "NET-002",
+            "D-004",
+            "NIX-004"
+          ],
+          "deliverables": [
+            "guest nftables kill switch",
+            "WireGuard setup",
+            "DNS/IPv4/IPv6 tests",
+            "desktop status"
+          ],
+          "acceptance": [
+            "removing proton0 immediately stops app traffic",
+            "direct IPv4 and IPv6 tests fail",
+            "VPN handshake required before online state"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "IMAGES",
+      "title": "Image distribution and provenance",
+      "tasks": [
+        {
+          "id": "IMG-001",
+          "title": "Implement OCI pull/cache",
+          "depends_on": [
+            "GO-001",
+            "CFG-001"
+          ],
+          "deliverables": [
+            "ORAS Go client",
+            "digest-addressed cache",
+            "atomic extraction",
+            "size limits"
+          ],
+          "acceptance": [
+            "public anonymous pull works",
+            "tag resolves to digest before download",
+            "partial downloads never become runnable"
+          ]
+        },
+        {
+          "id": "IMG-002",
+          "title": "Implement manifest and SBOM verification",
+          "depends_on": [
+            "IMG-001"
+          ],
+          "deliverables": [
+            "manifest schema validation",
+            "role/arch/API validation",
+            "SPDX presence check"
+          ],
+          "acceptance": [
+            "wrong role blocked",
+            "wrong architecture blocked",
+            "missing SBOM blocks strict mode"
+          ]
+        },
+        {
+          "id": "IMG-003",
+          "title": "Implement provenance verification",
+          "depends_on": [
+            "IMG-002"
+          ],
+          "deliverables": [
+            "Sigstore/GitHub attestation verifier",
+            "repository/workflow/ref policy",
+            "offline cache policy"
+          ],
+          "acceptance": [
+            "wrong repository is never overridable",
+            "wrong workflow is never overridable",
+            "digest mismatch blocks before decompression"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "TORRENT",
+      "title": "Torrent acquisition",
+      "tasks": [
+        {
+          "id": "TOR-001",
+          "title": "Implement secure torrent input",
+          "depends_on": [
+            "CLI-001",
+            "D-004"
+          ],
+          "deliverables": [
+            "TTY no-echo magnet prompt",
+            "stdin mode",
+            "torrent file streaming",
+            "sensitive argv opt-in warning"
+          ],
+          "acceptance": [
+            "default magnet absent from shell history/process list",
+            "input size bounded",
+            "malformed URI rejected"
+          ]
+        },
+        {
+          "id": "TOR-002",
+          "title": "Implement metadata-first qBittorrent control",
+          "depends_on": [
+            "TOR-001",
+            "NET-003",
+            "NIX-004"
+          ],
+          "deliverables": [
+            "guest-local qBittorrent API adapter",
+            "metadata pause",
+            "file selection",
+            "exact size report"
+          ],
+          "acceptance": [
+            "payload bytes remain paused until approval",
+            "unexpected executable files highlighted",
+            "capacity recalculated from selected files"
+          ]
+        },
+        {
+          "id": "TOR-003",
+          "title": "Implement download monitoring and completion",
+          "depends_on": [
+            "TOR-002",
+            "STOR-003"
+          ],
+          "deliverables": [
+            "progress stream",
+            "stall/error handling",
+            "hash/manifest capture",
+            "clean downloader destruction"
+          ],
+          "acceptance": [
+            "VPN loss pauses/stops traffic",
+            "download cannot write outside quarantine",
+            "downloader destroyed before scanner sees storage"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "SCANNING",
+      "title": "Scanning and sanitization",
+      "tasks": [
+        {
+          "id": "SCAN-001",
+          "title": "Implement scanner update phase",
+          "depends_on": [
+            "NIX-005",
+            "D-004"
+          ],
+          "deliverables": [
+            "freshclam orchestration",
+            "definition age/version report",
+            "online-to-offline restart"
+          ],
+          "acceptance": [
+            "quarantine absent during update",
+            "scan boot has no NIC device",
+            "outdated definitions block"
+          ]
+        },
+        {
+          "id": "SCAN-002",
+          "title": "Implement read-only quarantine and inventory",
+          "depends_on": [
+            "SCAN-001",
+            "TOR-003"
+          ],
+          "deliverables": [
+            "read-only block attachment",
+            "noexec/nosuid/nodev guest mount",
+            "magic/MIME inventory",
+            "SHA-256 manifest"
+          ],
+          "acceptance": [
+            "write attempts fail",
+            "extension mismatch recorded",
+            "host never mounts quarantine filesystem"
+          ]
+        },
+        {
+          "id": "SCAN-003",
+          "title": "Implement ClamAV fail-closed scanning",
+          "depends_on": [
+            "SCAN-002"
+          ],
+          "deliverables": [
+            "bounded clamd/clamscan adapter",
+            "limit/error parser",
+            "structured findings"
+          ],
+          "acceptance": [
+            "malware rejects",
+            "skipped file rejects",
+            "scan error rejects",
+            "timeout rejects"
+          ]
+        },
+        {
+          "id": "SCAN-004",
+          "title": "Implement archive containment",
+          "depends_on": [
+            "SCAN-003"
+          ],
+          "deliverables": [
+            "bounded extraction directory",
+            "depth/count/ratio limits",
+            "path traversal and link rejection",
+            "recursive scan"
+          ],
+          "acceptance": [
+            "zip bombs reject before disk exhaustion",
+            "absolute paths reject",
+            "symlink/hardlink escapes reject",
+            "encrypted archives reject safe policy"
+          ]
+        },
+        {
+          "id": "SCAN-005",
+          "title": "Implement safe reconstruction",
+          "depends_on": [
+            "SCAN-004"
+          ],
+          "deliverables": [
+            "PDF raster/rebuild",
+            "Office render then PDF reconstruction",
+            "image decode/reencode",
+            "media full decode/reencode",
+            "metadata stripping"
+          ],
+          "acceptance": [
+            "safe output contains no original active content by design",
+            "tool failure rejects",
+            "output rescanned",
+            "transformation recorded in report"
+          ]
+        },
+        {
+          "id": "SCAN-006",
+          "title": "Implement signed scan report",
+          "depends_on": [
+            "SCAN-005"
+          ],
+          "deliverables": [
+            "schema-conformant report",
+            "scanner image/definition identity",
+            "output hashes",
+            "session MAC/signature"
+          ],
+          "acceptance": [
+            "incomplete report cannot approve",
+            "report verifies before transfer",
+            "no private torrent identifier persists by default"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "WORKSPACE",
+      "title": "Graphical workspace transfer",
+      "tasks": [
+        {
+          "id": "WS-001",
+          "title": "Implement trusted host file import",
+          "depends_on": [
+            "D-004",
+            "NIX-003"
+          ],
+          "deliverables": [
+            "explicit single-file import",
+            "read-only host open",
+            "framed bounded stream",
+            "dual hash verification"
+          ],
+          "acceptance": [
+            "guest cannot enumerate host directory",
+            "symlinks rejected or resolved safely",
+            "partial transfer removed"
+          ]
+        },
+        {
+          "id": "WS-002",
+          "title": "Implement scanner-to-workstation promotion",
+          "depends_on": [
+            "SCAN-006",
+            "WS-001"
+          ],
+          "deliverables": [
+            "approval token",
+            "one-way relay",
+            "Inbox placement",
+            "report association"
+          ],
+          "acceptance": [
+            "only report-listed output transferable",
+            "original hostile input not promoted in safe mode",
+            "workstation is fresh before promotion"
+          ]
+        },
+        {
+          "id": "WS-003",
+          "title": "Implement Export workspace tracking",
+          "depends_on": [
+            "D-004",
+            "NIX-003"
+          ],
+          "deliverables": [
+            "Export directory inventory",
+            "export receipts",
+            "CLEAN/READY/UNEXPORTED/CHANGED states"
+          ],
+          "acceptance": [
+            "ordinary stop blocks unexported work",
+            "--discard requires explicit confirmation",
+            "changed-after-export is detected"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "USB",
+      "title": "USB enrollment and export",
+      "tasks": [
+        {
+          "id": "USB-001",
+          "title": "Implement exact device enumeration and enrollment",
+          "depends_on": [
+            "D-001"
+          ],
+          "deliverables": [
+            "sysfs/libudev discovery",
+            "VID/PID/serial/interface/capacity identity",
+            "USBGuard rule suggestion",
+            "enrollment file"
+          ],
+          "acceptance": [
+            "composite HID/network device rejected",
+            "ambiguous duplicate device rejected",
+            "host root/boot device never selectable"
+          ]
+        },
+        {
+          "id": "USB-002",
+          "title": "Implement destructive prepare flow",
+          "depends_on": [
+            "USB-001",
+            "SEC-001"
+          ],
+          "deliverables": [
+            "two-step confirmation",
+            "LUKS2+ext4 format in exporter",
+            "recovery-safe progress",
+            "post-format identity"
+          ],
+          "acceptance": [
+            "wrong device path cannot be substituted",
+            "mounted device blocks",
+            "cancellation before commit leaves clear report"
+          ]
+        },
+        {
+          "id": "USB-003",
+          "title": "Implement one-way exporter relay",
+          "depends_on": [
+            "USB-002",
+            "SCAN-006",
+            "NIX-006"
+          ],
+          "deliverables": [
+            "bounded framed host relay",
+            "QEMU USB hotplug",
+            "exporter receipt",
+            "three-way hash check"
+          ],
+          "acceptance": [
+            "host never mounts USB",
+            "scanner never sees USB",
+            "exporter has no NIC",
+            "hash mismatch fails and warns not to trust device"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "PACKAGING",
+      "title": "Installation and releases",
+      "tasks": [
+        {
+          "id": "PKG-001",
+          "title": "Complete NixOS host module",
+          "depends_on": [
+            "D-005",
+            "IMG-003"
+          ],
+          "deliverables": [
+            "daemon service",
+            "packages",
+            "groups",
+            "tmpfiles",
+            "USBGuard integration",
+            "config options"
+          ],
+          "acceptance": [
+            "nixos-rebuild switch succeeds",
+            "doctor --strict passes on documented host",
+            "uninstall leaves no running service"
+          ]
+        },
+        {
+          "id": "PKG-002",
+          "title": "Build deb and rpm packages",
+          "depends_on": [
+            "PKG-001"
+          ],
+          "deliverables": [
+            "nfpm or native Go packaging pipeline",
+            "systemd/polkit/udev/tmpfiles assets",
+            "uninstall behavior"
+          ],
+          "acceptance": [
+            "clean Ubuntu, Debian and Fedora VM install tests pass",
+            "package upgrade preserves config and image cache"
+          ]
+        },
+        {
+          "id": "PKG-003",
+          "title": "Build generic Linux installer",
+          "depends_on": [
+            "PKG-002"
+          ],
+          "deliverables": [
+            "tar.zst",
+            "Go-based system install/uninstall",
+            "change preview and rollback"
+          ],
+          "acceptance": [
+            "no shell installer",
+            "unsupported hosts fail before mutation",
+            "all changed paths listed"
+          ]
+        },
+        {
+          "id": "REL-001",
+          "title": "Harden GitHub CI",
+          "depends_on": [
+            "GO-001",
+            "NIX-001"
+          ],
+          "deliverables": [
+            "full-SHA action pins or action-free steps",
+            "least permissions",
+            "fork-safe jobs",
+            "cache policy"
+          ],
+          "acceptance": [
+            "no pull_request_target",
+            "fork PR has no write/token privileges",
+            "workflow policy check passes"
+          ]
+        },
+        {
+          "id": "REL-002",
+          "title": "Build public images on free runners",
+          "depends_on": [
+            "REL-001",
+            "NIX-006"
+          ],
+          "deliverables": [
+            "one image per clean job",
+            "workspace reclamation",
+            "TCG smoke tests",
+            "failure diagnostics"
+          ],
+          "acceptance": [
+            "all official images fit standard public runners or fallback is documented",
+            "no nested KVM dependency",
+            "no artifact published from PR"
+          ]
+        },
+        {
+          "id": "REL-003",
+          "title": "Publish OCI images, SBOMs and attestations",
+          "depends_on": [
+            "REL-002",
+            "IMG-003"
+          ],
+          "deliverables": [
+            "GHCR media types",
+            "anonymous pulls",
+            "SPDX SBOM",
+            "artifact attestations"
+          ],
+          "acceptance": [
+            "clean client pulls anonymously",
+            "private-vm verifies by digest and provenance",
+            "tag mutation cannot change cached execution identity"
+          ]
+        },
+        {
+          "id": "REL-004",
+          "title": "Implement release command and immutable verification",
+          "depends_on": [
+            "PKG-003",
+            "REL-003"
+          ],
+          "deliverables": [
+            "release prepare/publish/verify commands",
+            "protected environment",
+            "clean-room verification"
+          ],
+          "acceptance": [
+            "release refuses dirty/unprotected tag",
+            "all packages and images verified after publication",
+            "rollback instructions tested"
+          ]
+        }
+      ]
+    }
+  ]
+}

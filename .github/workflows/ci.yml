@@ -1,0 +1,69 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  go:
+    runs-on: ubuntu-latest
+    steps:
+      # Deliberately avoids mutable third-party actions. The runner fetches the
+      # exact event SHA directly. Replace this with actions/checkout pinned to a
+      # full reviewed commit SHA if preferred.
+      - name: Fetch exact source revision
+        env:
+          REPOSITORY: ${{ github.repository }}
+          REVISION: ${{ github.sha }}
+        run: |
+          git init .
+          git remote add origin "https://github.com/${REPOSITORY}.git"
+          git fetch --depth=1 origin "${REVISION}"
+          git checkout --detach FETCH_HEAD
+
+      - name: Tool versions
+        run: |
+          go version
+          python3 --version
+
+      - name: Format
+        run: |
+          test -z "$(gofmt -l cmd internal)"
+
+      - name: Test
+        run: |
+          go test -race ./...
+          go vet ./...
+          python3 tools/validate_schemas.py
+
+  repository-policy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fetch exact source revision
+        env:
+          REPOSITORY: ${{ github.repository }}
+          REVISION: ${{ github.sha }}
+        run: |
+          git init .
+          git remote add origin "https://github.com/${REPOSITORY}.git"
+          git fetch --depth=1 origin "${REVISION}"
+          git checkout --detach FETCH_HEAD
+
+      - name: Reject shell product logic
+        run: |
+          if find . -path './.git' -prune -o -type f \( -name '*.sh' -o -name '*.bash' \) -print | grep -q .; then
+            echo "Shell product files are prohibited."
+            exit 1
+          fi
+
+      - name: Reject obvious generated secrets
+        run: |
+          if grep -RInE --exclude-dir=.git \
+            '(PrivateKey[[:space:]]*=[[:space:]]*[A-Za-z0-9+/=]{20,}|BEGIN (RSA|OPENSSH|EC) PRIVATE KEY)' .; then
+            echo "Potential secret or torrent identifier committed."
+            exit 1
+          fi

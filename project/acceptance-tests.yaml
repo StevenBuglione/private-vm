@@ -1,0 +1,253 @@
+{
+  "version": 1,
+  "suites": [
+    {
+      "id": "HOST",
+      "tests": [
+        {
+          "id": "HOST-001",
+          "name": "Strict preflight on supported encrypted host",
+          "given": "supported host with KVM, systemd, cgroups v2, nftables, zram/no disk swap and hibernation disabled",
+          "when": "private-vm doctor --strict",
+          "then": "exit 0 and no blocking diagnostics"
+        },
+        {
+          "id": "HOST-002",
+          "name": "Missing KVM blocks",
+          "given": "/dev/kvm absent or inaccessible",
+          "when": "doctor or any run command",
+          "then": "exit preflight code and create no session resources"
+        },
+        {
+          "id": "HOST-003",
+          "name": "Disk swap blocks strict run",
+          "given": "unencrypted active disk swap",
+          "when": "run",
+          "then": "block before pulling or booting images"
+        }
+      ]
+    },
+    {
+      "id": "SUPPLY",
+      "tests": [
+        {
+          "id": "SUPPLY-001",
+          "name": "Wrong image repository rejected",
+          "given": "validly signed image from another repository",
+          "when": "images verify",
+          "then": "hard failure with no override"
+        },
+        {
+          "id": "SUPPLY-002",
+          "name": "Digest mismatch rejected before execution",
+          "given": "modified compressed image",
+          "when": "images pull/verify",
+          "then": "delete partial artifact and never create root overlay"
+        },
+        {
+          "id": "SUPPLY-003",
+          "name": "Wrong role rejected",
+          "given": "scanner image labeled as workstation request",
+          "when": "plan",
+          "then": "hard failure"
+        }
+      ]
+    },
+    {
+      "id": "DISPLAY",
+      "tests": [
+        {
+          "id": "DISPLAY-001",
+          "name": "Graphical workstation boot",
+          "given": "verified workstation-basic image",
+          "when": "desktop start",
+          "then": "XFCE appears through SPICE Unix socket"
+        },
+        {
+          "id": "DISPLAY-002",
+          "name": "No display TCP listener",
+          "given": "active desktop session",
+          "when": "inspect host sockets and QEMU args",
+          "then": "only session-owned Unix SPICE socket exists"
+        },
+        {
+          "id": "DISPLAY-003",
+          "name": "Clipboard and file transfer disabled",
+          "given": "active SPICE session",
+          "when": "copy or drag file in either direction",
+          "then": "operation is unavailable"
+        }
+      ]
+    },
+    {
+      "id": "VPN",
+      "tests": [
+        {
+          "id": "VPN-001",
+          "name": "Application traffic requires tunnel",
+          "given": "online role with valid Proton profile",
+          "when": "WireGuard is down",
+          "then": "DNS, IPv4 and IPv6 application egress fail"
+        },
+        {
+          "id": "VPN-002",
+          "name": "Host endpoint allowlist",
+          "given": "guest clear interface",
+          "when": "guest targets non-Proton public or LAN address",
+          "then": "host namespace drops traffic"
+        },
+        {
+          "id": "VPN-003",
+          "name": "qBittorrent bound to proton0",
+          "given": "downloader ready",
+          "when": "inspect qBittorrent configuration and remove proton0",
+          "then": "torrent traffic cannot continue"
+        }
+      ]
+    },
+    {
+      "id": "EPHEMERAL",
+      "tests": [
+        {
+          "id": "EPH-001",
+          "name": "Normal teardown removes state",
+          "given": "completed workstation session",
+          "when": "desktop stop",
+          "then": "QEMU, sockets, overlay, keys, mappings and namespaces disappear"
+        },
+        {
+          "id": "EPH-002",
+          "name": "Daemon crash recovery",
+          "given": "active session",
+          "when": "daemon is SIGKILLed and restarted",
+          "then": "startup reconciliation terminates QEMU and destroys resources"
+        },
+        {
+          "id": "EPH-003",
+          "name": "Power-loss cryptographic erasure",
+          "given": "large scratch backed by LUKS and volatile key",
+          "when": "host reboots without cleanup",
+          "then": "remaining ciphertext cannot be opened and startup deletes it"
+        }
+      ]
+    },
+    {
+      "id": "TORRENT",
+      "tests": [
+        {
+          "id": "TOR-001",
+          "name": "Metadata before payload",
+          "given": "valid magnet link",
+          "when": "prepare torrent",
+          "then": "file list/size appears while payload remains paused"
+        },
+        {
+          "id": "TOR-002",
+          "name": "Capacity failure is early",
+          "given": "selected files exceed available scratch or output capacity",
+          "when": "approve download",
+          "then": "block before payload transfer"
+        },
+        {
+          "id": "TOR-003",
+          "name": "Downloader destroyed before scanning",
+          "given": "completed download",
+          "when": "scan phase starts",
+          "then": "no downloader QEMU process exists"
+        }
+      ]
+    },
+    {
+      "id": "SCAN",
+      "tests": [
+        {
+          "id": "SCAN-001",
+          "name": "Offline scan",
+          "given": "quarantine attached to scanner",
+          "when": "scan starts",
+          "then": "QEMU has no NIC and host namespace has no network"
+        },
+        {
+          "id": "SCAN-002",
+          "name": "Read-only quarantine",
+          "given": "scanner scan phase",
+          "when": "guest attempts block/filesystem write",
+          "then": "write fails"
+        },
+        {
+          "id": "SCAN-003",
+          "name": "Fail closed on skipped file",
+          "given": "file exceeds scanner limit",
+          "when": "scan completes",
+          "then": "result rejected"
+        },
+        {
+          "id": "SCAN-004",
+          "name": "Archive bomb containment",
+          "given": "crafted high-ratio archive",
+          "when": "inventory/extraction runs",
+          "then": "limits stop extraction before capacity exhaustion and reject"
+        },
+        {
+          "id": "SCAN-005",
+          "name": "Safe reconstruction provenance",
+          "given": "supported document/media input",
+          "when": "safe policy approves",
+          "then": "output is reconstructed, rescanned, hashed and listed in report"
+        }
+      ]
+    },
+    {
+      "id": "USB",
+      "tests": [
+        {
+          "id": "USB-001",
+          "name": "Composite USB rejected",
+          "given": "device exposing storage and HID/network interface",
+          "when": "usb enroll",
+          "then": "hard failure"
+        },
+        {
+          "id": "USB-002",
+          "name": "Only exporter sees USB",
+          "given": "full workflow",
+          "when": "inspect QEMU device graphs",
+          "then": "USB is attached only to exporter"
+        },
+        {
+          "id": "USB-003",
+          "name": "Three-way hash equality",
+          "given": "approved output",
+          "when": "export completes",
+          "then": "scanner, host relay and exporter hashes match before success"
+        }
+      ]
+    },
+    {
+      "id": "WORKSPACE",
+      "tests": [
+        {
+          "id": "WS-001",
+          "name": "Unexported work blocks stop",
+          "given": "new file in ~/Export",
+          "when": "desktop stop without discard",
+          "then": "stop blocked"
+        },
+        {
+          "id": "WS-002",
+          "name": "Host import is explicit",
+          "given": "single selected local file",
+          "when": "workspace import",
+          "then": "only that byte stream reaches ~/Inbox and guest cannot enumerate parent directory"
+        },
+        {
+          "id": "WS-003",
+          "name": "Safe promotion excludes original",
+          "given": "torrent document sanitized",
+          "when": "open in workstation",
+          "then": "only report-listed reconstructed output is transferred"
+        }
+      ]
+    }
+  ]
+}

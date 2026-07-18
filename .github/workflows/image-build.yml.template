@@ -1,0 +1,60 @@
+# Rename to image-build.yml only after:
+# 1. NIX-001 validates all image outputs;
+# 2. every referenced action is pinned to a full commit SHA;
+# 3. GHCR package names and permissions are approved.
+name: Image build
+
+on:
+  pull_request:
+    paths:
+      - "nix/**"
+      - "flake.nix"
+      - "flake.lock"
+      - "cmd/private-vm-guestd/**"
+      - "api/**"
+      - "policies/**"
+  push:
+    branches: [main]
+    paths:
+      - "nix/**"
+      - "flake.nix"
+      - "flake.lock"
+      - "cmd/private-vm-guestd/**"
+      - "api/**"
+      - "policies/**"
+
+permissions:
+  contents: read
+  packages: write
+  id-token: write
+  attestations: write
+
+jobs:
+  image:
+    strategy:
+      fail-fast: false
+      matrix:
+        image:
+          - workstation-basic
+          - workstation-office
+          - workstation-development
+          - downloader
+          - scanner
+          - exporter
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@FULL_COMMIT_SHA_REQUIRED
+      - uses: DeterminateSystems/nix-installer-action@FULL_COMMIT_SHA_REQUIRED
+      - name: Free workspace and report capacity
+        run: |
+          df -h
+          free -h
+      - name: Build one image
+        run: nix build ".#${{ matrix.image }}-image" --print-build-logs
+      - name: Boot smoke test under TCG
+        run: go run ./cmd/private-vm images test --role "${{ matrix.image }}" --backend tcg
+      - name: Package, SBOM, push and attest
+        if: github.event_name == 'push'
+        run: |
+          echo "Implement REL-003: zstd, ORAS push by digest, SPDX SBOM and GitHub attestation."
+          exit 1

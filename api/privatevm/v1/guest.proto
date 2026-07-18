@@ -1,0 +1,177 @@
+syntax = "proto3";
+
+package privatevm.v1;
+
+option go_package = "github.com/StevenBuglione/private-vm/gen/privatevm/v1;privatevmv1";
+
+import "privatevm/v1/common.proto";
+
+service PrivateVMGuest {
+  rpc Hello(GuestHelloRequest) returns (GuestHelloResponse);
+  rpc ConfigureVPN(ConfigureVPNRequest) returns (VPNStatus);
+  rpc TestVPN(TestVPNRequest) returns (VPNStatus);
+  rpc PrepareTorrent(PrepareTorrentRequest) returns (TorrentMetadata);
+  rpc StartTorrent(StartTorrentRequest) returns (stream TorrentEvent);
+  rpc UpdateScanner(UpdateScannerRequest) returns (ScannerUpdateStatus);
+  rpc Scan(ScanRequest) returns (stream ScanEvent);
+  rpc GetWorkspaceState(WorkspaceStateRequest) returns (WorkspaceState);
+  rpc ReceiveFile(stream GuestFileChunk) returns (TransferReceipt);
+  rpc SendFile(GuestSendFileRequest) returns (stream GuestFileChunk);
+  rpc ExportUSB(stream ExportUSBChunk) returns (ExportUSBReceipt);
+  rpc Shutdown(ShutdownRequest) returns (Empty);
+}
+
+message GuestAuth {
+  RequestContext context = 1;
+  GuestRole expected_role = 2;
+  bytes capability = 3;
+}
+
+message GuestHelloRequest {
+  GuestAuth auth = 1;
+}
+
+message GuestHelloResponse {
+  ApiVersion api_version = 1;
+  GuestRole role = 2;
+  string image_digest = 3;
+  repeated string capabilities = 4;
+}
+
+message ConfigureVPNRequest {
+  GuestAuth auth = 1;
+  bytes wireguard_config = 2;
+}
+
+message TestVPNRequest {
+  GuestAuth auth = 1;
+}
+
+message VPNStatus {
+  bool configured = 1;
+  bool handshake = 2;
+  bool dns_through_tunnel = 3;
+  bool ipv4_bypass_blocked = 4;
+  bool ipv6_bypass_blocked = 5;
+  string public_ip = 6;
+  repeated Diagnostic diagnostics = 7;
+}
+
+message PrepareTorrentRequest {
+  GuestAuth auth = 1;
+  oneof source {
+    bytes torrent_file = 2;
+    string magnet = 3;
+  }
+}
+
+message TorrentFile {
+  uint32 index = 1;
+  string path = 2;
+  uint64 size_bytes = 3;
+  bool selected = 4;
+}
+
+message TorrentMetadata {
+  string display_name = 1;
+  bytes info_hash = 2;
+  repeated TorrentFile files = 3;
+  uint64 selected_size_bytes = 4;
+}
+
+message StartTorrentRequest {
+  GuestAuth auth = 1;
+  repeated uint32 selected_file_indexes = 2;
+}
+
+message TorrentEvent {
+  Progress progress = 1;
+  Diagnostic diagnostic = 2;
+  bool complete = 3;
+}
+
+message UpdateScannerRequest {
+  GuestAuth auth = 1;
+}
+
+message ScannerUpdateStatus {
+  bool current = 1;
+  string database_version = 2;
+  int64 updated_unix_seconds = 3;
+  repeated Diagnostic diagnostics = 4;
+}
+
+message ScanRequest {
+  GuestAuth auth = 1;
+  string policy_name = 2;
+}
+
+message ScanFinding {
+  string code = 1;
+  string path = 2;
+  string severity = 3;
+  string detail = 4;
+}
+
+message ScanEvent {
+  Progress progress = 1;
+  ScanFinding finding = 2;
+  bool approved = 3;
+  bool complete = 4;
+}
+
+message WorkspaceStateRequest {
+  GuestAuth auth = 1;
+}
+
+message WorkspaceEntry {
+  string relative_path = 1;
+  FileDescriptor descriptor = 2;
+  bool exported = 3;
+  bool changed_since_export = 4;
+}
+
+message WorkspaceState {
+  enum State {
+    STATE_UNSPECIFIED = 0;
+    STATE_CLEAN = 1;
+    STATE_READY = 2;
+    STATE_UNEXPORTED = 3;
+    STATE_CHANGED = 4;
+  }
+  State state = 1;
+  repeated WorkspaceEntry entries = 2;
+}
+
+message GuestFileChunk {
+  GuestAuth auth = 1;
+  FileDescriptor descriptor = 2;
+  uint64 offset = 3;
+  bytes data = 4;
+  bool final = 5;
+}
+
+message GuestSendFileRequest {
+  GuestAuth auth = 1;
+  string relative_path = 2;
+}
+
+message ExportUSBChunk {
+  GuestAuth auth = 1;
+  FileDescriptor descriptor = 2;
+  uint64 offset = 3;
+  bytes data = 4;
+  bool final = 5;
+}
+
+message ExportUSBReceipt {
+  FileDescriptor descriptor = 1;
+  Hash written_digest = 2;
+  bool unmounted = 3;
+  bool flushed = 4;
+}
+
+message ShutdownRequest {
+  GuestAuth auth = 1;
+  bool poweroff = 2;
+}

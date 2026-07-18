@@ -1,0 +1,143 @@
+syntax = "proto3";
+
+package privatevm.v1;
+
+option go_package = "github.com/StevenBuglione/private-vm/gen/privatevm/v1;privatevmv1";
+
+import "privatevm/v1/common.proto";
+
+service PrivateVMDaemon {
+  rpc GetVersion(Empty) returns (VersionResponse);
+  rpc Doctor(DoctorRequest) returns (DoctorResponse);
+  rpc Plan(PlanRequest) returns (PlanResponse);
+  rpc CreateSession(CreateSessionRequest) returns (Session);
+  rpc GetSession(GetSessionRequest) returns (Session);
+  rpc WatchSession(GetSessionRequest) returns (stream SessionEvent);
+  rpc StartSession(StartSessionRequest) returns (Session);
+  rpc StopSession(StopSessionRequest) returns (Session);
+  rpc AbortSession(AbortSessionRequest) returns (Session);
+  rpc ImportWorkspace(stream ImportChunk) returns (TransferReceipt);
+  rpc ExportWorkspace(ExportWorkspaceRequest) returns (stream ExportChunk);
+  rpc EnrollUSB(EnrollUSBRequest) returns (USBEnrollment);
+}
+
+message VersionResponse {
+  string version = 1;
+  string commit = 2;
+  ApiVersion api_version = 3;
+}
+
+message DoctorRequest {
+  RequestContext context = 1;
+  bool strict = 2;
+}
+
+message DoctorResponse {
+  repeated Diagnostic diagnostics = 1;
+  bool runnable = 2;
+}
+
+message ResourceRequest {
+  uint32 vcpus = 1;
+  uint64 memory_bytes = 2;
+  uint64 root_bytes = 3;
+  uint64 scratch_bytes = 4;
+}
+
+message PlanRequest {
+  RequestContext context = 1;
+  GuestRole role = 2;
+  string image_bundle = 3;
+  ResourceRequest resources = 4;
+  string policy_name = 5;
+}
+
+message PlanResponse {
+  repeated Diagnostic diagnostics = 1;
+  ResourceRequest resolved_resources = 2;
+  string image_digest = 3;
+  bool runnable = 4;
+}
+
+message CreateSessionRequest {
+  RequestContext context = 1;
+  GuestRole role = 2;
+  string image_bundle = 3;
+  string policy_name = 4;
+  ResourceRequest resources = 5;
+}
+
+message GetSessionRequest {
+  RequestContext context = 1;
+}
+
+message StartSessionRequest {
+  RequestContext context = 1;
+}
+
+message StopSessionRequest {
+  RequestContext context = 1;
+  bool discard_unexported = 2;
+  bool require_clean = 3;
+}
+
+message AbortSessionRequest {
+  RequestContext context = 1;
+  string reason = 2;
+}
+
+message Session {
+  string id = 1;
+  GuestRole role = 2;
+  SessionPhase phase = 3;
+  string image_digest = 4;
+  string display_socket = 5;
+  repeated Diagnostic diagnostics = 6;
+}
+
+message SessionEvent {
+  uint64 sequence = 1;
+  Session session = 2;
+  Progress progress = 3;
+  Diagnostic diagnostic = 4;
+}
+
+message ImportChunk {
+  RequestContext context = 1;
+  FileDescriptor descriptor = 2;
+  uint64 offset = 3;
+  bytes data = 4;
+  bool final = 5;
+}
+
+message TransferReceipt {
+  FileDescriptor descriptor = 1;
+  Hash receiver_digest = 2;
+}
+
+message ExportWorkspaceRequest {
+  RequestContext context = 1;
+  string relative_path = 2;
+}
+
+message ExportChunk {
+  FileDescriptor descriptor = 1;
+  uint64 offset = 2;
+  bytes data = 3;
+  bool final = 4;
+}
+
+message EnrollUSBRequest {
+  RequestContext context = 1;
+  string sysfs_path = 2;
+  bool prepare = 3;
+}
+
+message USBEnrollment {
+  string enrollment_id = 1;
+  string vendor_id = 2;
+  string product_id = 3;
+  string serial = 4;
+  repeated string interfaces = 5;
+  uint64 capacity_bytes = 6;
+}

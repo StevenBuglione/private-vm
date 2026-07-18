@@ -1,0 +1,118 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://private-vm.dev/schema/image-manifest-v1.json",
+  "title": "private-vm guest image manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "project": {
+      "const": "private-vm"
+    },
+    "role": {
+      "enum": [
+        "workstation",
+        "downloader",
+        "scanner",
+        "exporter"
+      ]
+    },
+    "bundle": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "architecture": {
+      "enum": [
+        "x86_64",
+        "aarch64"
+      ]
+    },
+    "source_repository": {
+      "type": "string"
+    },
+    "source_commit": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "source_ref": {
+      "type": "string"
+    },
+    "workflow": {
+      "type": "string"
+    },
+    "image_digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "uncompressed_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "compressed_size_bytes": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "virtual_size_bytes": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "nixos_version": {
+      "type": "string"
+    },
+    "flake_lock_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "guest_api_major": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "guest_api_minor": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "minimum_qemu_version": {
+      "type": "string"
+    },
+    "capabilities": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "uniqueItems": true
+    },
+    "sbom_digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "built_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "schema_version",
+    "project",
+    "role",
+    "architecture",
+    "source_repository",
+    "source_commit",
+    "workflow",
+    "image_digest",
+    "uncompressed_sha256",
+    "compressed_size_bytes",
+    "virtual_size_bytes",
+    "nixos_version",
+    "flake_lock_sha256",
+    "guest_api_major",
+    "guest_api_minor",
+    "minimum_qemu_version",
+    "capabilities",
+    "sbom_digest",
+    "built_at"
+  ]
+}

@@ -1,0 +1,83 @@
+{
+  "version": 1,
+  "milestones": [
+    {
+      "id": "M0",
+      "name": "Specification lock",
+      "exit": [
+        "ADRs accepted",
+        "Threat model reviewed",
+        "Schemas and protocol reviewed",
+        "NIX-001 completed"
+      ]
+    },
+    {
+      "id": "M1",
+      "name": "Developer preview",
+      "exit": [
+        "CLI/daemon/guest RPC works",
+        "workstation boots graphically",
+        "normal teardown is clean",
+        "no torrent/scanner/USB yet"
+      ]
+    },
+    {
+      "id": "M2",
+      "name": "Private desktop alpha",
+      "exit": [
+        "VPN two-layer enforcement",
+        "workspace import/export tracking",
+        "verified public workstation image"
+      ]
+    },
+    {
+      "id": "M3",
+      "name": "Torrent quarantine alpha",
+      "exit": [
+        "metadata-first torrent workflow",
+        "ephemeral encrypted scratch",
+        "downloader destruction before scanner"
+      ]
+    },
+    {
+      "id": "M4",
+      "name": "Safe scanner beta",
+      "exit": [
+        "offline fail-closed scan",
+        "archive containment",
+        "document/media reconstruction",
+        "signed scan report"
+      ]
+    },
+    {
+      "id": "M5",
+      "name": "USB export beta",
+      "exit": [
+        "exact enrollment",
+        "headless exporter",
+        "three-way hash verification",
+        "host never mounts USB"
+      ]
+    },
+    {
+      "id": "M6",
+      "name": "Cross-distribution release candidate",
+      "exit": [
+        "NixOS module",
+        "Deb/RPM/generic installs",
+        "GHCR images/SBOM/attestations",
+        "clean-room release verification"
+      ]
+    },
+    {
+      "id": "M7",
+      "name": "v1.0",
+      "exit": [
+        "independent security review",
+        "all acceptance suites pass",
+        "risk register has no unowned critical risk",
+        "operations and recovery drills pass"
+      ]
+    }
+  ]
+}

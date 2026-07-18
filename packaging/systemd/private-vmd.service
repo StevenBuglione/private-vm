@@ -1,0 +1,33 @@
+[Unit]
+Description=private-vm privileged orchestration daemon
+Documentation=https://github.com/StevenBuglione/private-vm
+After=local-fs.target
+Before=shutdown.target
+
+[Service]
+Type=simple
+ExecStart=/usr/libexec/private-vmd --config /etc/private-vm/config.toml
+Restart=on-failure
+RestartSec=2
+User=root
+Group=private-vm
+UMask=0007
+RuntimeDirectory=private-vm
+RuntimeDirectoryMode=0750
+StateDirectory=private-vm
+StateDirectoryMode=0700
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectHome=yes
+ProtectSystem=strict
+ReadWritePaths=/run/private-vm /var/lib/private-vm /dev /sys
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_SYS_ADMIN CAP_SYS_RAWIO CAP_DAC_OVERRIDE CAP_CHOWN CAP_MKNOD
+AmbientCapabilities=
+LimitCORE=0
+LockPersonality=yes
+RestrictSUIDSGID=yes
+SystemCallArchitectures=native
+TimeoutStopSec=45
+
+[Install]
+WantedBy=multi-user.target

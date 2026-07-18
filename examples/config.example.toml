@@ -1,0 +1,35 @@
+version = 1
+strict = true
+
+[image_source]
+registry = "ghcr.io"
+repository = "StevenBuglione/private-vm"
+channel = "stable"
+require_attestation = true
+
+[runtime]
+directory = "/run/private-vm"
+image_cache = "/var/lib/private-vm/images"
+scratch_directory = "/var/lib/private-vm/scratch"
+small_scratch_max_bytes = 17179869184
+cleanup_timeout_seconds = 30
+
+[desktop]
+bundle = "development"
+viewer = "remote-viewer"
+audio = false
+memory_bytes = 17179869184
+vcpus = 8
+
+[vpn]
+profile_store = "none"
+profile_name = "proton-p2p"
+disable_ipv6_if_not_tunneled = true
+
+[usb]
+require_usbguard = true
+default_filesystem = "luks2-ext4"
+
+[logging]
+persistent_lifecycle_metadata = false
+telemetry = false

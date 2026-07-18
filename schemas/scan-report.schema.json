@@ -1,0 +1,146 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://private-vm.dev/schema/scan-report-v1.json",
+  "title": "private-vm scan report",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "session_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "policy": {
+      "type": "string"
+    },
+    "started_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "completed_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "scanner_image_digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "clamav_database_version": {
+      "type": "string"
+    },
+    "input": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "logical_name": {
+          "type": "string"
+        },
+        "size_bytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "detected_mime": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "logical_name",
+        "size_bytes",
+        "sha256",
+        "detected_mime"
+      ]
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "severity": {
+            "enum": [
+              "info",
+              "warning",
+              "blocking"
+            ]
+          },
+          "path": {
+            "type": "string"
+          },
+          "detail": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "severity",
+          "detail"
+        ]
+      }
+    },
+    "sanitized_outputs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "logical_name": {
+            "type": "string"
+          },
+          "size_bytes": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "detected_mime": {
+            "type": "string"
+          },
+          "transformation": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "logical_name",
+          "size_bytes",
+          "sha256",
+          "detected_mime",
+          "transformation"
+        ]
+      }
+    },
+    "result": {
+      "enum": [
+        "approved",
+        "rejected",
+        "error"
+      ]
+    },
+    "complete": {
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "schema_version",
+    "session_id",
+    "policy",
+    "started_at",
+    "completed_at",
+    "scanner_image_digest",
+    "input",
+    "findings",
+    "sanitized_outputs",
+    "result",
+    "complete"
+  ]
+}

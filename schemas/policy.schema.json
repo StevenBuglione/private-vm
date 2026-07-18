@@ -1,0 +1,115 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://private-vm.dev/schema/policy-v1.json",
+  "title": "private-vm content policy",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "const": 1
+    },
+    "name": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]{1,31}$"
+    },
+    "mode": {
+      "enum": [
+        "safe",
+        "quarantine"
+      ]
+    },
+    "limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "max_input_bytes": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "max_files": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "max_archive_depth": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10
+        },
+        "max_expansion_ratio": {
+          "type": "number",
+          "minimum": 1
+        },
+        "max_expanded_bytes": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "scan_timeout_seconds": {
+          "type": "integer",
+          "minimum": 30
+        }
+      },
+      "required": [
+        "max_input_bytes",
+        "max_files",
+        "max_archive_depth",
+        "max_expansion_ratio",
+        "max_expanded_bytes",
+        "scan_timeout_seconds"
+      ]
+    },
+    "rules": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "reject_on_malware": {
+          "type": "boolean",
+          "const": true
+        },
+        "reject_on_scan_error": {
+          "type": "boolean",
+          "const": true
+        },
+        "reject_on_skipped_file": {
+          "type": "boolean",
+          "const": true
+        },
+        "reject_encrypted_archives": {
+          "type": "boolean"
+        },
+        "block_executables": {
+          "type": "boolean"
+        },
+        "block_scripts": {
+          "type": "boolean"
+        },
+        "block_disk_images": {
+          "type": "boolean"
+        },
+        "sanitize_documents": {
+          "type": "boolean"
+        },
+        "reencode_media": {
+          "type": "boolean"
+        },
+        "strip_metadata": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "reject_on_malware",
+        "reject_on_scan_error",
+        "reject_on_skipped_file",
+        "block_executables",
+        "block_scripts",
+        "block_disk_images"
+      ]
+    }
+  },
+  "required": [
+    "version",
+    "name",
+    "mode",
+    "limits",
+    "rules"
+  ]
+}
