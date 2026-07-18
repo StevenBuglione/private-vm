@@ -118,21 +118,41 @@ func TestUnixGRPCPeerIdentityLifecycleAndSocketMode(t *testing.T) {
 	}
 }
 
+func TestGetVersionReportsCurrentProtocol(t *testing.T) {
+	response, err := (&Service{}).GetVersion(t.Context(), &privatevmv1.Empty{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.GetApiVersion().GetMajor() != protocolMajor || response.GetApiVersion().GetMinor() != protocolMinor {
+		t.Fatalf("GetVersion protocol = %v, want %d.%d", response.GetApiVersion(), protocolMajor, protocolMinor)
+	}
+}
+
 func TestProtocolMismatchReturnsTypedStatus(t *testing.T) {
-	service := &Service{}
-	_, err := service.Doctor(context.Background(), &privatevmv1.DoctorRequest{Context: &privatevmv1.RequestContext{
-		ApiVersion: &privatevmv1.ApiVersion{Major: 99}, RequestId: "request-0001",
-	}})
-	if status.Code(err) != codes.FailedPrecondition {
-		t.Fatalf("unexpected status: %v", err)
-	}
-	value, ok := status.FromError(err)
-	if !ok || len(value.Details()) != 1 {
-		t.Fatalf("typed error detail missing: %v", err)
-	}
-	detail, ok := value.Details()[0].(*privatevmv1.ErrorDetail)
-	if !ok || detail.GetCode() != "PROTOCOL_VERSION_MISMATCH" || detail.GetRemediation() == "" {
-		t.Fatalf("unexpected error detail: %#v", value.Details())
+	for _, test := range []struct {
+		name    string
+		version *privatevmv1.ApiVersion
+	}{
+		{name: "major", version: &privatevmv1.ApiVersion{Major: protocolMajor + 1}},
+		{name: "future-minor", version: &privatevmv1.ApiVersion{Major: protocolMajor, Minor: protocolMinor + 1}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			service := &Service{}
+			_, err := service.Doctor(context.Background(), &privatevmv1.DoctorRequest{Context: &privatevmv1.RequestContext{
+				ApiVersion: test.version, RequestId: "request-0001",
+			}})
+			if status.Code(err) != codes.FailedPrecondition {
+				t.Fatalf("unexpected status: %v", err)
+			}
+			value, ok := status.FromError(err)
+			if !ok || len(value.Details()) != 1 {
+				t.Fatalf("typed error detail missing: %v", err)
+			}
+			detail, ok := value.Details()[0].(*privatevmv1.ErrorDetail)
+			if !ok || detail.GetCode() != "PROTOCOL_VERSION_MISMATCH" || detail.GetRemediation() == "" {
+				t.Fatalf("unexpected error detail: %#v", value.Details())
+			}
+		})
 	}
 }
 

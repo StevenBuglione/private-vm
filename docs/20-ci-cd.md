@@ -40,11 +40,17 @@ For pull requests and pushes:
 - staticcheck
 - govulncheck
 - protobuf lint/breaking checks
+- clean protobuf regeneration with committed-output drift rejection
 - schema tests
 - fuzz smoke runs
 - Nix flake check/evaluation
 - package builds
 - no publishing
+
+The protobuf generator plugins are pinned by version and registry revision in
+`buf.gen.yaml`. CI checks out full history, compares pull requests with their
+exact base SHA and main pushes with the exact pre-push SHA, then runs `buf
+generate` and rejects modified, deleted, or untracked output under `gen/`.
 
 ## `image-build.yml`
 
