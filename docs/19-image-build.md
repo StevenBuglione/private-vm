@@ -16,6 +16,10 @@ The flake must expose:
 packages.x86_64-linux.private-vm
 packages.x86_64-linux.private-vmd
 packages.x86_64-linux.private-vm-guestd
+packages.x86_64-linux.guestd-workstation
+packages.x86_64-linux.guestd-downloader
+packages.x86_64-linux.guestd-scanner
+packages.x86_64-linux.guestd-exporter
 packages.x86_64-linux.image-workstation-basic
 packages.x86_64-linux.image-workstation-office
 packages.x86_64-linux.image-workstation-development
@@ -26,6 +30,11 @@ nixosModules.default
 checks.x86_64-linux.default
 devShells.x86_64-linux.default
 ```
+
+The generic `private-vm-guestd` output is included for packaging but has no
+compiled role and refuses to serve. Each image consumes only its matching
+role-specific guestd output, which prevents a boot-time argument from changing
+the API surface.
 
 The initial Nix task must choose and lock one of the supported NixOS 26.05 image
 interfaces:

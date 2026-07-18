@@ -30,6 +30,11 @@ Starts the privileged server, recovery scan, authorization, and orchestrator.
 Reads the compiled role from a build flag/config, starts the VSOCK service, and
 registers only role-specific handlers.
 
+The Nix guest derivations set `internal/guest.CompiledRole` with a linker flag.
+No runtime role selector exists. guestd reads the 256-bit capability from the
+fixed `fw_cfg` sysfs item, starts gRPC on VSOCK port 4050, and shuts down with a
+bounded graceful-stop interval.
+
 ## Internal package boundaries
 
 ```text
@@ -56,6 +61,12 @@ workspace    bounded import/export
 
 Packages must depend inward toward interfaces. External process execution is
 centralized behind narrow interfaces so tests can use fakes.
+
+`internal/guest` owns the volatile CID allocator, context-aware AF_VSOCK dialer,
+VSOCK-only gRPC transport credentials, locked capability token, authentication
+and request-context interceptors, exact role service registration, and verified
+Hello handshake. Linux dialing uses a cancellable socket connect directly;
+there is no detached dial goroutine.
 
 ## Dependency recommendations
 

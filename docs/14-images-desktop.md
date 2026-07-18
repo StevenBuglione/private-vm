@@ -155,6 +155,10 @@ forbidden devices
 package/SBOM references
 ```
 
+The manifest capability set must exactly equal the compiled role map in
+`docs/09-rpc-protocol.md`. Extra, missing, or duplicate capabilities are a fatal
+handshake mismatch; capabilities do not silently negotiate across roles.
+
 ## Update model
 
 Images are replaced, never in-place upgraded during a user session. The CLI may

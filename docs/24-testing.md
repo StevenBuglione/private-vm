@@ -38,6 +38,13 @@ Targets:
 - fake QEMU executable with QMP server
 - Unix gRPC daemon
 - VSOCK abstraction replaced with Unix socket
+- capability-authenticated guest gRPC over an in-memory listener
+- missing/wrong token rejection for unary and streaming RPCs
+- exact role-only service registration and wrong-role `Unimplemented`
+- protocol/image/capability handshake mismatch blocking
+- concurrent CID allocation, reservation, exhaustion, release and collision
+- `fw_cfg` exact-length and no-symlink token reads
+- VSOCK transport credentials rejecting non-VSOCK connections
 - fake cryptsetup/nft/ip/usb processes
 - filesystem ownership/race tests
 - crash injection at every resource creation step

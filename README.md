@@ -4,9 +4,9 @@
 graphical workstations and a compartmentalized torrent-download, malware-scan,
 sanitization and USB-export workflow.
 
-This directory is both a **complete implementation blueprint** and a
-**compilable starter repository**. It is designed to be handed directly to a
-coding agent.
+This repository contains the frozen v1 specification and an implementation in
+progress. Completed boundaries are tested as they land; unfinished workflows
+continue to fail closed.
 
 ## Read in this order
 
@@ -72,9 +72,13 @@ creating this package.
 
 ## Important status
 
-This is not an operational security product. Only `version` and the starter
-`doctor` command are implemented. Every security-sensitive command intentionally
-fails as not implemented until its backlog tasks and acceptance tests pass.
+This is not yet an operational security product. Configuration, diagnostics,
+the authenticated host daemon, volatile session records, typed QEMU/QMP
+lifecycle, ephemeral storage primitives, and the authenticated role-restricted
+guest channel are implemented and unit/integration tested. End-to-end role
+orchestration, VPN/torrent/scanner/USB workflows, image release verification,
+packaging, and the complete acceptance runbook remain in progress. Unfinished
+security-sensitive commands intentionally fail as not implemented.
 
 ## License
 

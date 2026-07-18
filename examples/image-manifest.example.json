@@ -19,9 +19,12 @@
   "minimum_qemu_version": "9.2",
   "capabilities": [
     "desktop",
-    "vpn",
-    "workspace-import",
-    "workspace-export"
+    "guest-events",
+    "guest-shutdown",
+    "guest-status",
+    "network-warning",
+    "workspace-export",
+    "workspace-import"
   ],
   "sbom_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
   "built_at": "2026-07-18T12:00:00Z"

@@ -32,11 +32,27 @@
           ];
         };
 
-      guest = system: module:
+      guestdFor = system: role:
+        let pkgs = pkgsFor system;
+        in pkgs.buildGoModule {
+          pname = "private-vm-guestd-${role}";
+          version = "0.0.0-dev";
+          src = self;
+          vendorHash = null;
+          subPackages = [ "cmd/private-vm-guestd" ];
+          ldflags = [
+            "-s"
+            "-w"
+            "-X github.com/StevenBuglione/private-vm/internal/buildinfo.Version=0.0.0-dev"
+            "-X github.com/StevenBuglione/private-vm/internal/guest.CompiledRole=${role}"
+          ];
+        };
+
+      guest = system: role: module:
         nixpkgs.lib.nixosSystem {
           inherit system;
           specialArgs = {
-            privateVMPackage = privateVMFor system;
+            privateVMPackage = guestdFor system role;
           };
           modules = [
             ./nix/guests/image-base.nix
@@ -47,17 +63,21 @@
       packages = forAllSystems (system:
         let
           pkgs = pkgsFor system;
-          workstationBasic = guest system ./nix/guests/workstation-basic.nix;
-          workstationOffice = guest system ./nix/guests/workstation-office.nix;
-          workstationDevelopment = guest system ./nix/guests/workstation-development.nix;
-          downloader = guest system ./nix/guests/downloader.nix;
-          scanner = guest system ./nix/guests/scanner.nix;
-          exporter = guest system ./nix/guests/exporter.nix;
+          workstationBasic = guest system "workstation" ./nix/guests/workstation-basic.nix;
+          workstationOffice = guest system "workstation" ./nix/guests/workstation-office.nix;
+          workstationDevelopment = guest system "workstation" ./nix/guests/workstation-development.nix;
+          downloader = guest system "downloader" ./nix/guests/downloader.nix;
+          scanner = guest system "scanner" ./nix/guests/scanner.nix;
+          exporter = guest system "exporter" ./nix/guests/exporter.nix;
           binaryPackages = {
           default = privateVMFor system;
           private-vm = privateVMFor system;
           private-vmd = privateVMFor system;
           private-vm-guestd = privateVMFor system;
+          guestd-workstation = guestdFor system "workstation";
+          guestd-downloader = guestdFor system "downloader";
+          guestd-scanner = guestdFor system "scanner";
+          guestd-exporter = guestdFor system "exporter";
           };
           imagePackages = nixpkgs.lib.optionalAttrs (system == "x86_64-linux") {
             image-workstation-basic = workstationBasic.config.system.build.images.qemu-efi;
