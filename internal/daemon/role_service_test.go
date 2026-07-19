@@ -23,6 +23,10 @@ type fakeRoleOrchestrator struct {
 	active         map[string]bool
 }
 
+func (f *fakeRoleOrchestrator) PlanAllocation(_ session.Snapshot, _ session.LaunchPlan) session.AllocateFunc {
+	return f.allocation("plan")
+}
+
 func newFakeRoleOrchestrator() *fakeRoleOrchestrator {
 	return &fakeRoleOrchestrator{workspaceState: "CLEAN", active: make(map[string]bool)}
 }

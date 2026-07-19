@@ -15,6 +15,7 @@ import (
 // registered with the session actor before the next lifecycle gate is
 // published, so cancellation can never create an unowned resource window.
 type RoleOrchestrator interface {
+	PlanAllocation(session.Snapshot, session.LaunchPlan) session.AllocateFunc
 	Preflight(context.Context, session.Snapshot) error
 	VerifyImages(context.Context, session.Snapshot) error
 	StorageAllocation(session.Snapshot) session.AllocateFunc

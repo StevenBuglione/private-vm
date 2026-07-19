@@ -111,7 +111,8 @@ func (s *Service) CreateSession(ctx context.Context, request *privatevmv1.Create
 	if err := validateSelectors(role, request.GetImageBundle(), request.GetPolicyName(), s.Config); err != nil {
 		return nil, err
 	}
-	if _, err := validateResources(request.GetResources(), resourceDefaults(role, s.Config)); err != nil {
+	resources, err := validateResources(request.GetResources(), resourceDefaults(role, s.Config))
+	if err != nil {
 		return nil, err
 	}
 	identity, err := identityFromContext(ctx)
@@ -127,6 +128,21 @@ func (s *Service) CreateSession(ctx context.Context, request *privatevmv1.Create
 	}
 	if s.afterCreate != nil {
 		s.afterCreate()
+	}
+	if s.Roles != nil {
+		plan := session.LaunchPlan{
+			Role: role, ImageBundle: resolvedBundle(role, request.GetImageBundle(), s.Config),
+			PolicyName: request.GetPolicyName(), VCPUs: resources.GetVcpus(),
+			MemoryBytes: resources.GetMemoryBytes(), RootBytes: resources.GetRootBytes(),
+			ScratchBytes: resources.GetScratchBytes(),
+		}
+		allocation := s.Roles.PlanAllocation(snapshot, plan)
+		if allocation == nil {
+			return nil, s.cleanupFailedCreate(snapshot, identity.UID, errors.New("role plan allocation is unavailable"))
+		}
+		if err := s.Sessions.AcquireResource(ctx, snapshot.ID, identity.UID, "session-plan", allocation); err != nil {
+			return nil, s.cleanupFailedCreate(snapshot, identity.UID, err)
+		}
 	}
 	if err := ctx.Err(); err != nil {
 		cleanupCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -144,6 +160,15 @@ func (s *Service) CreateSession(ctx context.Context, request *privatevmv1.Create
 		return nil, sessionError(err)
 	}
 	return sessionToProto(snapshot), nil
+}
+
+func (s *Service) cleanupFailedCreate(snapshot session.Snapshot, ownerUID uint32, cause error) error {
+	cleanupCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if _, cleanupErr := s.Sessions.Cleanup(cleanupCtx, snapshot.ID, ownerUID); cleanupErr != nil {
+		return sessionError(session.ErrCleanupIncomplete)
+	}
+	return sessionError(cause)
 }
 
 func (s *Service) GetSession(ctx context.Context, request *privatevmv1.GetSessionRequest) (*privatevmv1.Session, error) {
@@ -572,6 +597,16 @@ func validateSelectors(role session.Role, bundle, policyName string, snapshot co
 		return rpcError(codes.InvalidArgument, "POLICY_NAME_INVALID", "The policy name is unsupported.", "Choose safe or quarantine.", false)
 	}
 	return nil
+}
+
+func resolvedBundle(role session.Role, requested string, snapshot config.Config) string {
+	if role != session.RoleWorkstation {
+		return ""
+	}
+	if requested != "" {
+		return requested
+	}
+	return snapshot.Desktop().Bundle()
 }
 
 type requestMetadata struct {
