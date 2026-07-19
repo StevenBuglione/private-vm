@@ -145,12 +145,32 @@ func TestAcquireResourceIsAtomicOnCancellation(t *testing.T) {
 	}
 	operation, cancel := context.WithCancel(context.Background())
 	var cleaned, audited atomic.Int32
+	cleanupDone := make(chan struct{}, 1)
+	auditDone := make(chan struct{}, 1)
 	err = manager.AcquireResource(operation, snapshot.ID, 1000, "overlay", func(context.Context) (CleanupFunc, AuditFunc, error) {
 		cancel()
-		return func(context.Context) error { cleaned.Add(1); return nil }, func(context.Context) error { audited.Add(1); return nil }, nil
+		return func(context.Context) error {
+				cleaned.Add(1)
+				cleanupDone <- struct{}{}
+				return nil
+			}, func(context.Context) error {
+				audited.Add(1)
+				auditDone <- struct{}{}
+				return nil
+			}, nil
 	})
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("expected canceled allocation, got %v", err)
+	}
+	for name, done := range map[string]<-chan struct{}{
+		"cleanup": cleanupDone,
+		"audit":   auditDone,
+	} {
+		select {
+		case <-done:
+		case <-time.After(time.Second):
+			t.Fatalf("canceled allocation did not complete %s", name)
+		}
 	}
 	if cleaned.Load() != 1 || audited.Load() != 1 {
 		t.Fatalf("canceled allocation was orphaned: cleanup=%d audit=%d", cleaned.Load(), audited.Load())
