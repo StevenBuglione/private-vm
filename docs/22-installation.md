@@ -49,6 +49,19 @@ The module should:
 - add the chosen user to group only when explicitly configured
 - avoid enabling libvirt
 
+The module does not create backup-exclusion evidence by default. After the
+operator has actually excluded `/var/lib/private-vm/scratch` from every host
+backup, indexer and snapshot policy, set:
+
+```nix
+services.private-vm.scratchBackupExcluded = true;
+```
+
+This writes the exact validation marker required for disk-backed encrypted
+scratch. The option is an operator assertion only; private-vm does not claim a
+third-party backup tool honors the marker. Without that assertion, LUKS scratch
+fails closed while capacity-qualified tmpfs sessions remain possible.
+
 After group changes, re-login.
 
 The daemon runtime directory is `root:<configured-group>` mode `0750`, its
