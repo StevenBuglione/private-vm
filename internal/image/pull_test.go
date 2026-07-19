@@ -25,12 +25,10 @@ import (
 
 type fakeRepositoryFactory struct {
 	repository *fakeRepository
-	opened     string
 	err        error
 }
 
 func (factory *fakeRepositoryFactory) Open(repository string) (Repository, error) {
-	factory.opened = repository
 	return factory.repository, factory.err
 }
 
