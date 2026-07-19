@@ -11,7 +11,7 @@ var (
 	// These sentinels classify failures without retaining rejected profile data,
 	// resolver output, or wrapped operating-system errors.
 	ErrInvalidProfile     = errors.New("invalid Proton WireGuard profile")
-	ErrEndpointUnresolved = errors.New("Proton endpoint unresolved")
+	ErrEndpointUnresolved = errors.New("proton endpoint unresolved")
 	ErrProfileNotFound    = errors.New("volatile VPN profile not imported")
 	ErrProfileNotReady    = errors.New("volatile VPN profile endpoint check required")
 	ErrProfileRotated     = errors.New("volatile VPN profile generation changed")
