@@ -31,23 +31,37 @@ type ProductionInvoker struct {
 	stdin      io.Reader
 	prompt     io.Writer
 	readInput  func(context.Context, ValueRequest) (*secret.Bytes, error)
+	readStream func(context.Context, StreamRequest) (io.ReadCloser, error)
+	torrents   TorrentSubmitter
 	requestID  func() (string, error)
 }
 
 func NewProductionInvoker(socketPath string, stdin io.Reader, prompt io.Writer) Invoker {
+	return NewProductionInvokerWithTorrent(socketPath, stdin, prompt, nil)
+}
+
+// NewProductionInvokerWithTorrent installs the authenticated torrent
+// orchestrator handoff without changing the CLI's Unix-daemon VPN transport.
+func NewProductionInvokerWithTorrent(socketPath string, stdin io.Reader, prompt io.Writer, torrents TorrentSubmitter) Invoker {
 	if stdin == nil {
 		stdin = os.Stdin
 	}
 	if prompt == nil {
 		prompt = io.Discard
 	}
-	return &ProductionInvoker{socketPath: socketPath, stdin: stdin, prompt: prompt, readInput: SensitiveInput, requestID: newRequestID}
+	return &ProductionInvoker{socketPath: socketPath, stdin: stdin, prompt: prompt, readInput: SensitiveInput, readStream: SensitiveStream, torrents: torrents, requestID: newRequestID}
 }
 
 func (invoker *ProductionInvoker) Invoke(ctx context.Context, id CommandID, intent Intent) (Result, error) {
 	switch id {
 	case CommandWorkstationStart, "desktop.status", "desktop.stop", "session.list", "session.status", "session.stop", "session.abort", "session.cleanup":
 		return invoker.invokeSession(ctx, id, intent)
+	case CommandTorrentAdd:
+		request, ok := intent.(TorrentInputIntent)
+		if !ok {
+			return Result{}, invalidTorrentIntent()
+		}
+		return invoker.submitTorrent(ctx, request)
 	case CommandVPNImport, CommandVPNRotate:
 		request, ok := intent.(VPNImportIntent)
 		if !ok {

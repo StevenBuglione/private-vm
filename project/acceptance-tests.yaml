@@ -391,6 +391,27 @@
           "given": "completed download",
           "when": "scan phase starts",
           "then": "no downloader QEMU process exists"
+        },
+        {
+          "id": "TOR-004",
+          "name": "Secure input remains off argv and logs",
+          "given": "synthetic magnet and metainfo fixtures",
+          "when": "hidden-terminal, stdin and regular-file input paths run",
+          "then": "input is bounded and cleared, malformed input rejects, and no private value enters argv, environment, status or errors"
+        },
+        {
+          "id": "TOR-005",
+          "name": "VPN loss pauses payload",
+          "given": "an approved synthetic download in progress",
+          "when": "the typed VPN-loss responder runs",
+          "then": "qBittorrent is paused before the loss is reported and explicit re-verification is required"
+        },
+        {
+          "id": "TOR-006",
+          "name": "Seal cleanup is retryable",
+          "given": "a verified completed synthetic download",
+          "when": "the downloader absence audit fails once",
+          "then": "scanner readiness remains false and a later retry audits destruction without downloading or resealing again"
         }
       ]
     },

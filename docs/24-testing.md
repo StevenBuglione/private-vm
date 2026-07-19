@@ -496,6 +496,24 @@ Mock Proton endpoint:
 - qBittorrent bound interface checked
 - LAN access blocked
 
+## Torrent source tests
+
+TOR-001–TOR-003 source tests use only synthetic BTIH/metainfo values, semantic
+fakes and an in-memory qBittorrent HTTP fixture. They cover malformed and
+oversized input, hidden-terminal/stdin/file source selection, source
+destruction and redacted failures; add-paused ordering, repeated pause during
+metadata fetch, zero-payload evidence, path/case hazards, safe-policy blocked
+types, explicit selection and all capacity stages; success, error,
+cancellation, timeout/stall pause, VPN-loss pause, exact manifest matching,
+sync/unmount, idempotent cleanup and retryable downloader absence audit.
+
+The HTTP contract test proves only loopback API origin, fixed quarantine path,
+paused add and bounded/redacted responses. The Linux file verifier uses
+`openat2` beneath the quarantine root with no symlinks, magic links or mount
+crossing, requires one-link regular files of exact size and hashes with bounded
+memory. Live image qBittorrent API compatibility, block-device mounting, VPN
+packets and QEMU absence remain explicit acceptance tests.
+
 ## Cleanup fault matrix
 
 Inject failure after each:

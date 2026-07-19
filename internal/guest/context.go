@@ -49,7 +49,14 @@ func (s *contextServerStream) RecvMsg(message any) error {
 	}
 	switch request := message.(type) {
 	case *privatevmv1.TorrentInputFrame:
-		return ValidateGuestContext(request.GetContext(), s.role)
+		if s.validated {
+			return nil
+		}
+		if err := ValidateGuestContext(request.GetContext(), s.role); err != nil {
+			return err
+		}
+		s.validated = true
+		return nil
 	case *privatevmv1.TransferFrame:
 		if s.validated {
 			return nil

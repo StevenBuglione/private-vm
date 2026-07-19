@@ -9,6 +9,7 @@ import (
 	"github.com/StevenBuglione/private-vm/internal/apperror"
 	"github.com/StevenBuglione/private-vm/internal/guestvpn"
 	"github.com/StevenBuglione/private-vm/internal/session"
+	"github.com/StevenBuglione/private-vm/internal/torrent"
 	"github.com/StevenBuglione/private-vm/internal/vpn"
 	"google.golang.org/grpc/codes"
 )
@@ -18,7 +19,18 @@ import (
 // generated unimplemented server fails them closed until their owner exists.
 type DownloaderVPNServer struct {
 	privatevmv1.UnimplementedDownloaderGuestServiceServer
-	controller *guestvpn.Controller
+	controller        *guestvpn.Controller
+	torrentController *torrent.Controller
+}
+
+// NewDownloaderServer composes the exact downloader VPN and torrent services.
+// The separate constructor above remains useful for NET-003 tests and keeps
+// torrent methods fail closed until this complete composition is installed.
+func NewDownloaderServer(vpnController *guestvpn.Controller, torrentController *torrent.Controller) (*DownloaderVPNServer, error) {
+	if vpnController == nil || torrentController == nil {
+		return nil, errors.New("downloader VPN and torrent controllers are required")
+	}
+	return &DownloaderVPNServer{controller: vpnController, torrentController: torrentController}, nil
 }
 
 func NewDownloaderVPNServer(controller *guestvpn.Controller) (*DownloaderVPNServer, error) {

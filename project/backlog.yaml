@@ -565,7 +565,8 @@
           "acceptance": [
             "default magnet absent from shell history/process list",
             "input size bounded",
-            "malformed URI rejected"
+            "malformed URI rejected",
+            "guest stream clears every received chunk and rejects mixed, missing-final or excessive framing"
           ]
         },
         {
@@ -585,7 +586,8 @@
           "acceptance": [
             "payload bytes remain paused until approval",
             "unexpected executable files highlighted",
-            "capacity recalculated from selected files"
+            "capacity recalculated from selected files across quarantine, scan, reconstruction and destination stages",
+            "unsafe paths, normalized duplicates and case collisions reject before payload"
           ]
         },
         {
@@ -604,7 +606,9 @@
           "acceptance": [
             "VPN loss pauses/stops traffic",
             "download cannot write outside quarantine",
-            "downloader destroyed before scanner sees storage"
+            "downloader destroyed before scanner sees storage",
+            "completion verifies exact selected paths, sizes and hashes before shutdown and sync/unmount",
+            "failed downloader absence audit keeps scanner readiness blocked and is retryable"
           ]
         }
       ]

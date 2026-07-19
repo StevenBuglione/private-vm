@@ -249,6 +249,22 @@ Downloader:
 - `GetDownloadStatus`
 - `SealQuarantine`
 
+`AddTorrent` requires its authenticated `GuestContext` on the first frame,
+then accepts one kind of non-empty chunk: magnet or metainfo, never both. Each
+chunk is at most 16 KiB, at most 1,024 frames are accepted, the cumulative
+limits are 8 KiB and 16 MiB respectively, and exactly one final frame is
+required. Received protobuf byte slices are detached and cleared on every
+path. Metadata is returned only after qBittorrent has been explicitly paused,
+payload-byte evidence is zero and every file priority has been set to zero.
+
+The downloader controller serializes selection, capacity approval, start,
+pause, progress and seal state. `StartDownload` is unavailable before explicit
+selection and all quarantine/scan/reconstruction/destination capacity gates.
+VPN loss invokes the same bounded pause owner. `SealQuarantine` verifies exact
+selected paths/sizes and hashes, shuts down qBittorrent, syncs and unmounts in
+the guest; the host coordinator must additionally destroy and audit the
+downloader before it can issue a scanner-ready receipt.
+
 The implemented downloader VPN adapter accepts at most the frozen 64-KiB
 profile size, clears and detaches the protobuf byte slice on every handler
 return (including rejected role/context), and parses only a host-resolved

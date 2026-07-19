@@ -12,6 +12,7 @@ type CommandID string
 const (
 	CommandWorkstationStart CommandID = "workstation.start"
 	CommandTorrentRun       CommandID = "torrent.run"
+	CommandTorrentAdd       CommandID = "torrent.add"
 	CommandScannerStart     CommandID = "scanner.start"
 	CommandVPNImport        CommandID = "vpn.import"
 	CommandVPNInspect       CommandID = "vpn.inspect"
@@ -105,6 +106,7 @@ type TorrentIntent struct {
 func (TorrentIntent) privateVMIntent() {}
 
 type TorrentInputIntent struct {
+	MagnetTTY   bool
 	MagnetStdin bool
 	TorrentFile string
 }

@@ -45,6 +45,7 @@ pairs = [
     ("schemas/image-release-receipt.schema.json", "examples/image-release-receipt.example.json", "json"),
     ("schemas/image-sbom.schema.json", "examples/image-sbom.spdx.example.json", "json"),
     ("schemas/network-status.schema.json", "examples/network-status.example.json", "json"),
+    ("schemas/torrent-status.schema.json", "examples/torrent-status.example.json", "json"),
     ("schemas/scan-report.schema.json", "examples/scan-report.example.json", "json"),
     ("schemas/vpn-profile-status.schema.json", "examples/vpn-profile-status.example.json", "json"),
     ("schemas/workstation-bundles.schema.json", "project/workstation-bundles.json", "json"),
@@ -173,6 +174,19 @@ for field, value in {
     unsafe_guest_vpn = deepcopy(guest_vpn_status)
     unsafe_guest_vpn[field] = value
     negative_cases.append((f"guest VPN {field} in status", guest_vpn_status_schema, unsafe_guest_vpn))
+torrent_status_schema = json.loads((ROOT / "schemas/torrent-status.schema.json").read_text(encoding="utf-8"))
+torrent_status = json.loads((ROOT / "examples/torrent-status.example.json").read_text(encoding="utf-8"))
+for field, value in {
+    "magnet": "magnet:?" + "xt=urn:btih:public-fixture",
+    "info_hash": "public-fixture",
+    "display_name": "private-name",
+    "file_path": "private/path",
+    "endpoint": "1.1.1.1:51820",
+    "raw_output": "synthetic command output",
+}.items():
+    unsafe_torrent = deepcopy(torrent_status)
+    unsafe_torrent[field] = value
+    negative_cases.append((f"torrent {field} in status", torrent_status_schema, unsafe_torrent))
 weakened = deepcopy(safe_policy)
 weakened["rules"]["sanitize_documents"] = False
 negative_cases.append(("weakened safe policy", policy_schema, weakened))

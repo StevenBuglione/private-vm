@@ -104,6 +104,22 @@ vpn          WireGuard parser and tests
 workspace    bounded import/export
 ```
 
+`internal/torrent` owns one serialized metadata-to-seal state machine. Its
+qBittorrent adapter has a package-fixed `http://127.0.0.1:8080` origin and
+package-fixed quarantine save path; no generic Web API URL, save path, hook or
+command surface exists. Adds are paused, metadata polling repeatedly enforces
+pause, selections first set every priority to zero, and payload start requires
+a conservative four-stage capacity plan. The typed VPN responder pauses the
+same controller. Completion uses no-follow/beneath/no-cross-device opens to
+hash exact selected regular files, then qBittorrent shutdown and guest
+sync/unmount precede a separate host destruction/absence-audit gate.
+
+The CLI torrent adapter uses the existing hidden terminal and bounded stream
+owners. Magnet parsing operates on bytes and protected memory; metainfo is
+streamed to the authenticated orchestrator and is not parsed on the host.
+Internal handles, metadata and manifests redact formatting and reject durable
+serialization. Only `torrent-status.schema.json` is safe for machine output.
+
 Packages must depend inward toward interfaces. External process execution is
 centralized behind narrow interfaces so tests can use fakes.
 

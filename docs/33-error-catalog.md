@@ -323,6 +323,32 @@ endpoint, address, DNS, source-path or resolver details. Caller cancellation and
 operation timeouts continue to use the canonical CLI/RPC context mappings at
 their eventual boundary.
 
+### Torrent
+
+| Code | Exit | Safe meaning |
+|---|---:|---|
+| `TORRENT_REQUEST_INVALID` | 17 | The current state or typed request is invalid. |
+| `TORRENT_INPUT_INVALID` | 17 | Magnet/metainfo syntax or stream framing is invalid. |
+| `TORRENT_INPUT_TOO_LARGE` | 17 | Magnet or metainfo exceeded its fixed bound. |
+| `TORRENT_SOURCE_UNSAFE` | 17 | The selected metainfo file failed local regular/no-follow checks. |
+| `TORRENT_INPUT_READ_FAILED` | 17 | Secure input could not be read or synchronously transferred. |
+| `TORRENT_METADATA_TIMEOUT` | 17 | Paused metadata did not become safely available in time. |
+| `TORRENT_METADATA_UNSAFE` | 17 | Metadata contains payload bytes, unsafe paths, collisions or invalid bounds. |
+| `TORRENT_SELECTION_INVALID` | 17 | Explicit indexes are absent, duplicate or outside metadata. |
+| `TORRENT_EXECUTABLE_BLOCKED` | 17 | Safe policy blocks the selected executable-like type. |
+| `TORRENT_CAPACITY_INSUFFICIENT` | 14 | A required encrypted workflow stage lacks conservative capacity. |
+| `TORRENT_PAYLOAD_NOT_APPROVED` | 17 | Payload start was requested before selection/capacity approval. |
+| `TORRENT_DOWNLOAD_STALLED` | 17 | No bounded progress occurred before the stall ceiling. |
+| `TORRENT_DOWNLOAD_FAILED` | 17 | qBittorrent reported invalid state, progress or an operation failure. |
+| `TORRENT_VPN_LOST` | 13 | Typed VPN loss paused transfer and requires re-verification. |
+| `QUARANTINE_SEAL_FAILED` | 17 | Exact completion/hash/shutdown/sync/unmount proof failed. |
+| `DOWNLOADER_CLEANUP_INCOMPLETE` | 24 | Host absence audit failed; scanner readiness remains blocked. |
+| `TORRENT_CANCELLED` | 21 | Guest operation was cancelled after a bounded pause attempt. |
+| `TORRENT_TIMEOUT` | 15 | Guest operation exceeded its deadline after a bounded pause attempt. |
+
+All messages and remediations omit magnets, torrent identifiers, display/file
+names, content hashes, endpoints, source paths and qBittorrent output.
+
 ### Scanner
 
 - `SCANNER_DEFINITIONS_STALE`

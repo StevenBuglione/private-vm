@@ -148,6 +148,7 @@ No v1 command imports a directory.
 
 ```text
 private-vm torrent start [--policy safe|quarantine]
+private-vm torrent add --magnet-tty
 private-vm torrent add --magnet-stdin
 private-vm torrent add --torrent-file FILE
 private-vm torrent metadata
@@ -162,6 +163,12 @@ private-vm torrent complete
 
 `--magnet STRING` is absent by default. A deliberately unsafe argv flag may be
 added only for debugging builds, never official release UX.
+
+`--magnet-tty` uses the process-serialized `/dev/tty` reader, disables echo and
+restores terminal state on every return path. `--magnet-stdin` uses the bounded
+owned standard-input adapter. `.torrent` input is a no-follow regular-file
+stream capped at 16 MiB; its path is consumed by the unprivileged CLI and is not
+sent to guestd. Exactly one source is required.
 
 ### Scan
 

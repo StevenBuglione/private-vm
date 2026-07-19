@@ -239,6 +239,14 @@ Required settings:
 - no alternate upload directory outside quarantine
 - no web API listener beyond localhost
 
+The source adapter fixes the API origin to `http://127.0.0.1:8080`, supplies
+the required same-origin headers, bounds every response to 2 MiB or less and
+uses only the reviewed v2 torrent/app endpoints. The save path is the compiled
+guest quarantine path. It has no caller-set URL, path, raw API method, hook or
+preference surface. Authentication and the image's exact qBittorrent
+configuration are composed by the downloader image/runtime owner; live API
+compatibility and interface-binding inspection remain image acceptance gates.
+
 Port forwarding is not part of v1. Download functionality does not require it,
 and it adds state and inbound exposure.
 

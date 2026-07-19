@@ -151,6 +151,15 @@ provide static guest addressing, a scoped TAP descriptor or the ephemeral guest
 VPN configuration only while the same current VPN resolution plan and network
 lifecycle lease remain valid.
 
+## Redacted torrent status
+
+`schemas/torrent-status.schema.json` is the only durable/machine-safe torrent
+status shape. It contains a stable workflow state, byte counters, a stable code
+and remediation. It cannot contain a magnet, info hash, display name, file
+path, content hash, VPN endpoint, qBittorrent response or external-command
+output. Metadata and the completed-file manifest remain volatile internal/RPC
+values whose Go types reject serialization.
+
 ## Sensitive versus non-sensitive fields
 
 Sensitive by default:

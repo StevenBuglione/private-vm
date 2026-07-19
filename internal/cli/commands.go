@@ -231,19 +231,23 @@ func (factory commandFactory) torrent() *cobra.Command {
 	}, func([]string) Intent { return TorrentIntent{Policy: startPolicy} })
 	start.Flags().StringVar(&startPolicy, "policy", "safe", "safe or quarantine")
 
-	var magnetStdin bool
+	var magnetTTY, magnetStdin bool
 	var torrentFile string
-	add := factory.operation("add", "Add a torrent through bounded secure input", "torrent.add", noArgs, func(*cobra.Command) error {
-		if err := validateExclusive(boolCount(magnetStdin, torrentFile != ""), true,
+	add := factory.operation("add", "Add a torrent through bounded secure input", CommandTorrentAdd, noArgs, func(*cobra.Command) error {
+		selected := boolCount(magnetTTY, magnetStdin, torrentFile != "")
+		if err := validateExclusive(selected, true,
 			"Torrent input requires exactly one secure source.",
-			"Choose either --magnet-stdin or --torrent-file."); err != nil {
+			"Choose hidden terminal input, --magnet-stdin, or --torrent-file."); err != nil {
 			return err
 		}
 		if torrentFile != "" {
 			return validatePath(torrentFile)
 		}
 		return nil
-	}, func([]string) Intent { return TorrentInputIntent{MagnetStdin: magnetStdin, TorrentFile: torrentFile} })
+	}, func([]string) Intent {
+		return TorrentInputIntent{MagnetTTY: magnetTTY, MagnetStdin: magnetStdin, TorrentFile: torrentFile}
+	})
+	add.Flags().BoolVar(&magnetTTY, "magnet-tty", false, "read one bounded magnet with terminal echo disabled")
 	add.Flags().BoolVar(&magnetStdin, "magnet-stdin", false, "read one bounded magnet from standard input")
 	add.Flags().StringVar(&torrentFile, "torrent-file", "", "stream one bounded .torrent file")
 
