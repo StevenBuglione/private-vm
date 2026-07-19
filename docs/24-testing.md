@@ -15,6 +15,9 @@
 - sysfs USB/block association, USBGuard record parsing, serial-or-explicit-port
   enrollment, duplicate-device ambiguity, host root/boot exclusion and
   mode-`0600` enrollment round trips
+- claim collision, cancellation rollback, absence audit, release retry, stale
+  preparation challenges, two exact confirmation steps, final identity
+  revalidation, Polkit-before-commit ordering and incomplete prepare evidence
 - scan report parser
 - policy decisions
 - stream framing/hash

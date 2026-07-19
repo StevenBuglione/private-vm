@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/StevenBuglione/private-vm/schemas/usb-prepare-receipt.schema.json",
+  "title": "private-vm USB preparation receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": { "const": 1 },
+    "enrollment_id": { "type": "string", "pattern": "^usb-[0-9a-f]{16}$" },
+    "filesystem": { "const": "luks2-ext4" },
+    "capacity_bytes": { "type": "integer", "minimum": 1 },
+    "identity_fingerprint": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "state": { "const": "DESTINATION_PREPARED" }
+  },
+  "required": [
+    "schema_version",
+    "enrollment_id",
+    "filesystem",
+    "capacity_bytes",
+    "identity_fingerprint",
+    "state"
+  ]
+}
