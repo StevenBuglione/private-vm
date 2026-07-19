@@ -7,6 +7,6 @@ import (
 	"os"
 )
 
-func openSourceNoFollow(string) (*os.File, error) {
-	return nil, errors.New("safe source opening is supported only on Linux")
+func openSourceNoFollow(string) (*os.File, *os.File, error) {
+	return nil, nil, errors.New("safe source opening is supported only on Linux")
 }

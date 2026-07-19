@@ -191,7 +191,15 @@ func (server *WorkstationVPNServer) StopVPN(ctx context.Context) error {
 
 // Close lets guestd keep one bounded role cleanup owner.
 func (server *WorkstationVPNServer) Close(ctx context.Context) error {
-	return server.StopVPN(ctx)
+	if server == nil {
+		return nil
+	}
+	networkErr := server.StopVPN(ctx)
+	var workspaceErr error
+	if workspace, ok := server.WorkstationGuestServiceServer.(interface{ Close(context.Context) error }); ok {
+		workspaceErr = workspace.Close(ctx)
+	}
+	return errors.Join(networkErr, workspaceErr)
 }
 
 func (server *ScannerVPNServer) ConfigureWireGuard(ctx context.Context, request *privatevmv1.ConfigureWireGuardRequest) (*privatevmv1.VPNStatus, error) {

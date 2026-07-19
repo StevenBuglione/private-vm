@@ -186,13 +186,13 @@ func (connection *vsockGuestConnection) Import(ctx context.Context, request Work
 	}
 	receiver, _ := transfer.NewReceiver(header, header.Size, io.Discard)
 	var offset, sequence uint64
-	for count := 0; count < maximumWorkspaceFrames; count++ {
+	for count := 1; count < maximumWorkspaceFrames; count++ {
 		frame, receiveErr := request.Receive()
 		if receiveErr != nil || frame == nil {
 			return nil, errors.Join(ErrWorkspaceTransfer, receiveErr)
 		}
 		if chunk := frame.GetChunk(); chunk != nil {
-			if chunk.GetSequence() != sequence || receiver.WriteChunk(offset, chunk.GetData()) != nil {
+			if len(chunk.GetData()) == 0 || chunk.GetSequence() != sequence || receiver.WriteChunk(offset, chunk.GetData()) != nil {
 				clear(chunk.Data)
 				return nil, ErrWorkspaceTransfer
 			}
@@ -208,6 +208,11 @@ func (connection *vsockGuestConnection) Import(ctx context.Context, request Work
 		end := frame.GetEnd()
 		if end == nil || end.GetTotalSize() != header.Size || !sameProtoHash(end.GetDigest(), header.SHA256) || receiver.Finish() != nil {
 			return nil, ErrWorkspaceTransfer
+		}
+		extra, trailingErr := request.Receive()
+		clearWorkspaceTransferFrame(extra)
+		if extra != nil || !errors.Is(trailingErr, io.EOF) {
+			return nil, errors.Join(ErrWorkspaceTransfer, trailingErr)
 		}
 		if err := stream.Send(frame); err != nil {
 			return nil, err
@@ -249,7 +254,7 @@ func (connection *vsockGuestConnection) Export(ctx context.Context, request Work
 			return nil, errors.Join(ErrWorkspaceTransfer, receiveErr)
 		}
 		if chunk := frame.GetChunk(); chunk != nil {
-			if chunk.GetSequence() != sequence || receiver.WriteChunk(offset, chunk.GetData()) != nil {
+			if len(chunk.GetData()) == 0 || chunk.GetSequence() != sequence || receiver.WriteChunk(offset, chunk.GetData()) != nil {
 				clear(chunk.Data)
 				return nil, ErrWorkspaceTransfer
 			}
@@ -265,6 +270,11 @@ func (connection *vsockGuestConnection) Export(ctx context.Context, request Work
 		end := frame.GetEnd()
 		if end == nil || end.GetTotalSize() != header.Size || !sameProtoHash(end.GetDigest(), header.SHA256) || receiver.Finish() != nil {
 			return nil, ErrWorkspaceTransfer
+		}
+		extra, trailingErr := stream.Recv()
+		clearWorkspaceTransferFrame(extra)
+		if extra != nil || !errors.Is(trailingErr, io.EOF) {
+			return nil, errors.Join(ErrWorkspaceTransfer, trailingErr)
 		}
 		if err := request.Send(frame); err != nil {
 			return nil, err
@@ -341,6 +351,12 @@ func equalBytes(left, right []byte) bool {
 		mismatch |= left[index] ^ right[index]
 	}
 	return mismatch == 0
+}
+
+func clearWorkspaceTransferFrame(frame *privatevmv1.TransferFrame) {
+	if frame != nil && frame.GetChunk() != nil {
+		clear(frame.GetChunk().Data)
+	}
 }
 
 func cloneDescriptor(value *privatevmv1.FileDescriptor) *privatevmv1.FileDescriptor {

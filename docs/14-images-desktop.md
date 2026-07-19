@@ -109,14 +109,23 @@ No guest should contain user credentials at image-build time.
 The workstation guestd is the only process that receives host-import frames or
 enumerates `~/Export`. It accepts one flat logical filename, stages it under an
 exclusive `.<transfer-id>.partial` file in `~/Inbox`, verifies the declared and
-received SHA-256 values, synchronizes it, and uses a no-replace rename. Links,
-directories, traversal names, reordered chunks, extra bytes, hash mismatch,
-cancellation and timeout all remove the partial file.
+received SHA-256 values, synchronizes it, and uses a no-replace rename. Guestd
+pins `Inbox` and `Export` directory descriptors at composition and performs
+create, open, list, rename, unlink, and fsync operations relative to leased
+copies. Device/inode checks reject pathname replacement before publication or
+completion. Links, directories, traversal names, reordered, empty or oversized
+chunks, excessive frame counts, extra bytes, hash mismatch, cancellation,
+timeout, directory replacement, and receipt failure remove the staged or newly
+published import.
 
-The host opens a trusted import once through a no-follow descriptor. Preflight
-hashing and transfer reuse that descriptor, and the transfer hash plus final
-file identity must still equal the preflight descriptor. Parent or final path
-symlinks are rejected.
+The host atomically opens a trusted import's parent and file with `openat2` and
+no-symlink resolution, then retains both descriptors. Preflight hashing and
+transfer reuse the selected file descriptor even if its pathname is replaced.
+Parent or final path symlinks are rejected.
+
+Every transfer has one begin frame, bounded non-empty chunks of at most 1 MiB,
+and one end frame; the next read must be EOF. The host relay does not commit or
+forward the end frame until that EOF is proven.
 
 `~/Export` is a flat, bounded regular-file set. Guestd hashes every entry and
 returns boot-random HMAC-derived output identifiers rather than filenames in

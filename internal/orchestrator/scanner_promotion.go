@@ -111,7 +111,10 @@ func (source *approvedScannerWorkspaceSource) approvedWorkspaceImport(ctx contex
 	}
 	count, complete := 1, false
 	receive := func() (*privatevmv1.TransferFrame, error) {
-		if complete || count >= maximumWorkspaceFrames {
+		if complete {
+			return nil, io.EOF
+		}
+		if count >= maximumWorkspaceFrames {
 			cancel()
 			return nil, ErrWorkspaceTransfer
 		}

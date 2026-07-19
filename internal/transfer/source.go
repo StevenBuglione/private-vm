@@ -13,6 +13,7 @@ import (
 // preflight hashing and transfer use the same no-follow descriptor.
 type Source struct {
 	file   *os.File
+	parent *os.File
 	header Header
 	info   os.FileInfo
 	used   bool
@@ -23,11 +24,7 @@ func OpenSource(ctx context.Context, path string, maximum uint64) (*Source, erro
 	if err != nil || filepath.Clean(absolute) != absolute {
 		return nil, errors.New("source path is not canonical")
 	}
-	resolved, err := filepath.EvalSymlinks(absolute)
-	if err != nil || resolved != absolute {
-		return nil, errors.New("source path contains a symbolic link")
-	}
-	file, err := openSourceNoFollow(absolute)
+	file, parent, err := openSourceNoFollow(absolute)
 	if err != nil {
 		return nil, err
 	}
@@ -35,6 +32,7 @@ func OpenSource(ctx context.Context, path string, maximum uint64) (*Source, erro
 	defer func() {
 		if failed {
 			_ = file.Close()
+			_ = parent.Close()
 		}
 	}()
 	info, err := file.Stat()
@@ -58,7 +56,7 @@ func OpenSource(ctx context.Context, path string, maximum uint64) (*Source, erro
 		return nil, err
 	}
 	failed = false
-	return &Source{file: file, header: header, info: info}, nil
+	return &Source{file: file, parent: parent, header: header, info: info}, nil
 }
 
 func (source *Source) Header() Header { return source.header }
@@ -112,12 +110,19 @@ func (source *Source) Stream(ctx context.Context, send func(sequence uint64, dat
 }
 
 func (source *Source) Close() error {
-	if source == nil || source.file == nil {
+	if source == nil {
 		return nil
 	}
-	err := source.file.Close()
+	var fileErr, parentErr error
+	if source.file != nil {
+		fileErr = source.file.Close()
+	}
+	if source.parent != nil {
+		parentErr = source.parent.Close()
+	}
 	source.file = nil
-	return err
+	source.parent = nil
+	return errors.Join(fileErr, parentErr)
 }
 
 func hashOpenFile(ctx context.Context, file *os.File, maximum uint64) ([sha256.Size]byte, error) {

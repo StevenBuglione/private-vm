@@ -617,10 +617,14 @@ A release must pass all entries in `project/acceptance-tests.yaml`.
 
 Workstation transfer unit tests use only private temporary directories. They
 cover a complete import/export, traversal and symlink rejection, digest failure
-cleanup, no-overwrite staging, opaque inventory identities, verification, and
-changed-after-export detection. The host/daemon/VSOCK relay and dirty-stop
-acceptance remain separate integration gates; guest-only evidence cannot mark
-those gates complete.
+cleanup, no-overwrite staging, opaque inventory identities, verification,
+changed-after-export detection, pinned-parent source behavior, Inbox pathname
+replacement, exact terminal EOF, frame/chunk limits, cancellation, deadline,
+and receiver-failure cleanup. Focused production-relay tests prove that a
+trailing import or export frame prevents the end frame from reaching the next
+commit boundary. The full host/daemon/VSOCK relay and dirty-stop acceptance
+remain separate integration gates; guest-only evidence cannot mark those gates
+complete.
 
 The host workstation source gate additionally uses authenticated daemon fakes
 to exercise import, aggregate inventory, export and verification, and a real

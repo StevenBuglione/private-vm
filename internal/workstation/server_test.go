@@ -1,11 +1,15 @@
 package workstation
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
+	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	privatevmv1 "github.com/StevenBuglione/private-vm/gen/privatevm/v1"
 	"google.golang.org/grpc"
@@ -56,6 +60,92 @@ func TestImportRejectsTraversal(t *testing.T) {
 	if err := server.ImportFile(stream); err == nil {
 		t.Fatal("traversal name was accepted")
 	}
+}
+
+func TestImportFailureCancellationTimeoutAndFramingRemoveAllArtifacts(t *testing.T) {
+	data := []byte("trusted input")
+	digest := sha256.Sum256(data)
+	maximum := bytes.Repeat([]byte{'x'}, 1<<20)
+	oversized := bytes.Repeat([]byte{'x'}, 1+(1<<20))
+	for _, test := range []struct {
+		name   string
+		stream func(context.Context) *importStream
+	}{
+		{name: "zero-chunk", stream: func(ctx context.Context) *importStream {
+			return &importStream{ctx: ctx, frames: []*privatevmv1.TransferFrame{beginFrame("transfer-zero", "zero.txt", data, digest), chunkFrame(0, nil), endFrame(data, digest)}}
+		}},
+		{name: "oversized-chunk", stream: func(ctx context.Context) *importStream {
+			return &importStream{ctx: ctx, frames: []*privatevmv1.TransferFrame{beginFrame("transfer-oversized", "oversized.txt", maximum, sha256.Sum256(maximum)), chunkFrame(0, oversized)}}
+		}},
+		{name: "trailing-frame", stream: func(ctx context.Context) *importStream {
+			return &importStream{ctx: ctx, frames: []*privatevmv1.TransferFrame{beginFrame("transfer-trailing", "trailing.txt", data, digest), chunkFrame(0, data), endFrame(data, digest), chunkFrame(1, []byte("extra"))}}
+		}},
+		{name: "cancellation", stream: func(ctx context.Context) *importStream {
+			canceled, cancel := context.WithCancel(ctx)
+			return &importStream{ctx: canceled, frames: []*privatevmv1.TransferFrame{beginFrame("transfer-canceled", "canceled.txt", data, digest), chunkFrame(0, data)}, beforeRecv: func(index int) {
+				if index == 1 {
+					cancel()
+				}
+			}}
+		}},
+		{name: "deadline", stream: func(ctx context.Context) *importStream {
+			expired, cancel := context.WithDeadline(ctx, time.Now().Add(-time.Second))
+			t.Cleanup(cancel)
+			return &importStream{ctx: expired, frames: []*privatevmv1.TransferFrame{beginFrame("transfer-timeout", "timeout.txt", data, digest), chunkFrame(0, data)}}
+		}},
+		{name: "receipt-failure", stream: func(ctx context.Context) *importStream {
+			return &importStream{ctx: ctx, sendErr: errors.New("injected receipt failure"), frames: []*privatevmv1.TransferFrame{beginFrame("transfer-receipt", "receipt.txt", data, digest), chunkFrame(0, data), endFrame(data, digest)}}
+		}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			server, root := testServer(t)
+			if err := server.ImportFile(test.stream(t.Context())); err == nil {
+				t.Fatal("invalid import returned success")
+			}
+			assertNoImportArtifacts(t, filepath.Join(root, "Inbox"))
+		})
+	}
+}
+
+func TestImportFrameLimitRemovesPartial(t *testing.T) {
+	server, root := testServer(t)
+	data := bytes.Repeat([]byte{'x'}, int(maxWorkspaceFrames))
+	digest := sha256.Sum256(data)
+	frames := make([]*privatevmv1.TransferFrame, 0, int(maxWorkspaceFrames))
+	frames = append(frames, beginFrame("transfer-frame-limit", "limited.bin", data, digest))
+	for sequence := uint64(0); sequence < maxWorkspaceFrames-1; sequence++ {
+		frames = append(frames, chunkFrame(sequence, []byte{'x'}))
+	}
+	if err := server.ImportFile(&importStream{ctx: t.Context(), frames: frames}); err == nil {
+		t.Fatal("frame limit returned success")
+	}
+	assertNoImportArtifacts(t, filepath.Join(root, "Inbox"))
+}
+
+func TestImportInboxReplacementFailsAndCleansPinnedDirectory(t *testing.T) {
+	server, root := testServer(t)
+	data := []byte("trusted input")
+	digest := sha256.Sum256(data)
+	inbox := filepath.Join(root, "Inbox")
+	moved := filepath.Join(root, "Inbox-moved")
+	stream := &importStream{ctx: t.Context(), frames: []*privatevmv1.TransferFrame{
+		beginFrame("transfer-replaced", "replaced.txt", data, digest), chunkFrame(0, data), endFrame(data, digest),
+	}, beforeRecv: func(index int) {
+		if index != 1 {
+			return
+		}
+		if err := os.Rename(inbox, moved); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Mkdir(inbox, 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}}
+	if err := server.ImportFile(stream); err == nil {
+		t.Fatal("replaced Inbox returned success")
+	}
+	assertNoImportArtifacts(t, inbox)
+	assertNoImportArtifacts(t, moved)
 }
 
 func TestWorkspaceExportVerificationAndChangeDetection(t *testing.T) {
@@ -117,7 +207,23 @@ func testServer(t *testing.T) (*Server, string) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() {
+		if err := server.Close(context.Background()); err != nil {
+			t.Error(err)
+		}
+	})
 	return server, root
+}
+
+func assertNoImportArtifacts(t *testing.T, directory string) {
+	t.Helper()
+	entries, err := os.ReadDir(directory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 0 {
+		t.Fatalf("import artifacts remain in %s: %+v", directory, entries)
+	}
 }
 
 func beginFrame(id, name string, data []byte, digest [sha256.Size]byte) *privatevmv1.TransferFrame {
@@ -135,15 +241,22 @@ func endFrame(data []byte, digest [sha256.Size]byte) *privatevmv1.TransferFrame 
 
 type importStream struct {
 	grpc.ServerStream
-	ctx     context.Context
-	frames  []*privatevmv1.TransferFrame
-	receipt *privatevmv1.TransferReceipt
+	ctx        context.Context
+	frames     []*privatevmv1.TransferFrame
+	receipt    *privatevmv1.TransferReceipt
+	sendErr    error
+	beforeRecv func(int)
+	received   int
 }
 
 func (stream *importStream) Context() context.Context { return stream.ctx }
 func (stream *importStream) Recv() (*privatevmv1.TransferFrame, error) {
+	if stream.beforeRecv != nil {
+		stream.beforeRecv(stream.received)
+	}
+	stream.received++
 	if len(stream.frames) == 0 {
-		return nil, os.ErrClosed
+		return nil, io.EOF
 	}
 	frame := stream.frames[0]
 	stream.frames = stream.frames[1:]
@@ -151,7 +264,7 @@ func (stream *importStream) Recv() (*privatevmv1.TransferFrame, error) {
 }
 func (stream *importStream) SendAndClose(receipt *privatevmv1.TransferReceipt) error {
 	stream.receipt = receipt
-	return nil
+	return stream.sendErr
 }
 
 type exportStream struct {

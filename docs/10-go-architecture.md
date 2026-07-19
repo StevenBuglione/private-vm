@@ -253,7 +253,12 @@ workstation or downloader device model.
 The workstation runtime exposes one sealed `WorkstationRelay`, not its VSOCK
 client. Host import/export callbacks carry only bounded transfer frames and an
 opaque output ID. The daemon retains its export digest until a separate receiver
-digest matches and the guest re-verifies the current output. The scanner
+digest matches and the guest re-verifies the current output. Both relay
+directions require EOF immediately after the authenticated end frame before
+forwarding that end frame to the next commit boundary. The host trusted-source
+reader and guest workspace operations retain pinned file or directory
+descriptors, so later pathname replacement cannot redirect an active transfer.
+The scanner
 promotion hook is sealed to the orchestrator package so only a scanner owner
 that authenticated a complete approved report can implement it.
 `WorkstationScannerPromotion` implements that hook by binding the report's sole

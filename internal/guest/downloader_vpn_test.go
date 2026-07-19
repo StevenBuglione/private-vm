@@ -71,6 +71,16 @@ type scannerDefinitionsFixture struct {
 	vpnContextSet bool
 }
 
+type closingWorkstationFixture struct {
+	privatevmv1.UnimplementedWorkstationGuestServiceServer
+	closed bool
+}
+
+func (fixture *closingWorkstationFixture) Close(context.Context) error {
+	fixture.closed = true
+	return nil
+}
+
 func (fixture *scannerDefinitionsFixture) UpdateDefinitions(ctx context.Context, _ *privatevmv1.ScannerRequest) (*privatevmv1.DefinitionsStatus, error) {
 	fixture.updates++
 	fixture.vpnContextSet, _ = ctx.Value(scannerVPNVerifiedContextKey{}).(bool)
@@ -196,6 +206,24 @@ func TestWorkstationVPNRPCUsesWorkstationRoleWithoutDownloaderService(t *testing
 	}
 	if err := handler.Close(t.Context()); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestWorkstationVPNCloseReleasesWorkspaceOwner(t *testing.T) {
+	workspace := &closingWorkstationFixture{}
+	handler, err := NewWorkstationVPNServer(workspace, func(underlay guestvpn.Underlay, _ guestvpn.ProbeTargets) (*guestvpn.Controller, error) {
+		return guestvpn.NewController(
+			&rpcVPNBackend{}, rpcVPNVerifier{}, guestvpn.RolePolicy{Role: session.RoleWorkstation}, underlay,
+		)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := handler.Close(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if !workspace.closed {
+		t.Fatal("workstation cleanup owner did not close its workspace")
 	}
 }
 
