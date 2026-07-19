@@ -93,12 +93,12 @@ func TestOverlayRequiresReadOnlyBaseAndVerifiesBacking(t *testing.T) {
 		t.Fatal(err)
 	}
 	runner := &overlayRunner{base: base}
-	manager := OverlayManager{QEMUImg: "/usr/bin/qemu-img", Runner: runner}
+	manager := OverlayManager{QEMUImg: "/usr/bin/qemu-img", Runner: runner, Registry: NewImageUseRegistry()}
 	overlay, err := manager.Create(context.Background(), directory, base, "root-workstation.qcow2")
 	if err != nil {
 		t.Fatal(err)
 	}
-	info, err := os.Stat(overlay)
+	info, err := os.Stat(overlay.Path())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -265,7 +265,8 @@ func (m *fakeMounter) Unmount(string, int) error {
 }
 
 type overlayRunner struct {
-	base string
+	base              string
+	replaceOnBaseInfo bool
 }
 
 func (r *overlayRunner) Run(_ context.Context, command Command) (Result, error) {
@@ -279,9 +280,22 @@ func (r *overlayRunner) Run(_ context.Context, command Command) (Result, error) 
 		if err != nil {
 			return Result{}, err
 		}
+		if _, err := file.Write([]byte("overlay")); err != nil {
+			_ = file.Close()
+			return Result{}, err
+		}
 		return Result{}, file.Close()
 	case "info":
 		path := command.Args[len(command.Args)-1]
+		if path == r.base && r.replaceOnBaseInfo {
+			r.replaceOnBaseInfo = false
+			if err := os.Remove(r.base); err != nil {
+				return Result{}, err
+			}
+			if err := os.WriteFile(r.base, []byte("changed"), 0o444); err != nil {
+				return Result{}, err
+			}
+		}
 		value := imageInfo{Format: "qcow2", VirtualSize: 1 << 30}
 		if path != r.base {
 			value.FullBackingFilename = r.base
