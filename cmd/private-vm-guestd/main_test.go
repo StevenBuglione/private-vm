@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"slices"
 	"strings"
 	"testing"
@@ -8,6 +9,15 @@ import (
 	"github.com/StevenBuglione/private-vm/internal/guest"
 	"github.com/StevenBuglione/private-vm/internal/session"
 )
+
+func TestGuestCompositionMessageExposesOnlyFixedStage(t *testing.T) {
+	if got := guestCompositionMessage(errors.Join(errors.New("private detail"), compositionError("downloader quarantine"))); got != "the fixed downloader quarantine component could not be composed" {
+		t.Fatalf("composition message = %q", got)
+	}
+	if got := guestCompositionMessage(errors.New("private detail")); got != "the role-specific guest service could not be composed" {
+		t.Fatalf("fallback composition message = %q", got)
+	}
+}
 
 func TestCurrentVersionReportsCompiledRoleAndCapabilities(t *testing.T) {
 	previous := guest.CompiledRole

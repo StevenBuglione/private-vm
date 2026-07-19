@@ -59,7 +59,7 @@ func main() {
 	}
 	serverConfig, roleCleanup, err := composeGuestServerConfig(identity, token)
 	if err != nil {
-		fatal("GUESTD_SERVER_INVALID", "the role-specific guest service could not be composed", "Destroy the guest and install a compatible verified image.")
+		fatal("GUESTD_SERVER_INVALID", guestCompositionMessage(err), "Destroy the guest and install a compatible verified image.")
 	}
 	if roleCleanup != nil {
 		defer func() {
@@ -108,6 +108,26 @@ func main() {
 
 type roleCleanup interface {
 	Close(context.Context) error
+}
+
+type guestCompositionError struct {
+	component string
+}
+
+func (failure *guestCompositionError) Error() string {
+	return "the fixed " + failure.component + " component could not be composed"
+}
+
+func compositionError(component string) error {
+	return &guestCompositionError{component: component}
+}
+
+func guestCompositionMessage(err error) string {
+	var failure *guestCompositionError
+	if errors.As(err, &failure) {
+		return failure.Error()
+	}
+	return "the role-specific guest service could not be composed"
 }
 
 func composeGuestServerConfig(identity guest.Identity, token *guest.Token) (guest.ServerConfig, roleCleanup, error) {
@@ -202,11 +222,11 @@ func composeDownloaderService() (*guest.DownloaderVPNServer, *downloaderCleanup,
 	defer cancelPrepare()
 	uid, gid, err := privateUserIdentity()
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, compositionError("downloader user identity")
 	}
 	quarantine, err := torrent.PrepareLinuxQuarantine(prepareCtx, "/run/current-system/sw/bin/mkfs.ext4", uid, gid)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, compositionError("downloader quarantine")
 	}
 	fail := func(err error) (*guest.DownloaderVPNServer, *downloaderCleanup, error) {
 		cleanupCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -216,16 +236,16 @@ func composeDownloaderService() (*guest.DownloaderVPNServer, *downloaderCleanup,
 	}
 	available, err := quarantine.CapacityBytes()
 	if err != nil || available <= 6<<30 {
-		return fail(errors.New("quarantine capacity is insufficient"))
+		return fail(compositionError("downloader quarantine capacity"))
 	}
 	client, err := torrent.NewLocalQBittorrentService("/run/current-system/sw/bin/systemctl", uid, gid)
 	if err != nil {
-		return fail(err)
+		return fail(compositionError("downloader qBittorrent owner"))
 	}
 	backend, err := torrent.NewQBitBackend(client, torrent.NewFilesystemVerifier())
 	if err != nil {
 		_ = client.Close(context.Background())
-		return fail(err)
+		return fail(compositionError("downloader qBittorrent adapter"))
 	}
 	maximumSelected := (available - (5 << 30)) / 2
 	controller, err := torrent.NewController(backend, quarantine, torrent.Config{
@@ -238,14 +258,14 @@ func composeDownloaderService() (*guest.DownloaderVPNServer, *downloaderCleanup,
 	})
 	if err != nil {
 		_ = client.Close(context.Background())
-		return fail(err)
+		return fail(compositionError("downloader workflow controller"))
 	}
 	factory := productionVPNFactory(session.RoleDownloader, client)
 	server, err := guest.NewDownloaderServer(factory, controller)
 	if err != nil {
 		_ = controller.Close(context.Background())
 		_ = client.Close(context.Background())
-		return fail(err)
+		return fail(compositionError("downloader guest service"))
 	}
 	cleanup := &downloaderCleanup{server: server, controller: controller, client: client, quarantine: quarantine}
 	return server, cleanup, nil
