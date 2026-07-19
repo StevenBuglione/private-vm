@@ -385,6 +385,27 @@ names, content hashes, endpoints, source paths and qBittorrent output.
 - `SANITIZED_OUTPUT_INVALID`
 - `SANITIZED_OUTPUT_REJECTED`
 - `SANITIZED_OUTPUT_CLEANUP_INCOMPLETE`
+- `SCANNER_STATE_INVALID`
+- `SCANNER_SESSION_MISMATCH`
+- `SCANNER_POLICY_INVALID`
+- `SCANNER_POLICY_CHANGED`
+- `SCANNER_EVIDENCE_UNAVAILABLE`
+- `SCANNER_RECEIPT_UNAVAILABLE`
+- `SCANNER_RECEIPT_WRITE_FAILED`
+- `SCANNER_TOOLCHAIN_UNAVAILABLE`
+- `SCAN_CANCELLED`
+- `SCAN_TIMEOUT`
+- `SCAN_STREAM_FAILED`
+- `SANITIZED_OUTPUT_UNAVAILABLE`
+- `SANITIZED_OUTPUT_CHANGED`
+
+Scanner guest RPC errors use one `ErrorDetail` containing the same stable code,
+safe message, remediation, retryability and current scanner state. Wrapped
+filesystem errors, tool output, logical names, hashes and malware signature text
+are discarded before status construction. Cancellation uses `Canceled`, timeout
+uses `DeadlineExceeded`, bounded limit failures use `ResourceExhausted`, missing
+image adapters use `Unavailable`, and phase, policy, isolation, report or output
+integrity failures use `FailedPrecondition` unless the request itself is invalid.
 
 ### USB
 

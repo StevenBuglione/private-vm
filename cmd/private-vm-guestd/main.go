@@ -53,13 +53,16 @@ func main() {
 	if err != nil {
 		fatal("GUESTD_IDENTITY_INVALID", err.Error(), "Install a verified role image with complete build identity metadata.")
 	}
-	serverConfig := guest.ServerConfig{Identity: identity, Token: token}
-	if role == session.RoleWorkstation {
-		workspace, workspaceErr := workstation.New(workstation.Config{Root: "/home/private"})
-		if workspaceErr != nil {
-			fatal("GUESTD_WORKSPACE_INVALID", workspaceErr.Error(), "Recreate the verified workstation so its private Inbox and Export directories are available.")
-		}
-		serverConfig.Workstation = workspace
+	serverConfig, scannerService, err := composeGuestServerConfig(identity, token)
+	if err != nil {
+		fatal("GUESTD_SERVER_INVALID", "the role-specific guest service could not be composed", "Destroy the guest and install a compatible verified image.")
+	}
+	if scannerService != nil {
+		defer func() {
+			cleanupContext, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			_ = scannerService.Close(cleanupContext)
+		}()
 	}
 	server, err := guest.NewServer(serverConfig)
 	if err != nil {
@@ -97,6 +100,29 @@ func main() {
 			fatal("GUESTD_SERVE_FAILED", err.Error(), "Destroy the guest and retry with a verified image and VSOCK device.")
 		}
 	}
+}
+
+func composeGuestServerConfig(identity guest.Identity, token *guest.Token) (guest.ServerConfig, *guest.ScannerService, error) {
+	config := guest.ServerConfig{Identity: identity, Token: token}
+	switch identity.Role {
+	case session.RoleWorkstation:
+		workspace, err := workstation.New(workstation.Config{Root: "/home/private"})
+		if err != nil {
+			return guest.ServerConfig{}, nil, err
+		}
+		config.Workstation = workspace
+		return config, nil, nil
+	case session.RoleScanner:
+		// Continue below and install only the scanner service compiled for this role.
+	default:
+		return config, nil, nil
+	}
+	scannerService, err := guest.NewFailClosedScannerService(identity, token)
+	if err != nil {
+		return guest.ServerConfig{}, nil, err
+	}
+	config.Scanner = scannerService
+	return config, scannerService, nil
 }
 
 type versionRecord struct {

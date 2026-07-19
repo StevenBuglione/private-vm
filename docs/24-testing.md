@@ -403,6 +403,8 @@ one Go package worker:
 ```bash
 CGO_ENABLED=0 GOMAXPROCS=2 go test -p=1 ./internal/scan
 CGO_ENABLED=0 GOMAXPROCS=2 go vet ./internal/scan
+CGO_ENABLED=0 GOMAXPROCS=2 go test -p=1 ./internal/guest ./cmd/private-vm-guestd
+CGO_ENABLED=0 GOMAXPROCS=2 go vet ./internal/guest ./cmd/private-vm-guestd
 python3 tools/validate_schemas.py
 python3 tools/validate_examples.py
 ```
@@ -413,6 +415,13 @@ replacement failures. A local `net.Pipe` implements the ClamAV protocol fixture;
 no daemon, definitions download or hostile public corpus is required. Real
 freshclam, offline boot/device enforcement and pinned PDF/Office/media tools
 remain separate scanner-image and KVM acceptance gates.
+
+The guest RPC portion uses an authenticated in-memory gRPC transport and two
+scanner-service instances sharing only a fake retained-overlay receipt. It
+proves update boot to offline boot sequencing, descriptor-safe inventory, a
+complete fake malware verdict, reconstructed-only output, canonical report
+authentication, bounded export framing, role-only registration, stable redacted
+adapter failures, cancellation/timeout mapping and idempotent output cleanup.
 
 ## Network tests
 

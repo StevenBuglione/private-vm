@@ -13,6 +13,14 @@ were exercised by these low-memory tests.
 | `SCAN-005` | reconstruction orchestration and volatile outputs | PDF and Office raster path, PNG/JPEG re-encode, media/text policy, output bounds, MIME/hash, structure verification, mandatory rescan, failure/cancellation cleanup and active/unsupported rejection |
 | `SCAN-006` | strict canonical report plus volatile HMAC | complete approval verifies; tampering, wrong/destroyed key, incomplete phases, blocking verdicts, unrescanned output and noncanonical JSON reject |
 
+The scanner guest RPC integration adds a single serialized phase owner over
+these boundaries. Its credential-free test creates an update service, retains
+only the typed definition receipt, creates a fresh offline service, and executes
+inventory, malware scan, reconstruction, report authentication and approved
+export through authenticated gRPC. Progress is filename/hash-free, an
+out-of-order or changed-policy call fails closed, cross-role services remain
+absent, and cancellation/timeout paths clean partial reconstructed output.
+
 Local commands use `CGO_ENABLED=0`, `GOMAXPROCS=2` and `-p 1`. They use no VPN
 credential, magnet, torrent, public download or physical USB.
 
@@ -24,5 +32,9 @@ Remaining system acceptance before these issues may be treated as fully closed:
   prove the guest mount and failed write;
 - run the pinned libmagic, ClamAV, Ghostscript/Poppler, LibreOffice and ffmpeg
   toolchain against the versioned hostile corpus;
-- prove the authenticated scanner RPC envelope and promotion relay end to end;
+- replace the generic fail-closed scanner composition with the image-pinned
+  boot-evidence, retained-overlay receipt, freshclam/libmagic/clamd/archive and
+  reconstruction adapters, then exercise them over AF_VSOCK;
+- prove the authenticated scanner promotion relay into a fresh workstation and
+  exporter end to end;
 - verify cleanup through scanner/QEMU death and daemon recovery.

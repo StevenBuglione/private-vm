@@ -2,6 +2,7 @@ package main
 
 import (
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/StevenBuglione/private-vm/internal/guest"
@@ -23,6 +24,38 @@ func TestCurrentVersionReportsCompiledRoleAndCapabilities(t *testing.T) {
 	}
 	if record.APIMajor != guest.APIMajor || record.APIMinor != guest.APIMinor {
 		t.Fatalf("currentVersion() API=%d.%d", record.APIMajor, record.APIMinor)
+	}
+}
+
+func TestComposeGuestServerConfigWiresOnlyScannerCompiledRole(t *testing.T) {
+	token, err := guest.TokenFromBytes(make([]byte, guest.TokenSize))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(token.Destroy)
+	identity := guest.Identity{
+		Role: session.RoleScanner, ImageDigest: "sha256:" + strings.Repeat("a", 64),
+		SourceCommit: strings.Repeat("b", 40), BootNonce: append([]byte{1}, make([]byte, guest.BootNonceSize-1)...),
+		OSRelease: "26.05", GuestdVersion: "test",
+	}
+	config, scannerService, err := composeGuestServerConfig(identity, token)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if scannerService == nil || config.Scanner != scannerService || config.Workstation != nil || config.Downloader != nil || config.Exporter != nil {
+		t.Fatalf("scanner composition = %#v", config)
+	}
+	if err := scannerService.Close(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+
+	identity.Role = session.RoleWorkstation
+	config, scannerService, err = composeGuestServerConfig(identity, token)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if scannerService != nil || config.Scanner != nil {
+		t.Fatal("non-scanner composition registered scanner service")
 	}
 }
 

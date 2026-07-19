@@ -299,6 +299,24 @@ guest daemon. The official Nix outputs build four distinct guestd derivations;
 there is no runtime role flag. Calling a service for another role therefore
 returns gRPC `Unimplemented` because that service is absent.
 
+The scanner role service has one serialized phase owner. Definition update,
+definition status and offline verification requests carry no policy name.
+Inventory pins one installed immutable policy; scan, reconstruction and report
+requests must use that same policy. The source composition registers the real
+scanner service only for a scanner-compiled guestd. If the image-specific boot
+evidence, retained-overlay receipt or pinned tool adapters are absent, the
+service starts but every affected operation fails with
+`SCANNER_TOOLCHAIN_UNAVAILABLE`; it never replaces a missing check with a
+successful result.
+
+Scanner progress streams disclose only a fixed operation, counts, units and
+stable finding codes. They do not disclose logical names, hashes, tool output or
+malware signature text. `Reconstruct` creates and authenticates the canonical
+report before publishing `REPORT_COMPLETE`. `ExportApprovedFile` verifies that
+HMAC again, accepts only an output ID present in the approved report, rehashes
+the identity-pinned volatile output while streaming chunks of at most 1 MiB,
+and omits the end frame on any size, read or hash mismatch.
+
 The advertised v1 capability map is exact and sorted:
 
 | Scope | Capabilities |
