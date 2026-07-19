@@ -1124,18 +1124,18 @@
           };
           imagePackages = nixpkgs.lib.optionalAttrs (system == "x86_64-linux") {
             image-workstation-basic = workstationBasic.config.system.build.images.qemu-efi;
-            closure-workstation-basic = workstationBasic.config.system.build.toplevel;
+            closure-workstation-basic = workstationBasic.config.system.build.images.qemu-efi.passthru.config.system.build.toplevel;
             image-workstation-office = workstationOffice.config.system.build.images.qemu-efi;
-            closure-workstation-office = workstationOffice.config.system.build.toplevel;
+            closure-workstation-office = workstationOffice.config.system.build.images.qemu-efi.passthru.config.system.build.toplevel;
             image-workstation-development = workstationDevelopment.config.system.build.images.qemu-efi;
-            closure-workstation-development = workstationDevelopment.config.system.build.toplevel;
+            closure-workstation-development = workstationDevelopment.config.system.build.images.qemu-efi.passthru.config.system.build.toplevel;
             image-downloader = downloader.config.system.build.images.qemu-efi;
-            closure-downloader = downloader.config.system.build.toplevel;
+            closure-downloader = downloader.config.system.build.images.qemu-efi.passthru.config.system.build.toplevel;
             image-scanner = scanner.config.system.build.images.qemu-efi;
-            closure-scanner = scanner.config.system.build.toplevel;
+            closure-scanner = scanner.config.system.build.images.qemu-efi.passthru.config.system.build.toplevel;
             sbom-scanner = scannerSBOMFor system;
             image-exporter = exporter.config.system.build.images.qemu-efi;
-            closure-exporter = exporter.config.system.build.toplevel;
+            closure-exporter = exporter.config.system.build.images.qemu-efi.passthru.config.system.build.toplevel;
           };
         in
         binaryPackages // imagePackages
