@@ -269,6 +269,16 @@ writing, and actual extracted content is reinventoried. Extraction can run only
 as a non-root worker in a verified private tmpfs boundary; its identity-pinned
 directory is removed on success, failure or cancellation.
 
+The production reconstruction owner recursively processes supported ZIP and
+TAR members. One cumulative budget covers entries and expanded temporary bytes
+across every nesting level; a nested archive does not receive a fresh copy of
+the policy limit. Every extracted regular member is reinventoried and scanned
+with ClamAV before it is inspected recursively or passed to its type-specific
+reconstructor. Extension/type mismatch, malware, encryption, traversal, links,
+special entries, compression bombs and depth exhaustion block the complete
+archive. Original archive bytes are never promotable; only individually
+reconstructed and rescanned leaf outputs may enter an approved report.
+
 Reconstruction accepts the validated `safe` policy only. External tools receive
 content on stdin and return content on stdout with fixed filename-free
 arguments. PDF output is raster-only and page-count checked, Office first

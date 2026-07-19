@@ -386,6 +386,228 @@ func TestProductionArchiveTraversalBecomesBlockingCompleteFinding(t *testing.T) 
 	}
 }
 
+func TestProductionArchiveRecursivelyScansReconstructsAndCleans(t *testing.T) {
+	inner := productionZIPBytes(t, map[string][]byte{"document.txt": []byte("one\r\ntwo\r\n")})
+	outer := productionZIPBytes(t, map[string][]byte{"nested.zip": inner})
+	adapter, inventory, summary, selected, parent := productionArchiveFixture(t, "payload.zip", outer, productionCleanScanner{})
+
+	result, err := adapter.Reconstruct(t.Context(), inventory, summary, selected)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Outputs) != 1 || len(result.Findings) != 0 || len(result.Archives) != 2 {
+		t.Fatalf("recursive reconstruction = %#v", result)
+	}
+	depths := []uint32{result.Archives[0].Depth, result.Archives[1].Depth}
+	slices.Sort(depths)
+	if !slices.Equal(depths, []uint32{0, 1}) {
+		t.Fatalf("archive depths = %v", depths)
+	}
+	reader, err := adapter.OpenApproved(t.Context(), result.Outputs[0].OutputID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, readErr := io.ReadAll(reader)
+	closeErr := reader.Close()
+	if readErr != nil || closeErr != nil || string(data) != "one\ntwo\n" {
+		t.Fatalf("archive output = %q read=%v close=%v", data, readErr, closeErr)
+	}
+	assertNoProductionExtractions(t, parent)
+	if err := adapter.Cleanup(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	entries, err := os.ReadDir(parent)
+	if err != nil || len(entries) != 0 {
+		t.Fatalf("cleanup entries=%v err=%v", entries, err)
+	}
+}
+
+func TestProductionArchiveContainmentFailuresAreCompleteAndCleaned(t *testing.T) {
+	encrypted := productionZIPBytes(t, map[string][]byte{"document.txt": []byte("text")})
+	markProductionZIPEncrypted(t, encrypted)
+	bomb := productionZIPBytes(t, map[string][]byte{"document.txt": bytes.Repeat([]byte("A"), 256<<10)})
+	nested := productionZIPBytes(t, map[string][]byte{"document.txt": []byte("text")})
+	for depth := 0; depth < 5; depth++ {
+		nested = productionZIPBytes(t, map[string][]byte{"nested.zip": nested})
+	}
+	typeMismatch := productionZIPBytes(t, map[string][]byte{"document.pdf": []byte("plain text")})
+	traversal := productionZIPBytes(t, map[string][]byte{"../escape.txt": []byte("blocked")})
+
+	for _, test := range []struct {
+		name    string
+		payload []byte
+		code    string
+	}{
+		{"traversal", traversal, "ARCHIVE_PATH_UNSAFE"},
+		{"encrypted", encrypted, "ARCHIVE_ENCRYPTED"},
+		{"bomb", bomb, "ARCHIVE_LIMIT_REACHED"},
+		{"nested-limit", nested, "ARCHIVE_LIMIT_REACHED"},
+		{"type-mismatch", typeMismatch, "TYPE_MISMATCH"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			adapter, inventory, summary, selected, parent := productionArchiveFixture(t, "payload.zip", test.payload, productionCleanScanner{})
+			result, err := adapter.Reconstruct(t.Context(), inventory, summary, selected)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(result.Outputs) != 0 || !hasProductionFinding(result.Findings, test.code) {
+				t.Fatalf("containment result = %#v", result)
+			}
+			assertNoProductionExtractions(t, parent)
+			if err := adapter.Cleanup(t.Context()); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
+type productionScannerFunc func(context.Context, io.Reader, uint64) (scan.ClamResult, error)
+
+func (function productionScannerFunc) Scan(ctx context.Context, reader io.Reader, expected uint64) (scan.ClamResult, error) {
+	return function(ctx, reader, expected)
+}
+
+func TestProductionArchiveCancellationAndTimeoutRemoveExtraction(t *testing.T) {
+	payload := productionZIPBytes(t, map[string][]byte{"document.txt": []byte("bounded")})
+	for _, test := range []struct {
+		name string
+		run  func(*testing.T, *productionScannerReconstruction, scan.Inventory, scan.ScanSummary, policy.Policy) error
+	}{
+		{"cancellation", func(t *testing.T, adapter *productionScannerReconstruction, inventory scan.Inventory, summary scan.ScanSummary, selected policy.Policy) error {
+			ctx, cancel := context.WithCancel(t.Context())
+			adapter.scanner = productionScannerFunc(func(context.Context, io.Reader, uint64) (scan.ClamResult, error) {
+				cancel()
+				return scan.ClamResult{}, context.Canceled
+			})
+			_, err := adapter.Reconstruct(ctx, inventory, summary, selected)
+			return err
+		}},
+		{"timeout", func(t *testing.T, adapter *productionScannerReconstruction, inventory scan.Inventory, summary scan.ScanSummary, selected policy.Policy) error {
+			ctx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
+			defer cancel()
+			called := false
+			adapter.scanner = productionScannerFunc(func(ctx context.Context, _ io.Reader, _ uint64) (scan.ClamResult, error) {
+				called = true
+				<-ctx.Done()
+				return scan.ClamResult{}, ctx.Err()
+			})
+			_, err := adapter.Reconstruct(ctx, inventory, summary, selected)
+			if !called {
+				t.Fatal("deadline expired before the extracted member scan began")
+			}
+			return err
+		}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			adapter, inventory, summary, selected, parent := productionArchiveFixture(t, "payload.zip", payload, productionCleanScanner{})
+			err := test.run(t, adapter, inventory, summary, selected)
+			if test.name == "cancellation" && !errors.Is(err, context.Canceled) {
+				t.Fatalf("cancellation error = %v", err)
+			}
+			if test.name == "timeout" && !errors.Is(err, context.DeadlineExceeded) {
+				t.Fatalf("timeout error = %v", err)
+			}
+			assertNoProductionExtractions(t, parent)
+			if len(adapter.outputs) != 0 {
+				t.Fatal("failed recursive scan retained an output")
+			}
+		})
+	}
+}
+
+func productionArchiveFixture(t *testing.T, name string, payload []byte, memberScanner ScannerContentScanner) (*productionScannerReconstruction, scan.Inventory, scan.ScanSummary, policy.Policy, string) {
+	t.Helper()
+	parent := productionTmpfs(t)
+	quarantine := t.TempDir()
+	if err := os.WriteFile(filepath.Join(quarantine, name), payload, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	selected, err := policy.Load(filepath.Join("..", "..", "examples", "policy.safe.toml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	classifier := scan.ConservativeMIMEClassifier{}
+	inventory, err := scan.BuildInventory(t.Context(), quarantine, scan.InventoryLimits{
+		MaxFiles: selected.Limits().MaxFiles(), MaxInputBytes: selected.Limits().MaxInputBytes(),
+	}, classifier)
+	if err != nil {
+		t.Fatal(err)
+	}
+	summary, err := scan.ScanInventory(t.Context(), inventory, func(ctx context.Context, entry scan.InventoryEntry) (io.ReadCloser, error) {
+		return scan.OpenInventoryEntry(ctx, quarantine, entry)
+	}, productionCleanScanner{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	adapter := &productionScannerReconstruction{
+		root: quarantine,
+		sandbox: scan.ExtractionSandbox{
+			ParentPath: parent, Tmpfs: true, PrivateMountNamespace: true, WorkerUID: os.Geteuid(), WorkerGID: os.Getegid(),
+		},
+		classifier: classifier, scanner: memberScanner, outputs: make(map[string]*scan.ReconstructedOutput),
+	}
+	return adapter, inventory, summary, selected, parent
+}
+
+func productionZIPBytes(t *testing.T, members map[string][]byte) []byte {
+	t.Helper()
+	var buffer bytes.Buffer
+	archive := zip.NewWriter(&buffer)
+	names := make([]string, 0, len(members))
+	for name := range members {
+		names = append(names, name)
+	}
+	slices.Sort(names)
+	for _, name := range names {
+		header := &zip.FileHeader{Name: name, Method: zip.Deflate}
+		header.SetMode(0o600)
+		writer, err := archive.CreateHeader(header)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := writer.Write(members[name]); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := archive.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return buffer.Bytes()
+}
+
+func markProductionZIPEncrypted(t *testing.T, archive []byte) {
+	t.Helper()
+	local := bytes.Index(archive, []byte("PK\x03\x04"))
+	central := bytes.Index(archive, []byte("PK\x01\x02"))
+	if local < 0 || central < 0 {
+		t.Fatal("ZIP headers missing")
+	}
+	archive[local+6] |= 1
+	archive[central+8] |= 1
+}
+
+func hasProductionFinding(findings []scan.Finding, code string) bool {
+	for _, finding := range findings {
+		if finding.Code == code && finding.Severity == scan.SeverityBlocking {
+			return true
+		}
+	}
+	return false
+}
+
+func assertNoProductionExtractions(t *testing.T, parent string) {
+	t.Helper()
+	entries, err := os.ReadDir(parent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range entries {
+		if strings.HasPrefix(entry.Name(), "private-vm-extract-") {
+			t.Fatalf("extraction remains after recursive processing: %s", entry.Name())
+		}
+	}
+}
+
 func productionTmpfs(t *testing.T) string {
 	t.Helper()
 	parent := "/dev/shm"

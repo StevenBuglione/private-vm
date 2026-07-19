@@ -847,6 +847,16 @@ type productionScannerReconstruction struct {
 	closed        bool
 }
 
+type productionReconstructionRun struct {
+	adapter       *productionScannerReconstruction
+	result        *ScannerReconstruction
+	reconstructor scan.Reconstructor
+	archiveLimits scan.ArchiveLimits
+	entries       uint64
+	expanded      uint64
+	reported      map[string]struct{}
+}
+
 func (adapter *productionScannerReconstruction) Reconstruct(ctx context.Context, inventory scan.Inventory, summary scan.ScanSummary, selected policy.Policy) (ScannerReconstruction, error) {
 	if adapter == nil || selected.Validate() != nil || selected.Mode() != policy.ModeSafe || adapter.scanner == nil || adapter.classifier == nil {
 		return ScannerReconstruction{}, scannerAdapterUnavailable("reconstruction")
@@ -873,6 +883,15 @@ func (adapter *productionScannerReconstruction) Reconstruct(ctx context.Context,
 			MaxMediaStreams: 32, MaxTextBytes: min(limits.MaxSingleFileBytes(), 64<<20),
 		},
 	}
+	run := &productionReconstructionRun{
+		adapter: adapter, result: &result, reconstructor: reconstructor,
+		archiveLimits: scan.ArchiveLimits{
+			MaxDepth: limits.MaxArchiveDepth(), MaxEntries: limits.MaxFiles(),
+			MaxPathBytes: scan.MaximumInventoryPathBytes, MaxFileBytes: limits.MaxSingleFileBytes(),
+			MaxExpandedBytes: limits.MaxExpandedBytes(), MaxExpansionRatio: limits.MaxExpansionRatio(),
+		},
+		reported: make(map[string]struct{}),
+	}
 	for _, entry := range inventory.Entries {
 		if err := ctx.Err(); err != nil {
 			_ = adapter.Cleanup(context.Background())
@@ -881,68 +900,10 @@ func (adapter *productionScannerReconstruction) Reconstruct(ctx context.Context,
 		if !clean[entry.RelativePath] {
 			continue
 		}
-		if !entry.ExtensionAgreement {
-			result.Findings = append(result.Findings, productionBlockingFinding("TYPE_MISMATCH", entry.RelativePath, "The filename extension does not agree with the detected content type."))
-			continue
-		}
-		class := productionContentClass(entry.DetectedMIME)
-		switch class {
-		case scan.ContentActive:
-			result.Findings = append(result.Findings, productionBlockingFinding("ACTIVE_CONTENT_BLOCKED", entry.RelativePath, "Active content cannot be promoted by the safe policy."))
-			continue
-		case scan.ContentUnsupported:
-			result.Findings = append(result.Findings, productionBlockingFinding("SANITIZER_UNSUPPORTED_TYPE", entry.RelativePath, "This content type has no safe reconstruction backend."))
-			continue
-		case scan.ContentArchive:
-			archive, finding, err := adapter.inspectArchive(ctx, entry, selected)
-			if err != nil {
-				_ = adapter.Cleanup(context.Background())
-				return ScannerReconstruction{}, err
-			}
-			if archive != nil {
-				result.Archives = append(result.Archives, *archive)
-			}
-			result.Findings = append(result.Findings, finding)
-			continue
-		}
-		reader, err := scan.OpenInventoryEntry(ctx, adapter.root, entry)
-		if err != nil {
+		if err := run.processEntry(ctx, adapter.root, entry, entry.RelativePath, 0); err != nil {
 			_ = adapter.Cleanup(context.Background())
 			return ScannerReconstruction{}, err
 		}
-		file, ok := reader.(*os.File)
-		if !ok {
-			reader.Close()
-			_ = adapter.Cleanup(context.Background())
-			return ScannerReconstruction{}, scannerAdapterUnavailable("reconstruction input")
-		}
-		output, reconstructErr := reconstructor.Reconstruct(ctx, file, entry)
-		closeErr := file.Close()
-		if reconstructErr != nil || closeErr != nil || output == nil {
-			_ = adapter.Cleanup(context.Background())
-			return ScannerReconstruction{}, errors.Join(reconstructErr, closeErr)
-		}
-		outputID, err := newScannerOutputID()
-		if err != nil {
-			_ = output.Cleanup()
-			_ = adapter.Cleanup(context.Background())
-			return ScannerReconstruction{}, err
-		}
-		adapter.mu.Lock()
-		if adapter.closed || adapter.outputs[outputID] != nil {
-			adapter.mu.Unlock()
-			_ = output.Cleanup()
-			_ = adapter.Cleanup(context.Background())
-			return ScannerReconstruction{}, scannerAdapterUnavailable("reconstruction output")
-		}
-		adapter.outputs[outputID] = output
-		adapter.mu.Unlock()
-		result.Outputs = append(result.Outputs, scan.ReportSanitizedOutput{
-			OutputID: outputID, LogicalName: sanitizedLogicalName(entry, output.DetectedMIME),
-			SourceSHA256: entry.SHA256, SizeBytes: output.SizeBytes, SHA256: output.SHA256,
-			DetectedMIME: output.DetectedMIME, Transformation: output.Transformation, RescanVerdict: "CLAMAV_CLEAN",
-		})
-		result.Tools = append(result.Tools, output.Tools...)
 	}
 	if len(result.Outputs) != 1 && len(result.Findings) == 0 {
 		result.Findings = append(result.Findings, productionBlockingFinding("PROMOTION_SELECTION_REQUIRED", "", "The safe v1 workflow requires exactly one reconstructed output."))
@@ -950,42 +911,183 @@ func (adapter *productionScannerReconstruction) Reconstruct(ctx context.Context,
 	return result, nil
 }
 
-func (adapter *productionScannerReconstruction) inspectArchive(ctx context.Context, entry scan.InventoryEntry, selected policy.Policy) (*scan.ReportArchive, scan.Finding, error) {
-	reader, err := scan.OpenInventoryEntry(ctx, adapter.root, entry)
-	if err != nil {
-		return nil, scan.Finding{}, err
+func (run *productionReconstructionRun) processEntry(ctx context.Context, root string, entry scan.InventoryEntry, reportPath string, depth uint32) error {
+	if err := ctx.Err(); err != nil {
+		return err
 	}
-	defer reader.Close()
+	if !entry.ExtensionAgreement {
+		run.result.Findings = append(run.result.Findings, productionBlockingFinding("TYPE_MISMATCH", reportPath, "The filename extension does not agree with the detected content type."))
+		return nil
+	}
+	switch productionContentClass(entry.DetectedMIME) {
+	case scan.ContentActive:
+		run.result.Findings = append(run.result.Findings, productionBlockingFinding("ACTIVE_CONTENT_BLOCKED", reportPath, "Active content cannot be promoted by the safe policy."))
+		return nil
+	case scan.ContentUnsupported:
+		run.result.Findings = append(run.result.Findings, productionBlockingFinding("SANITIZER_UNSUPPORTED_TYPE", reportPath, "This content type has no safe reconstruction backend."))
+		return nil
+	case scan.ContentArchive:
+		if entry.DetectedMIME != "application/zip" && entry.DetectedMIME != "application/x-tar" {
+			run.result.Findings = append(run.result.Findings, productionBlockingFinding("ARCHIVE_FORMAT_UNSUPPORTED", reportPath, "This archive encoding cannot be safely expanded by v1."))
+			return nil
+		}
+		err := run.processArchive(ctx, root, entry, reportPath, depth)
+		if err == nil {
+			return nil
+		}
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		code := scan.ErrorCode(err)
+		if archiveContentRejection(code) {
+			run.result.Findings = append(run.result.Findings, productionBlockingFinding(code, reportPath, "The archive violated a bounded containment rule."))
+			return nil
+		}
+		return err
+	}
+	reader, err := scan.OpenInventoryEntry(ctx, root, entry)
+	if err != nil {
+		return err
+	}
 	file, ok := reader.(*os.File)
 	if !ok {
-		return nil, scan.Finding{}, scannerAdapterUnavailable("archive input")
+		reader.Close()
+		return scannerAdapterUnavailable("reconstruction input")
 	}
-	limits := scan.ArchiveLimits{
-		MaxDepth: selected.Limits().MaxArchiveDepth(), MaxEntries: selected.Limits().MaxFiles(),
-		MaxPathBytes: scan.MaximumInventoryPathBytes, MaxFileBytes: selected.Limits().MaxSingleFileBytes(),
-		MaxExpandedBytes: selected.Limits().MaxExpandedBytes(), MaxExpansionRatio: selected.Limits().MaxExpansionRatio(),
+	output, reconstructErr := run.reconstructor.Reconstruct(ctx, file, entry)
+	closeErr := file.Close()
+	if reconstructErr != nil || closeErr != nil || output == nil {
+		return errors.Join(reconstructErr, closeErr)
+	}
+	outputID, err := newScannerOutputID()
+	if err != nil {
+		_ = output.Cleanup()
+		return err
+	}
+	run.adapter.mu.Lock()
+	if run.adapter.closed || run.adapter.outputs[outputID] != nil {
+		run.adapter.mu.Unlock()
+		_ = output.Cleanup()
+		return scannerAdapterUnavailable("reconstruction output")
+	}
+	run.adapter.outputs[outputID] = output
+	run.adapter.mu.Unlock()
+	run.result.Outputs = append(run.result.Outputs, scan.ReportSanitizedOutput{
+		OutputID: outputID, LogicalName: sanitizedLogicalName(entry, output.DetectedMIME),
+		SourceSHA256: entry.SHA256, SizeBytes: output.SizeBytes, SHA256: output.SHA256,
+		DetectedMIME: output.DetectedMIME, Transformation: output.Transformation, RescanVerdict: "CLAMAV_CLEAN",
+	})
+	run.result.Tools = append(run.result.Tools, output.Tools...)
+	return nil
+}
+
+func (run *productionReconstructionRun) processArchive(ctx context.Context, root string, entry scan.InventoryEntry, reportPath string, depth uint32) (returnedErr error) {
+	if run.entries >= run.archiveLimits.MaxEntries || run.expanded >= run.archiveLimits.MaxExpandedBytes {
+		return &scan.Error{Code: "ARCHIVE_LIMIT_REACHED", Message: "Archive content exceeds the cumulative extraction budget.", Remediation: "Reduce archive size or nesting and restart the workflow."}
+	}
+	limits := run.archiveLimits
+	limits.MaxEntries -= run.entries
+	limits.MaxExpandedBytes -= run.expanded
+	reader, err := scan.OpenInventoryEntry(ctx, root, entry)
+	if err != nil {
+		return err
+	}
+	file, ok := reader.(*os.File)
+	if !ok {
+		reader.Close()
+		return scannerAdapterUnavailable("archive input")
 	}
 	var plan scan.ArchivePlan
 	switch entry.DetectedMIME {
 	case "application/zip":
-		plan, err = scan.InspectZIP(ctx, file, int64(entry.SizeBytes), 0, limits)
+		plan, err = scan.InspectZIP(ctx, file, int64(entry.SizeBytes), depth, limits)
 	case "application/x-tar":
-		plan, err = scan.InspectTAR(ctx, file, entry.SizeBytes, 0, limits)
-	default:
-		return nil, productionBlockingFinding("ARCHIVE_FORMAT_UNSUPPORTED", entry.RelativePath, "This archive encoding cannot be safely expanded by v1."), nil
+		plan, err = scan.InspectTAR(ctx, file, entry.SizeBytes, depth, limits)
 	}
 	if err != nil {
-		code := scan.ErrorCode(err)
-		return nil, productionBlockingFinding(code, entry.RelativePath, "The archive violated a bounded containment rule."), nil
+		_ = file.Close()
+		return err
 	}
 	if len(plan.Entries) == 0 || plan.ExpandedBytes == 0 {
-		return nil, productionBlockingFinding("ARCHIVE_INVALID", entry.RelativePath, "The archive has no inspectable regular content."), nil
+		_ = file.Close()
+		return &scan.Error{Code: "ARCHIVE_INVALID", Message: "The archive has no inspectable regular content.", Remediation: "Reject empty or uninspectable archives under the safe policy."}
 	}
-	report := &scan.ReportArchive{
-		SourceSHA256: entry.SHA256, Format: plan.Format, Depth: plan.Depth,
-		EntryCount: uint64(len(plan.Entries)), ExpandedBytes: plan.ExpandedBytes, Complete: true,
+	run.entries += uint64(len(plan.Entries))
+	run.expanded += plan.ExpandedBytes
+	if _, err := file.Seek(0, io.SeekStart); err != nil {
+		_ = file.Close()
+		return &scan.Error{Code: "ARCHIVE_INVALID", Message: "The archive could not be rewound safely.", Remediation: "Reject the archive and restart scanning in a fresh scanner."}
 	}
-	return report, productionBlockingFinding("ARCHIVE_RECURSION_REQUIRED", entry.RelativePath, "Archive members require a separately bounded recursive reconstruction pass."), nil
+	var extraction *scan.Extraction
+	switch entry.DetectedMIME {
+	case "application/zip":
+		extraction, err = scan.ExtractZIP(ctx, file, int64(entry.SizeBytes), depth, limits, run.adapter.sandbox, run.adapter.classifier)
+	case "application/x-tar":
+		extraction, err = scan.ExtractTAR(ctx, file, entry.SizeBytes, depth, limits, run.adapter.sandbox, run.adapter.classifier)
+	}
+	closeErr := file.Close()
+	if err != nil || closeErr != nil || extraction == nil {
+		return errors.Join(err, closeErr)
+	}
+	defer func() {
+		if cleanupErr := extraction.Cleanup(); cleanupErr != nil {
+			returnedErr = errors.Join(cleanupErr, returnedErr)
+		}
+	}()
+	manifest := extraction.Manifest()
+	summary, err := scan.ScanInventory(ctx, manifest, func(openContext context.Context, member scan.InventoryEntry) (io.ReadCloser, error) {
+		return scan.OpenInventoryEntry(openContext, extraction.RootPath(), member)
+	}, run.adapter.scanner)
+	if err != nil {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		return err
+	}
+	if !summary.Complete || summary.ScannedFiles != uint64(len(manifest.Entries)) || len(summary.Findings) != len(manifest.Entries) {
+		return scannerAdapterUnavailable("archive malware evidence")
+	}
+	for index, member := range manifest.Entries {
+		memberPath, ok := archiveMemberReportPath(reportPath, member.RelativePath)
+		if !ok {
+			run.result.Findings = append(run.result.Findings, productionBlockingFinding("ARCHIVE_PATH_UNSAFE", reportPath, "A recursive archive member path exceeds the report and traversal bound."))
+			continue
+		}
+		finding := summary.Findings[index]
+		if finding.Code != "CLAMAV_CLEAN" || finding.Severity != scan.SeverityInfo {
+			finding.RelativePath = memberPath
+			run.result.Findings = append(run.result.Findings, finding)
+			continue
+		}
+		if err := run.processEntry(ctx, extraction.RootPath(), member, memberPath, depth+1); err != nil {
+			return err
+		}
+	}
+	reportKey := entry.SHA256 + "\x00" + string(plan.Format) + "\x00" + hex.EncodeToString([]byte{byte(depth)})
+	if _, exists := run.reported[reportKey]; !exists {
+		run.reported[reportKey] = struct{}{}
+		run.result.Archives = append(run.result.Archives, scan.ReportArchive{
+			SourceSHA256: entry.SHA256, Format: plan.Format, Depth: plan.Depth,
+			EntryCount: uint64(len(plan.Entries)), ExpandedBytes: plan.ExpandedBytes, Complete: true,
+		})
+	}
+	return nil
+}
+
+func archiveMemberReportPath(parent, member string) (string, bool) {
+	value := parent + "!/" + member
+	return value, len(value) <= scan.MaximumInventoryPathBytes
+}
+
+func archiveContentRejection(code string) bool {
+	switch code {
+	case "ARCHIVE_INVALID", "ARCHIVE_ENCRYPTED", "ARCHIVE_LINK_REJECTED", "ARCHIVE_SPECIAL_FILE_REJECTED",
+		"ARCHIVE_DUPLICATE_PATH", "ARCHIVE_LIMIT_REACHED", "ARCHIVE_PATH_UNSAFE", "ARCHIVE_EXTRACTION_FAILED",
+		"SCAN_LIMIT_REACHED":
+		return true
+	default:
+		return false
+	}
 }
 
 func (adapter *productionScannerReconstruction) OpenApproved(ctx context.Context, outputID string) (io.ReadCloser, error) {
