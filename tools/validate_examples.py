@@ -52,6 +52,7 @@ pairs = [
     ("schemas/scan-report.schema.json", "examples/scan-report.example.json", "json"),
     ("schemas/vpn-profile-status.schema.json", "examples/vpn-profile-status.example.json", "json"),
     ("schemas/recovery-report.schema.json", "examples/recovery-report.example.json", "json"),
+    ("schemas/usb-enrollment.schema.json", "examples/usb-enrollment.example.json", "json"),
     ("schemas/workstation-bundles.schema.json", "project/workstation-bundles.json", "json"),
 ]
 

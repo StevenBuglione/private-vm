@@ -26,6 +26,19 @@ It refuses:
 
 Enrollment stores identity only, never filesystem content.
 
+The persistent record is the closed `schemas/usb-enrollment.schema.json`
+document. It uses `schema_version = 1`, stores no kernel block path or transient
+bus/address, and is written as a mode-`0600` regular file in a private
+user-owned directory. The `enrollment_id` is derived from the complete
+normalized identity, so editing any identity field invalidates the record.
+
+A serial-bearing device is still pinned to its observed physical port so a move
+is visible. A device without a serial can be enrolled only after the user
+separately accepts physical-port binding; moving it invalidates the enrollment.
+Every later claim enumerates a fresh snapshot and requires exactly one complete
+match. `/dev/sdX` names, bus numbers and addresses are observations only and
+never authorize a claim.
+
 ## USBGuard
 
 NixOS integration enables USBGuard with implicit block. The enrolled transfer
@@ -37,6 +50,11 @@ with-interface equals { 08:*:* }
 
 Existing keyboard/mouse policies must be preserved. Installation must not
 blindly replace USBGuard rules.
+
+The source core emits an exact suggested rule containing VID/PID, optional
+serial, USBGuard hash, physical port and
+`with-interface equals { 08:*:* }`. Applying or merging that suggestion remains
+an explicit privileged installation operation.
 
 ## Host automount
 

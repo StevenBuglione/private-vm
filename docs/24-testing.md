@@ -12,6 +12,9 @@
 - WireGuard parser
 - capacity planner
 - USB identity matching
+- sysfs USB/block association, USBGuard record parsing, serial-or-explicit-port
+  enrollment, duplicate-device ambiguity, host root/boot exclusion and
+  mode-`0600` enrollment round trips
 - scan report parser
 - policy decisions
 - stream framing/hash
