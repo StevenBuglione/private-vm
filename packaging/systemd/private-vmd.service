@@ -6,7 +6,7 @@ Before=shutdown.target
 
 [Service]
 Type=simple
-ExecStart=/usr/libexec/private-vmd --config /etc/private-vm/config.toml
+ExecStart=/usr/libexec/private-vmd --config /etc/private-vm/config.toml --group private-vm
 Restart=on-failure
 RestartSec=2
 User=root

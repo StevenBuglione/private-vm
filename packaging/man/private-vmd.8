@@ -1,0 +1,22 @@
+.TH PRIVATE-VMD 8 "2026-07-19" "private-vm 0.0.0-dev" "System Administration"
+.SH NAME
+private-vmd \- privileged private-vm lifecycle daemon
+.SH SYNOPSIS
+.B private-vmd
+[--config PATH] [--group GROUP]
+.SH DESCRIPTION
+.B private-vmd
+runs as root and exposes only the bounded semantic gRPC API on
+.IR /run/private-vm/control.sock .
+It is not a generic command, mount, device or QEMU-argument service.
+.PP
+The systemd service owns startup, shutdown and recovery. Do not run multiple
+instances and do not manually delete session resources before cleanup audits
+them.
+.SH SECURITY
+The configuration file must contain no VPN key, magnet, password or token.
+Core dumps are disabled. QMP and SPICE use private Unix sockets; guest RPC uses
+AF_VSOCK. No daemon endpoint listens on TCP.
+.SH SEE ALSO
+.BR private-vm (1),
+https://github.com/StevenBuglione/private-vm/blob/main/docs/28-operations-runbook.md

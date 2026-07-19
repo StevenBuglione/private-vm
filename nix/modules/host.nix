@@ -7,10 +7,16 @@
 
 let
   cfg = config.services.private-vm;
-  polkitPolicy = pkgs.runCommand "private-vm-polkit-policy" { } ''
+  hostIntegration = pkgs.runCommand "private-vm-host-integration" { } ''
     install -Dm0444 \
       ${../../packaging/polkit/org.private-vm.policy} \
       "$out/share/polkit-1/actions/org.private-vm.policy"
+    install -Dm0444 \
+      ${../../packaging/udev/90-private-vm.rules} \
+      "$out/lib/udev/rules.d/90-private-vm.rules"
+    install -Dm0444 \
+      ${../../packaging/usbguard/private-vm.conf.example} \
+      "$out/share/private-vm/usbguard/private-vm.conf.example"
     test "$(grep -Fc '<action id=' "$out/share/polkit-1/actions/org.private-vm.policy")" -eq 1
     grep -Fq '<action id="org.private-vm.usb.prepare">' \
       "$out/share/polkit-1/actions/org.private-vm.policy"
@@ -18,7 +24,7 @@ let
       "$out/share/polkit-1/actions/org.private-vm.policy"
   '';
   installedApplication = lib.lowPrio cfg.package;
-  installedPolkitPolicy = lib.hiPrio polkitPolicy;
+  installedHostIntegration = lib.hiPrio hostIntegration;
   daemonPath = with pkgs; [
     config.security.polkit.package.bin
     qemu
@@ -49,6 +55,16 @@ in
       default = "private-vm";
     };
 
+    authorizedUsers = lib.mkOption {
+      type = lib.types.listOf (lib.types.strMatching "[a-z_][a-z0-9_-]{0,30}");
+      default = [ ];
+      example = [ "alice" ];
+      description = ''
+        Existing local users to add to the private-vm authorization group.
+        Group changes take effect for a user only after a new login session.
+      '';
+    };
+
     strict = lib.mkOption {
       type = lib.types.bool;
       default = true;
@@ -73,10 +89,13 @@ in
 
   config = lib.mkIf cfg.enable {
     users.groups.${cfg.group} = { };
+    users.users = lib.genAttrs cfg.authorizedUsers (_: {
+      extraGroups = [ cfg.group ];
+    });
 
     environment.systemPackages = with pkgs; [
       installedApplication
-      installedPolkitPolicy
+      installedHostIntegration
       qemu
       cryptsetup
       nftables
@@ -94,6 +113,7 @@ in
     ];
     services.usbguard.enable = true;
     services.usbguard.implicitPolicyTarget = "block";
+    services.udev.packages = [ installedHostIntegration ];
     security.polkit.enable = true;
 
     systemd.tmpfiles.rules = [
@@ -167,16 +187,32 @@ in
         message = "private-vmd StateDirectoryMode must remain 0700";
       }
       {
-        assertion = lib.elem installedPolkitPolicy config.environment.systemPackages;
-        message = "the independently packaged private-vm Polkit action must be in the system profile";
+        assertion = lib.elem installedHostIntegration config.environment.systemPackages;
+        message = "the independently packaged private-vm host integration must be in the system profile";
       }
       {
         assertion = lib.elem "/share/polkit-1" config.environment.pathsToLink;
         message = "the system profile must link private-vm's packaged Polkit action";
       }
+      {
+        assertion = builtins.length cfg.authorizedUsers == builtins.length (lib.unique cfg.authorizedUsers);
+        message = "services.private-vm.authorizedUsers must not contain duplicates";
+      }
+      {
+        assertion = lib.all (
+          name:
+          let
+            account = config.users.users.${name};
+          in
+          account.isNormalUser || account.isSystemUser
+        ) cfg.authorizedUsers;
+        message = "every services.private-vm.authorizedUsers entry must name an explicitly configured user";
+      }
     ];
 
-    environment.etc."private-vm/config.toml".text = ''
+    environment.etc."private-vm/config.toml" = {
+      mode = "0600";
+      text = ''
       schema_version = 1
       strict = ${if cfg.strict then "true" else "false"}
 
@@ -189,6 +225,7 @@ in
       [logging]
       persistent_lifecycle_metadata = false
       telemetry = false
-    '';
+      '';
+    };
   };
 }
