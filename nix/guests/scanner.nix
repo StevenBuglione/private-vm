@@ -91,18 +91,23 @@ in
     TimeoutStopSec = "30s";
   };
 
-  systemd.services.clamav-freshclam.serviceConfig = {
-    LimitCORE = 0;
-    MemoryMax = "2G";
-    NoNewPrivileges = true;
-    ProtectClock = true;
-    ProtectControlGroups = true;
-    ProtectHostname = true;
-    ProtectKernelLogs = true;
-    ProtectKernelModules = true;
-    ProtectKernelTunables = true;
-    TasksMax = 32;
-    TimeoutStartSec = "5min";
+  # Do not let this hardening fragment materialize an otherwise-disabled unit
+  # in the offline specialisation. The no-NIC scan boot must have no updater
+  # service or timer that an operator could start manually.
+  systemd.services.clamav-freshclam = lib.mkIf config.services.clamav.updater.enable {
+    serviceConfig = {
+      LimitCORE = 0;
+      MemoryMax = "2G";
+      NoNewPrivileges = true;
+      ProtectClock = true;
+      ProtectControlGroups = true;
+      ProtectHostname = true;
+      ProtectKernelLogs = true;
+      ProtectKernelModules = true;
+      ProtectKernelTunables = true;
+      TasksMax = 32;
+      TimeoutStartSec = "5min";
+    };
   };
 
   specialisation.scan-offline.configuration = {
