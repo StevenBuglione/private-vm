@@ -307,6 +307,10 @@
           testScript = ''
             machine.wait_for_unit("graphical.target")
             machine.wait_for_unit("display-manager.service")
+            machine.wait_for_unit("private-vm-guestd.service")
+            machine.succeed("systemctl is-active private-vm-guestd.service")
+            machine.succeed("timeout 15s private-vm-guest-smoke")
+            machine.succeed("ss -H -l -A vsock | grep -E '(^|:)4050([[:space:]]|$)'")
             machine.wait_for_x()
             machine.wait_until_succeeds("loginctl list-sessions --no-legend | grep -E '[[:space:]]private[[:space:]]'")
             machine.succeed("test -x /run/current-system/sw/bin/startxfce4")
