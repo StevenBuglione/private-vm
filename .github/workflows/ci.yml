@@ -79,6 +79,7 @@ jobs:
           nix develop --command govulncheck ./...
           nix develop --command python3 tools/validate_schemas.py
           nix develop --command python3 tools/validate_examples.py
+          nix develop --command python3 tools/check_packaging_assets.py
       - name: Secret scan
         run: nix develop --command gitleaks dir . --redact --no-banner --exit-code 1
 

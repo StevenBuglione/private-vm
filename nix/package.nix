@@ -49,6 +49,8 @@ pkgs.buildGoModule {
       "$out/share/polkit-1/actions/org.private-vm.policy"
     install -Dm0444 ${../packaging/man/private-vm.1} "$out/share/man/man1/private-vm.1"
     install -Dm0444 ${../packaging/man/private-vmd.8} "$out/share/man/man8/private-vmd.8"
+    install -Dm0444 ${../LICENSE} "$out/share/doc/private-vm/LICENSE"
+    install -Dm0444 ${../README.md} "$out/share/doc/private-vm/README.md"
 
     installShellCompletion --cmd private-vm \
       --bash <($out/bin/private-vm completion bash) \

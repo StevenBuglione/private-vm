@@ -113,6 +113,7 @@ root daemon and host integration are required.
 ```bash
 sudo apt install ./private-vm_VERSION_amd64.deb
 sudo usermod -aG private-vm "$USER"
+sudo systemctl enable --now private-vmd.service
 ```
 
 Declared dependencies should include:
@@ -136,6 +137,7 @@ Package names vary; packaging tests must verify actual target releases.
 ```bash
 sudo dnf install ./private-vm-VERSION-1.x86_64.rpm
 sudo usermod -aG private-vm "$USER"
+sudo systemctl enable --now private-vmd.service
 ```
 
 Dependencies:
@@ -151,6 +153,12 @@ Dependencies:
 - util-linux
 - e2fsprogs
 - zstd
+
+The DEB and RPM are produced from one closed package-content specification.
+They contain no lifecycle shell hooks. systemd-sysusers creates only the
+`private-vm` group and systemd-tmpfiles creates the runtime/cache/scratch
+directories with reviewed modes. The udev rule merely tags a mass-storage
+candidate; it never authorizes, mounts or passes through a USB device.
 
 ## Generic Linux
 
@@ -190,6 +198,10 @@ private-vm images verify --all
 The daemon protocol must support a bounded compatibility window. Active sessions
 are never hot-upgraded.
 
+Both native packages mark `/etc/private-vm/config.toml` as a non-replacing
+configuration file. `/var/lib/private-vm` and user exports are not package-owned,
+so an upgrade or ordinary removal cannot silently delete their contents.
+
 ## Uninstall
 
 ```bash
@@ -200,3 +212,8 @@ sudo private-vm system uninstall --accept
 
 Uninstall must not delete image cache or configuration without separate flags.
 It must never delete user exports.
+
+For an ordinary package-manager removal, first run cleanup and explicitly stop
+and disable `private-vmd.service`; the release acceptance VM proves no daemon
+process remains after package removal. The generic Go uninstaller performs the
+same bounded stop/disable operation as part of its reviewed transaction.

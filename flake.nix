@@ -125,6 +125,18 @@
           src = self;
         };
 
+      linuxPackagesFor =
+        system:
+        let
+          pkgs = pkgsFor system;
+        in
+        import ./nix/linux-packages.nix {
+          inherit pkgs;
+          application = privateVMFor system;
+          version = projectVersion;
+          sourceDateEpoch = self.lastModified or 0;
+        };
+
       guestdFor =
         system: role:
         let
@@ -1175,6 +1187,10 @@
             guestd-scanner = guestdFor system "scanner";
             guestd-exporter = guestdFor system "exporter";
           };
+          linuxDistributionPackages = nixpkgs.lib.optionalAttrs (system == "x86_64-linux") {
+            deb = (linuxPackagesFor system).deb;
+            rpm = (linuxPackagesFor system).rpm;
+          };
           imagePackages = nixpkgs.lib.optionalAttrs (system == "x86_64-linux") {
             image-workstation-basic = workstationBasic.config.system.build.images.qemu-efi;
             closure-workstation-basic =
@@ -1196,7 +1212,7 @@
               exporter.config.system.build.images.qemu-efi.passthru.config.system.build.toplevel;
           };
         in
-        binaryPackages // imagePackages
+        binaryPackages // linuxDistributionPackages // imagePackages
       );
 
       apps = forAllSystems (system: {
@@ -1304,6 +1320,9 @@
               export PATH="${pkgs.actionlint}/bin:${pkgs.zizmor}/bin:$PATH"
               python3 tools/test_workflow_policy.py
               python3 tools/check_workflow_policy.py
+            '';
+            package-contract = sourceCheck "private-vm-package-contract" ''
+              python3 tools/check_packaging_assets.py
             '';
           };
         in
