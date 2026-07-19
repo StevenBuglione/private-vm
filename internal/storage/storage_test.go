@@ -12,6 +12,8 @@ import (
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/StevenBuglione/private-vm/internal/session"
 )
 
 func TestLUKSLifecycleKeepsKeyOffArgumentsAndDeletesCiphertext(t *testing.T) {
@@ -59,6 +61,9 @@ func TestLUKSLifecycleKeepsKeyOffArgumentsAndDeletesCiphertext(t *testing.T) {
 	if err := handle.Destroy(context.Background()); err != nil {
 		t.Fatalf("repeated destruction is not idempotent: %v", err)
 	}
+	if err := handle.Audit(context.Background()); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestLUKSCleanupRetriesBeforeDestroyingCiphertext(t *testing.T) {
@@ -83,6 +88,122 @@ func TestLUKSCleanupRetriesBeforeDestroyingCiphertext(t *testing.T) {
 	}
 }
 
+func TestLUKSRefusesUnverifiedLoopBeforeFormattingAndRetainsCleanupOwner(t *testing.T) {
+	manager, runner, _, sessionID := testLUKSManager(t)
+	runner.failLoopProof = true
+	handle, err := manager.Create(context.Background(), sessionID, 1<<30)
+	if err == nil || handle == nil {
+		t.Fatalf("unverified loop did not return a recoverable partial resource: handle=%v err=%v", handle, err)
+	}
+	for _, command := range runner.Commands() {
+		if len(command.Args) > 0 && (command.Args[0] == "luksFormat" || command.Args[0] == "open") {
+			t.Fatalf("cryptsetup touched an unverified loop: %v", command.Args)
+		}
+	}
+	runner.mu.Lock()
+	runner.failLoopProof = false
+	runner.mu.Unlock()
+	if err := handle.Destroy(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if err := handle.Audit(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestLUKSRefusesUnverifiedMapperBeforeFormattingFilesystem(t *testing.T) {
+	manager, runner, _, sessionID := testLUKSManager(t)
+	runner.failMapperProof = true
+	handle, err := manager.Create(context.Background(), sessionID, 1<<30)
+	if err == nil || handle == nil {
+		t.Fatalf("unverified mapper did not return a recoverable partial resource: handle=%v err=%v", handle, err)
+	}
+	for _, command := range runner.Commands() {
+		if command.Path == manager.Tools.MkfsExt4 {
+			t.Fatalf("mkfs touched an unverified mapper: %v", command.Args)
+		}
+	}
+	runner.mu.Lock()
+	runner.failMapperProof = false
+	runner.mu.Unlock()
+	if err := handle.Destroy(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if err := handle.Audit(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestLUKSCreateFailureMatrixConvergesToAbsence(t *testing.T) {
+	tests := []struct {
+		name      string
+		operation string
+		mountFail bool
+		cancel    bool
+	}{
+		{name: "loop attach", operation: "loop-attach"},
+		{name: "LUKS format", operation: "luks-format"},
+		{name: "mapper open", operation: "mapper-open"},
+		{name: "filesystem format", operation: "mkfs"},
+		{name: "outer mount", mountFail: true},
+		{name: "cancellation after mount", cancel: true},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			manager, runner, mounter, sessionID := testLUKSManager(t)
+			runner.failOperation = test.operation
+			mounter.failMount = test.mountFail
+			var ctx context.Context = context.Background()
+			if test.cancel {
+				var cancel context.CancelFunc
+				ctx, cancel = context.WithCancel(context.Background())
+				mounter.afterMount = cancel
+			}
+			handle, err := manager.Create(ctx, sessionID, 1<<30)
+			if err == nil || handle != nil {
+				t.Fatalf("injected failure did not clean completely: handle=%v err=%v", handle, err)
+			}
+			runner.mu.Lock()
+			loopAttached, mapperOpen := runner.loopAttached, runner.mapperOpen
+			runner.mu.Unlock()
+			if loopAttached || mapperOpen || mounter.mounted {
+				t.Fatalf("injected failure left devices: loop=%t mapper=%t mount=%t", loopAttached, mapperOpen, mounter.mounted)
+			}
+			for _, path := range []string{filepath.Join(manager.ScratchRoot, sessionID+".luks"), filepath.Join(manager.RuntimeRoot, sessionID, "mount")} {
+				if _, statErr := os.Lstat(path); !errors.Is(statErr, os.ErrNotExist) {
+					t.Fatalf("injected failure left path %s: %v", path, statErr)
+				}
+			}
+		})
+	}
+}
+
+func TestLUKSRollbackFailureReturnsRetryableCleanupOwner(t *testing.T) {
+	manager, runner, mounter, sessionID := testLUKSManager(t)
+	mounter.failMount = true
+	runner.failCloseOnce = true
+	handle, err := manager.Create(context.Background(), sessionID, 1<<30)
+	if err == nil || handle == nil {
+		t.Fatalf("failed rollback lost its cleanup owner: handle=%v err=%v", handle, err)
+	}
+	if err := handle.Destroy(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if err := handle.Audit(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestLUKSBlocksWithoutBackupExclusionEvidence(t *testing.T) {
+	manager, _, _, sessionID := testLUKSManager(t)
+	if err := os.Remove(filepath.Join(manager.ScratchRoot, noBackupMarkerName)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := manager.Create(context.Background(), sessionID, 1<<30); err == nil {
+		t.Fatal("encrypted scratch started without backup-exclusion evidence")
+	}
+}
+
 func TestOverlayRequiresReadOnlyBaseAndVerifiesBacking(t *testing.T) {
 	directory := filepath.Join(t.TempDir(), "outer")
 	if err := os.Mkdir(directory, 0o700); err != nil {
@@ -93,12 +214,12 @@ func TestOverlayRequiresReadOnlyBaseAndVerifiesBacking(t *testing.T) {
 		t.Fatal(err)
 	}
 	runner := &overlayRunner{base: base}
-	manager := OverlayManager{QEMUImg: "/usr/bin/qemu-img", Runner: runner}
+	manager := OverlayManager{QEMUImg: "/usr/bin/qemu-img", Runner: runner, Registry: NewImageUseRegistry()}
 	overlay, err := manager.Create(context.Background(), directory, base, "root-workstation.qcow2")
 	if err != nil {
 		t.Fatal(err)
 	}
-	info, err := os.Stat(overlay)
+	info, err := os.Stat(overlay.Path())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -110,6 +231,53 @@ func TestOverlayRequiresReadOnlyBaseAndVerifiesBacking(t *testing.T) {
 	}
 	if _, err := manager.Create(context.Background(), directory, base, "root-downloader.qcow2"); err == nil {
 		t.Fatal("writable base image unexpectedly passed")
+	}
+	if err := overlay.Destroy(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if err := overlay.Audit(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if err := overlay.Destroy(context.Background()); err != nil {
+		t.Fatalf("overlay cleanup is not idempotent: %v", err)
+	}
+}
+
+func TestOverlayAllocationIsOwnedBySessionCleanup(t *testing.T) {
+	runtimeRoot := filepath.Join(t.TempDir(), "run")
+	store, err := session.NewStore(runtimeRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sessions, err := session.NewManager(store, session.DefaultMaxSessionsPerOwner)
+	if err != nil {
+		t.Fatal(err)
+	}
+	snapshot, err := sessions.Create(1000, session.RoleWorkstation)
+	if err != nil {
+		t.Fatal(err)
+	}
+	outer := filepath.Join(t.TempDir(), "outer")
+	if err := os.Mkdir(outer, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	base := filepath.Join(t.TempDir(), "base.qcow2")
+	if err := os.WriteFile(base, []byte("test"), 0o444); err != nil {
+		t.Fatal(err)
+	}
+	name := "root-workstation.qcow2"
+	manager := OverlayManager{QEMUImg: "/usr/bin/qemu-img", Runner: &overlayRunner{base: base}, Registry: NewImageUseRegistry()}
+	if err := sessions.AcquireResource(t.Context(), snapshot.ID, 1000, "root-overlay", OverlayAllocation(manager, outer, base, name)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(outer, name)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := sessions.Cleanup(t.Context(), snapshot.ID, 1000); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(outer, name)); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("session cleanup left root overlay: %v", err)
 	}
 }
 
@@ -156,6 +324,68 @@ func TestTmpfsScratchUsesBoundedNoExecMountAndIdempotentCleanup(t *testing.T) {
 	if err := handle.Destroy(context.Background()); err != nil {
 		t.Fatalf("repeated cleanup failed: %v", err)
 	}
+	if err := handle.Audit(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestTmpfsCancellationAfterMountCleansAndAudits(t *testing.T) {
+	root := t.TempDir()
+	sessionID := "pvm-0123456789abcdef0123456789abcdef"
+	if err := os.Mkdir(filepath.Join(root, sessionID), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	mounter := &fakeMounter{afterMount: cancel}
+	manager := &TmpfsManager{RuntimeRoot: root, Mounter: mounter}
+	handle, err := manager.Create(ctx, sessionID, 512<<20)
+	if !errors.Is(err, context.Canceled) || handle != nil {
+		t.Fatalf("canceled tmpfs allocation did not clean: handle=%v err=%v", handle, err)
+	}
+	if mounter.mounted {
+		t.Fatal("canceled tmpfs allocation remains mounted")
+	}
+	if _, err := os.Lstat(filepath.Join(root, sessionID, "mount")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("canceled tmpfs allocation left its mountpoint: %v", err)
+	}
+}
+
+func TestTmpfsFailedRollbackReturnsRetryableOwner(t *testing.T) {
+	root := t.TempDir()
+	sessionID := "pvm-0123456789abcdef0123456789abcdef"
+	if err := os.Mkdir(filepath.Join(root, sessionID), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	mounter := &fakeMounter{afterMount: cancel, failUnmountOnce: true}
+	manager := &TmpfsManager{RuntimeRoot: root, Mounter: mounter}
+	handle, err := manager.Create(ctx, sessionID, 512<<20)
+	if err == nil || handle == nil {
+		t.Fatalf("failed tmpfs rollback lost cleanup ownership: handle=%v err=%v", handle, err)
+	}
+	if err := handle.Destroy(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if err := handle.Audit(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestCapacityEvidenceParsersAllowOnlyZRAMSwap(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "meminfo")
+	if err := os.WriteFile(path, []byte("MemTotal:       16384 kB\nMemAvailable:    8192 kB\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	total, available, err := readMemoryCapacity(path)
+	if err != nil || total != 16<<20 || available != 8<<20 {
+		t.Fatalf("memory evidence: total=%d available=%d err=%v", total, available, err)
+	}
+	if hasDiskBackedSwap([]byte("Filename Type Size Used Priority\n/dev/zram0 partition 1 0 5\n")) {
+		t.Fatal("zram was treated as disk-backed swap")
+	}
+	if !hasDiskBackedSwap([]byte("Filename Type Size Used Priority\n/swapfile file 1 0 -2\n")) {
+		t.Fatal("disk-backed swap was not detected")
+	}
 }
 
 func testLUKSManager(t *testing.T) (*LUKSManager, *fakeRunner, *fakeMounter, string) {
@@ -168,6 +398,9 @@ func testLUKSManager(t *testing.T) (*LUKSManager, *fakeRunner, *fakeMounter, str
 			t.Fatal(err)
 		}
 	}
+	if err := os.WriteFile(filepath.Join(scratch, noBackupMarkerName), []byte(noBackupMarkerContent), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	sessionID := "pvm-0123456789abcdef0123456789abcdef"
 	if err := os.Mkdir(filepath.Join(runtimeRoot, sessionID), 0o700); err != nil {
 		t.Fatal(err)
@@ -177,7 +410,7 @@ func testLUKSManager(t *testing.T) (*LUKSManager, *fakeRunner, *fakeMounter, str
 	manager := &LUKSManager{
 		ScratchRoot: scratch, RuntimeRoot: runtimeRoot,
 		Tools:  Tools{Losetup: "/usr/bin/losetup", Cryptsetup: "/usr/bin/cryptsetup", MkfsExt4: "/usr/bin/mkfs.ext4"},
-		Runner: runner, Mounter: mounter,
+		Runner: runner, Mounter: mounter, Inspector: runner,
 	}
 	return manager, runner, mounter, sessionID
 }
@@ -189,12 +422,17 @@ type recordedCommand struct {
 }
 
 type fakeRunner struct {
-	mu            sync.Mutex
-	commands      []recordedCommand
-	failCloseOnce bool
-	firstKey      []byte
-	keyReads      int
-	keysMatched   bool
+	mu              sync.Mutex
+	commands        []recordedCommand
+	failCloseOnce   bool
+	failLoopProof   bool
+	failMapperProof bool
+	failOperation   string
+	loopAttached    bool
+	mapperOpen      bool
+	firstKey        []byte
+	keyReads        int
+	keysMatched     bool
 }
 
 func (r *fakeRunner) Run(_ context.Context, command Command) (Result, error) {
@@ -217,14 +455,87 @@ func (r *fakeRunner) Run(_ context.Context, command Command) (Result, error) {
 		}
 		clear(key)
 	}
+	operation := fakeStorageOperation(command)
+	if r.failOperation == operation {
+		r.failOperation = ""
+		return Result{}, errors.New("injected " + operation + " failure")
+	}
 	if r.failCloseOnce && len(command.Args) > 0 && command.Args[0] == "close" {
 		r.failCloseOnce = false
 		return Result{}, errors.New("injected mapper close failure")
 	}
-	if len(command.Args) == 1 && command.Args[0] == "--find" {
+	if len(command.Args) == 3 && command.Args[0] == "--find" && command.Args[1] == "--show" {
+		r.loopAttached = true
 		return Result{Stdout: []byte("/dev/loop7\n")}, nil
 	}
+	if len(command.Args) == 2 && command.Args[0] == "--detach" {
+		r.loopAttached = false
+	}
+	if len(command.Args) > 0 && command.Args[0] == "open" {
+		r.mapperOpen = true
+	}
+	if len(command.Args) > 0 && command.Args[0] == "close" {
+		r.mapperOpen = false
+	}
 	return Result{}, nil
+}
+
+func fakeStorageOperation(command Command) string {
+	if len(command.Args) == 0 {
+		return ""
+	}
+	switch command.Args[0] {
+	case "--find":
+		return "loop-attach"
+	case "--detach":
+		return "loop-detach"
+	case "luksFormat":
+		return "luks-format"
+	case "open":
+		return "mapper-open"
+	case "close":
+		return "mapper-close"
+	case "-q":
+		return "mkfs"
+	default:
+		return ""
+	}
+}
+
+func (r *fakeRunner) VerifyLoopBacking(loopPath, _ string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.failLoopProof || !r.loopAttached || loopPath != "/dev/loop7" {
+		return errors.New("injected loop backing mismatch")
+	}
+	return nil
+}
+
+func (r *fakeRunner) VerifyMapperBacking(mappingName, loopPath string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.failMapperProof || !r.mapperOpen || !r.loopAttached || !storageSessionPattern.MatchString(mappingName) || loopPath != "/dev/loop7" {
+		return errors.New("injected mapper backing mismatch")
+	}
+	return nil
+}
+
+func (r *fakeRunner) LoopStillBacks(loopPath, _ string) (bool, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if loopPath != "/dev/loop7" {
+		return false, errors.New("unexpected loop identity")
+	}
+	return r.loopAttached, nil
+}
+
+func (r *fakeRunner) MapperExists(mappingName string) (bool, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if !storageSessionPattern.MatchString(mappingName) {
+		return false, errors.New("unexpected mapper identity")
+	}
+	return r.mapperOpen, nil
 }
 
 func (r *fakeRunner) Commands() []recordedCommand {
@@ -240,19 +551,28 @@ func (r *fakeRunner) KeyEvidence() (int, bool) {
 }
 
 type fakeMounter struct {
-	mounted    bool
-	unmounted  bool
-	filesystem string
-	data       string
+	mounted         bool
+	unmounted       bool
+	filesystem      string
+	data            string
+	failMount       bool
+	failUnmountOnce bool
+	afterMount      func()
 }
 
 func (m *fakeMounter) Mount(_, _ string, filesystem string, _ uintptr, data string) error {
 	if filesystem != "ext4" && filesystem != "tmpfs" {
 		return fmt.Errorf("unexpected filesystem %s", filesystem)
 	}
+	if m.failMount {
+		return errors.New("injected mount failure")
+	}
 	m.mounted = true
 	m.filesystem = filesystem
 	m.data = data
+	if m.afterMount != nil {
+		m.afterMount()
+	}
 	return nil
 }
 
@@ -260,12 +580,18 @@ func (m *fakeMounter) Unmount(string, int) error {
 	if !m.mounted {
 		return errors.New("not mounted")
 	}
+	if m.failUnmountOnce {
+		m.failUnmountOnce = false
+		return errors.New("injected unmount failure")
+	}
 	m.unmounted = true
+	m.mounted = false
 	return nil
 }
 
 type overlayRunner struct {
-	base string
+	base              string
+	replaceOnBaseInfo bool
 }
 
 func (r *overlayRunner) Run(_ context.Context, command Command) (Result, error) {
@@ -279,9 +605,22 @@ func (r *overlayRunner) Run(_ context.Context, command Command) (Result, error) 
 		if err != nil {
 			return Result{}, err
 		}
+		if _, err := file.Write([]byte("overlay")); err != nil {
+			_ = file.Close()
+			return Result{}, err
+		}
 		return Result{}, file.Close()
 	case "info":
 		path := command.Args[len(command.Args)-1]
+		if path == r.base && r.replaceOnBaseInfo {
+			r.replaceOnBaseInfo = false
+			if err := os.Remove(r.base); err != nil {
+				return Result{}, err
+			}
+			if err := os.WriteFile(r.base, []byte("changed"), 0o444); err != nil {
+				return Result{}, err
+			}
+		}
 		value := imageInfo{Format: "qcow2", VirtualSize: 1 << 30}
 		if path != r.base {
 			value.FullBackingFilename = r.base

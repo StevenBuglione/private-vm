@@ -22,7 +22,10 @@ stateDiagram-v2
     DESTROYED --> [*]
 ```
 
-`DESTROYED` is reached only after an audit of remaining resources.
+`DESTROYING` and `DESTROYED` are cleanup-owner states. Ordinary lifecycle RPCs
+cannot enter them. `DESTROYED` is committed only after reverse-order cleanup,
+per-resource absence audits, and removal of the volatile session record all
+succeed.
 
 ## Workstation workflow
 
@@ -141,14 +144,34 @@ Every transition emits an event with:
 - optional redacted display label
 
 The event stream is replayable only for the lifetime of the session and is kept
-under `/run`.
+under `/run`. A subscriber atomically receives events after its requested
+sequence and then follows new events without polling. The v1 lifetime limit is
+4,096 events, with terminal cleanup capacity reserved. History is never silently
+truncated: a future cursor, a full history, or a subscriber that exhausts its
+bounded queue fails with a stable typed error.
 
 ## Cancellation
 
-Cancellation is accepted in every nonterminal state. The orchestrator maps it to
-`ABORTING`; it never jumps directly to process kill without resource cleanup.
+Cancellation is accepted in every nonterminal state. Before an allocation is
+committed, cancellation rolls it back and audits absence. After cleanup is
+admitted, the session actor owns it independently of the caller connection and
+continues toward `DESTROYED`. The orchestrator never jumps directly to process
+kill without resource cleanup.
 
 ## Idempotency
 
 All cleanup functions return success if the target is already absent. Repeated
 `abort` or daemon startup recovery must converge on `DESTROYED`.
+
+Cleanup callers coalesce on one in-flight attempt. Steps run in strict reverse
+allocation order and stop at the first dependent failure. A retry resumes with
+the failed step; successful earlier steps are not repeated. No terminal state is
+published until every registered absence audit passes.
+
+## Ownership and quota
+
+One actor owns every session transition, role-workflow transition, resource
+registration, event publication, and cleanup attempt. Resource allocation and
+registration are one actor command, so a client disconnect cannot leave an
+unowned allocation window. Frozen v1 permits four concurrent live sessions per
+Unix owner; successful cleanup releases the quota slot.

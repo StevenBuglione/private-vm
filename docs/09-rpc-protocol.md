@@ -109,6 +109,13 @@ current fail-closed import stub has a ten-second authenticated first-frame and
 overall ceiling; later transfer implementations must add the documented
 per-chunk idle bound without weakening that first-frame bound.
 
+`GetSessionRequest.after_sequence` is an event cursor only when the request is
+used by `StreamEvents`; `GetSession` rejects a nonzero value. The stream
+atomically replays every lifetime event after that sequence and follows new
+events from the same session actor. Every `SessionEvent` includes its monotonic
+sequence, stable code, state snapshot, timestamp, and catalogued `safe_message`.
+There is no polling and no silent replay gap.
+
 ## Versioning
 
 ```text
@@ -172,6 +179,13 @@ Rules:
 - hash computed while streaming
 - partial output deleted on failure
 - no automatic overwrite
+
+Event streams use bounded per-subscriber queues. A future cursor returns
+`EVENT_CURSOR_INVALID`; a consumer that cannot keep up returns
+`EVENT_CONSUMER_TOO_SLOW` and reconnects with its last confirmed sequence. The
+session retains at most 4,096 lifetime events and reserves terminal cleanup
+capacity. Reaching the limit returns `EVENT_LIMIT_REACHED` rather than deleting
+evidence.
 
 ## Daemon services
 

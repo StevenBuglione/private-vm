@@ -46,6 +46,12 @@ Properties:
 - excluded from backup and indexing
 - startup deletion when orphaned
 
+Startup also requires the root-owned mode-`0600`
+`.private-vm-no-backup` marker with the frozen v1 content
+`private-vm-ephemeral-scratch-v1`. A missing, replaced, linked, writable or
+malformed marker blocks encrypted scratch creation. The marker is explicit
+operator evidence, not a claim that every third-party backup tool honors it.
+
 Inside the opened mapping is an ext4 filesystem containing opaque files:
 
 ```text
@@ -60,12 +66,24 @@ transfer-state/
 
 The host mounting this **outer** filesystem does not mount or parse guest content.
 
-The storage implementation passes the random LUKS key through inherited file
+The storage implementation attaches the ciphertext with atomic
+`losetup --find --show`, then proves through sysfs that the returned trusted
+`/dev/loopN` block device backs the exact owned ciphertext before formatting it.
+After `cryptsetup open`, it verifies the `/dev/mapper` link, DM name and sole
+loop slave before allowing `mkfs.ext4`. It
+passes the random LUKS key through inherited file
 descriptor 3 to `cryptsetup`; argv and environment contain no key bytes. Loop
-selection is validated before attachment. The outer ext4 mount is
+selection is validated after attachment and before any destructive operation.
+The outer ext4 mount is
 `nodev,nosuid,noexec`, contains only allowlisted opaque filenames, and is torn
 down in the order mount → mapper → loop → key → ciphertext. A failed cleanup
-step retains the key and ciphertext so the same cleanup owner can retry safely.
+step retains its typed handle, key and ciphertext so the same cleanup owner can
+retry safely. Mountpoints, ciphertext and loop/mapper identities are rechecked
+before cleanup; substituted paths or devices are never removed or formatted.
+
+The NixOS module writes the marker only when the operator explicitly sets
+`services.private-vm.scratchBackupExcluded = true` after configuring the host's
+actual backup, indexer and snapshot tools. The default is false.
 
 ## Small-session tmpfs mode
 
@@ -86,6 +104,14 @@ Small mode uses a per-session tmpfs submount with an explicit byte limit and
 `nodev,nosuid,noexec`; it does not rely on the capacity of the shared `/run`
 mount alone. Planning includes guest RAM, expected allocated writes, and the
 larger of 4 GiB or 20% total RAM as host reserve before selecting this mode.
+The planner reads bounded `MemTotal`/`MemAvailable`, `statfs` evidence for both
+roots and `/proc/swaps`; only zram swap is accepted. Arithmetic overflow,
+missing evidence, a non-tmpfs runtime root, disk-backed swap or insufficient
+RAM/disk capacity blocks allocation before mounting or sparse-file creation.
+One immutable capacity pool serializes all session reservations against the
+same host snapshot. A reservation accounts for guest RAM plus tmpfs writes or
+guest RAM plus encrypted-disk writes and is an idempotent session cleanup
+resource; concurrent plans cannot spend the same capacity twice.
 
 ## Key handling
 
@@ -111,6 +137,17 @@ is not an accepted production storage path.
 
 Create a fresh QCOW2 overlay with a verified read-only base. Validate backing
 format and path. Never chain session overlays across runs.
+
+The base is opened without symlink or magic-link traversal, must be a trusted
+non-writable standalone QCOW2 image, and may not itself have a backing file.
+The newly created overlay must report the exact full backing path and virtual
+size. Base and overlay device/inode, owner, group, link count, size and mode are
+pinned across each `qemu-img` operation. An image-use registry prevents
+`qemu-img` from touching a base or overlay while QEMU holds an active lease,
+and cleanup uses a pinned parent directory plus `unlinkat` after exact identity
+revalidation. Overlay, tmpfs and LUKS handles expose idempotent cleanup plus explicit
+absence audits and are registered through the session actor's atomic allocation
+boundary.
 
 ## Quarantine disk
 

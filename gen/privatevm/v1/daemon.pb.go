@@ -476,6 +476,7 @@ func (x *CreateSessionRequest) GetResources() *ResourceRequest {
 type GetSessionRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Context       *RequestContext        `protobuf:"bytes,1,opt,name=context,proto3" json:"context,omitempty"`
+	AfterSequence uint64                 `protobuf:"varint,2,opt,name=after_sequence,json=afterSequence,proto3" json:"after_sequence,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -515,6 +516,13 @@ func (x *GetSessionRequest) GetContext() *RequestContext {
 		return x.Context
 	}
 	return nil
+}
+
+func (x *GetSessionRequest) GetAfterSequence() uint64 {
+	if x != nil {
+		return x.AfterSequence
+	}
+	return 0
 }
 
 type ListSessionsRequest struct {
@@ -905,6 +913,7 @@ type SessionEvent struct {
 	Progress      *Progress              `protobuf:"bytes,4,opt,name=progress,proto3" json:"progress,omitempty"`
 	Diagnostic    *Diagnostic            `protobuf:"bytes,5,opt,name=diagnostic,proto3" json:"diagnostic,omitempty"`
 	UnixNanos     int64                  `protobuf:"varint,6,opt,name=unix_nanos,json=unixNanos,proto3" json:"unix_nanos,omitempty"`
+	SafeMessage   string                 `protobuf:"bytes,7,opt,name=safe_message,json=safeMessage,proto3" json:"safe_message,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -979,6 +988,13 @@ func (x *SessionEvent) GetUnixNanos() int64 {
 		return x.UnixNanos
 	}
 	return 0
+}
+
+func (x *SessionEvent) GetSafeMessage() string {
+	if x != nil {
+		return x.SafeMessage
+	}
+	return ""
 }
 
 type ExportWorkspaceRequest struct {
@@ -1229,9 +1245,10 @@ const file_privatevm_v1_daemon_proto_rawDesc = "" +
 	"\fimage_bundle\x18\x03 \x01(\tR\vimageBundle\x12\x1f\n" +
 	"\vpolicy_name\x18\x04 \x01(\tR\n" +
 	"policyName\x12;\n" +
-	"\tresources\x18\x05 \x01(\v2\x1d.privatevm.v1.ResourceRequestR\tresources\"K\n" +
+	"\tresources\x18\x05 \x01(\v2\x1d.privatevm.v1.ResourceRequestR\tresources\"r\n" +
 	"\x11GetSessionRequest\x126\n" +
-	"\acontext\x18\x01 \x01(\v2\x1c.privatevm.v1.RequestContextR\acontext\"M\n" +
+	"\acontext\x18\x01 \x01(\v2\x1c.privatevm.v1.RequestContextR\acontext\x12%\n" +
+	"\x0eafter_sequence\x18\x02 \x01(\x04R\rafterSequence\"M\n" +
 	"\x13ListSessionsRequest\x126\n" +
 	"\acontext\x18\x01 \x01(\v2\x1c.privatevm.v1.RequestContextR\acontext\"I\n" +
 	"\x14ListSessionsResponse\x121\n" +
@@ -1255,7 +1272,7 @@ const file_privatevm_v1_daemon_proto_rawDesc = "" +
 	"\x05phase\x18\x04 \x01(\x0e2\x1a.privatevm.v1.SessionPhaseR\x05phase\x12%\n" +
 	"\x0eworkflow_state\x18\x05 \x01(\tR\rworkflowState\x12!\n" +
 	"\fimage_digest\x18\x06 \x01(\tR\vimageDigest\x12:\n" +
-	"\vdiagnostics\x18\a \x03(\v2\x18.privatevm.v1.DiagnosticR\vdiagnostics\"\x87\x02\n" +
+	"\vdiagnostics\x18\a \x03(\v2\x18.privatevm.v1.DiagnosticR\vdiagnostics\"\xaa\x02\n" +
 	"\fSessionEvent\x12\x1a\n" +
 	"\bsequence\x18\x01 \x01(\x04R\bsequence\x12\x1d\n" +
 	"\n" +
@@ -1266,7 +1283,8 @@ const file_privatevm_v1_daemon_proto_rawDesc = "" +
 	"diagnostic\x18\x05 \x01(\v2\x18.privatevm.v1.DiagnosticR\n" +
 	"diagnostic\x12\x1d\n" +
 	"\n" +
-	"unix_nanos\x18\x06 \x01(\x03R\tunixNanos\"m\n" +
+	"unix_nanos\x18\x06 \x01(\x03R\tunixNanos\x12!\n" +
+	"\fsafe_message\x18\a \x01(\tR\vsafeMessage\"m\n" +
 	"\x16ExportWorkspaceRequest\x126\n" +
 	"\acontext\x18\x01 \x01(\v2\x1c.privatevm.v1.RequestContextR\acontext\x12\x1b\n" +
 	"\toutput_id\x18\x02 \x01(\tR\boutputId\"n\n" +

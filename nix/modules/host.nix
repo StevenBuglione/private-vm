@@ -58,6 +58,17 @@ in
       type = lib.types.str;
       default = "StevenBuglione/private-vm";
     };
+
+    scratchBackupExcluded = lib.mkOption {
+      type = lib.types.bool;
+      default = false;
+      description = ''
+        Operator assertion that /var/lib/private-vm/scratch is excluded from
+        host backup, indexing, and snapshot automation. Enabling this writes
+        only private-vm's validation marker; it does not configure or claim
+        support from third-party backup tools.
+      '';
+    };
   };
 
   config = lib.mkIf cfg.enable {
@@ -90,7 +101,8 @@ in
       "d /var/lib/private-vm/images 0755 root root -"
       "d /var/lib/private-vm/scratch 0700 root root -"
       "d /run/private-vm 0750 root ${cfg.group} -"
-    ];
+    ]
+    ++ lib.optional cfg.scratchBackupExcluded "f /var/lib/private-vm/scratch/.private-vm-no-backup 0600 root root - private-vm-ephemeral-scratch-v1";
 
     systemd.services.private-vmd = {
       description = "private-vm privileged orchestration daemon";
