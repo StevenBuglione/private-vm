@@ -130,9 +130,7 @@ func USBGuardRule(enrollment Enrollment) (string, error) {
 		serial = ` serial "` + identity.Serial + `"`
 	}
 	interfaces := make([]string, len(identity.Interfaces))
-	for index, iface := range identity.Interfaces {
-		interfaces[index] = iface
-	}
+	copy(interfaces, identity.Interfaces)
 	return fmt.Sprintf(
 		`allow id %s:%s%s hash "%s" via-port "%s" with-interface equals { %s }`,
 		identity.VendorID,
