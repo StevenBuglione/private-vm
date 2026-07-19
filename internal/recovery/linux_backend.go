@@ -78,20 +78,20 @@ type LinuxBackend struct {
 
 func NewLinuxBackend(config LinuxBackendConfig) (*LinuxBackend, error) {
 	if config.Store == nil || config.Runner == nil || config.Mounter == nil {
-		return nil, errors.New("Linux recovery requires a volatile store, typed runner, and mount cleaner")
+		return nil, errors.New("linux recovery requires a volatile store, typed runner, and mount cleaner")
 	}
 	if config.DaemonUID != uint32(os.Geteuid()) || config.DaemonGID != uint32(os.Getegid()) {
-		return nil, errors.New("Linux recovery daemon identity does not match the running process")
+		return nil, errors.New("linux recovery daemon identity does not match the running process")
 	}
 	if config.ScratchRoot == "" || !narrowAbsolute(config.ScratchRoot) {
-		return nil, errors.New("Linux recovery scratch root is invalid")
+		return nil, errors.New("linux recovery scratch root is invalid")
 	}
 	if config.Store.Root() == config.ScratchRoot || strings.HasPrefix(config.ScratchRoot+"/", config.Store.Root()+"/") || strings.HasPrefix(config.Store.Root()+"/", config.ScratchRoot+"/") {
-		return nil, errors.New("Linux recovery roots must be disjoint")
+		return nil, errors.New("linux recovery roots must be disjoint")
 	}
 	for label, path := range map[string]string{"cryptsetup": config.Cryptsetup, "losetup": config.Losetup} {
 		if !narrowAbsolute(path) || filepath.Base(path) != label {
-			return nil, errors.New("Linux recovery tool path is invalid")
+			return nil, errors.New("linux recovery tool path is invalid")
 		}
 	}
 	if config.MountInfoPath == "" {
@@ -108,7 +108,7 @@ func NewLinuxBackend(config LinuxBackendConfig) (*LinuxBackend, error) {
 	}
 	for _, path := range []string{config.MountInfoPath, config.SysBlockRoot, config.DevRoot, config.DevMapperRoot} {
 		if !narrowAbsolute(path) {
-			return nil, errors.New("Linux recovery evidence path is invalid")
+			return nil, errors.New("linux recovery evidence path is invalid")
 		}
 	}
 	if config.MaxCandidates == 0 {
@@ -118,7 +118,7 @@ func NewLinuxBackend(config LinuxBackendConfig) (*LinuxBackend, error) {
 		config.MaxLoops = linuxLoopLimit
 	}
 	if config.MaxCandidates < 1 || config.MaxCandidates > linuxInventoryLimit || config.MaxLoops < 1 || config.MaxLoops > linuxLoopLimit {
-		return nil, errors.New("Linux recovery inventory bounds are invalid")
+		return nil, errors.New("linux recovery inventory bounds are invalid")
 	}
 	return &LinuxBackend{config: config, unsafe: make(map[string]struct{}), observed: make(map[string]Candidate)}, nil
 }
@@ -161,12 +161,12 @@ func (backend *LinuxBackend) Inventory(ctx context.Context) ([]Candidate, error)
 	}
 	candidates = append(candidates, storage...)
 	if len(candidates) > backend.config.MaxCandidates {
-		return nil, errors.New("Linux recovery candidate limit exceeded")
+		return nil, errors.New("linux recovery candidate limit exceeded")
 	}
 	for _, candidate := range candidates {
 		key := linuxCandidateKey(candidate)
 		if _, duplicate := backend.observed[key]; duplicate {
-			return nil, errors.New("Linux recovery inventory returned a duplicate")
+			return nil, errors.New("linux recovery inventory returned a duplicate")
 		}
 		backend.observed[key] = candidate
 	}
@@ -221,7 +221,7 @@ func (backend *LinuxBackend) Cleanup(ctx context.Context, candidate Candidate) e
 	case KindRuntimePath:
 		return backend.config.Store.Remove(candidate.SessionID)
 	default:
-		return errors.New("Linux recovery resource class has no proven cleanup adapter")
+		return errors.New("linux recovery resource class has no proven cleanup adapter")
 	}
 }
 
@@ -453,7 +453,7 @@ func (backend *LinuxBackend) inspectCandidate(candidate Candidate) (Identity, er
 		}
 		return current.Identity, nil
 	default:
-		return Identity{}, errors.New("Linux recovery cannot revalidate this resource class")
+		return Identity{}, errors.New("linux recovery cannot revalidate this resource class")
 	}
 }
 
@@ -478,7 +478,7 @@ func (backend *LinuxBackend) candidatePresent(candidate Candidate) (bool, error)
 		mount, err := backend.mountFor(candidate.SessionID)
 		return mount != nil, err
 	default:
-		return false, errors.New("Linux recovery cannot audit this resource class")
+		return false, errors.New("linux recovery cannot audit this resource class")
 	}
 }
 

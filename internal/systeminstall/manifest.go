@@ -15,7 +15,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 )
 
@@ -305,14 +304,4 @@ func rejectSymlinkPath(root, path string) error {
 		}
 	}
 	return nil
-}
-
-func sortedDestinations(manifest Manifest) []string {
-	paths := make([]string, 0, len(manifest.Files)+1)
-	for _, file := range manifest.Files {
-		paths = append(paths, file.Destination)
-	}
-	paths = append(paths, InstalledManifest)
-	sort.Strings(paths)
-	return paths
 }

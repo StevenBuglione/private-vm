@@ -104,7 +104,7 @@ func runPublish(ctx context.Context, arguments []string, stdin io.Reader, stdout
 		return errors.New("RELEASE_INVALID: publish requires exact provenance flags and --token-stdin")
 	}
 	value, err := io.ReadAll(io.LimitReader(stdin, maximumTokenBytes+1))
-	if err != nil || len(value) == 0 || len(value) > maximumTokenBytes || bytes.IndexAny(value, "\r\n") >= 0 {
+	if err != nil || len(value) == 0 || len(value) > maximumTokenBytes || bytes.ContainsAny(value, "\r\n") {
 		clear(value)
 		return errors.New("RELEASE_INVALID: workflow credential is malformed or outside its bound")
 	}
