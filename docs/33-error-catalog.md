@@ -442,9 +442,14 @@ integrity failures use `FailedPrecondition` unless the request itself is invalid
 - `USB_COMPOSITE_INTERFACE`
 - `USB_HOST_FILESYSTEM`
 - `USB_MOUNTED`
+- `USB_READ_ONLY`
 - `USB_TOO_SMALL`
+- `USB_CONFIRMATION_REQUIRED`
+- `USB_ALREADY_CLAIMED`
 - `USB_WRITE_FAILED`
 - `USB_HASH_MISMATCH`
+- `USB_DISCOVERY_FAILED`
+- `USB_CLEANUP_INCOMPLETE`
 
 ### Workspace
 
