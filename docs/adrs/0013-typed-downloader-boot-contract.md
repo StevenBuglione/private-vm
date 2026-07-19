@@ -1,4 +1,4 @@
-# ADR 0012: Typed downloader boot contract
+# ADR 0013: Typed downloader boot contract
 
 ## Status
 

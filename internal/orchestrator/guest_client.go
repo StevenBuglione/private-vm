@@ -23,7 +23,8 @@ const (
 )
 
 type VSOCKGuestConnector struct {
-	Expected guest.HandshakeExpectation
+	Expected     guest.HandshakeExpectation
+	ProbeTargets guestvpn.ProbeTargets
 }
 
 func (connector VSOCKGuestConnector) Connect(ctx context.Context, cid uint32, role session.Role, capability Capability) (GuestConnection, error) {
@@ -37,22 +38,24 @@ func (connector VSOCKGuestConnector) Connect(ctx context.Context, cid uint32, ro
 	}
 	return &vsockGuestConnection{
 		connection: connection, role: role, expected: connector.Expected,
-		common:      privatevmv1.NewGuestCommonServiceClient(connection),
-		workstation: privatevmv1.NewWorkstationGuestServiceClient(connection),
-		downloader:  privatevmv1.NewDownloaderGuestServiceClient(connection),
+		probeTargets: connector.ProbeTargets,
+		common:       privatevmv1.NewGuestCommonServiceClient(connection),
+		workstation:  privatevmv1.NewWorkstationGuestServiceClient(connection),
+		downloader:   privatevmv1.NewDownloaderGuestServiceClient(connection),
 	}, nil
 }
 
 type vsockGuestConnection struct {
 	mu sync.Mutex
 
-	connection  *grpc.ClientConn
-	role        session.Role
-	expected    guest.HandshakeExpectation
-	common      privatevmv1.GuestCommonServiceClient
-	workstation privatevmv1.WorkstationGuestServiceClient
-	downloader  privatevmv1.DownloaderGuestServiceClient
-	closed      bool
+	connection   *grpc.ClientConn
+	role         session.Role
+	expected     guest.HandshakeExpectation
+	common       privatevmv1.GuestCommonServiceClient
+	workstation  privatevmv1.WorkstationGuestServiceClient
+	downloader   privatevmv1.DownloaderGuestServiceClient
+	probeTargets guestvpn.ProbeTargets
+	closed       bool
 }
 
 func (connection *vsockGuestConnection) Handshake(ctx context.Context) error {
@@ -66,7 +69,7 @@ func (connection *vsockGuestConnection) Handshake(ctx context.Context) error {
 	return err
 }
 
-func (connection *vsockGuestConnection) ConfigureVPN(ctx context.Context, _ guestvpn.Underlay, profile io.Reader) (guestvpn.Status, error) {
+func (connection *vsockGuestConnection) ConfigureVPN(ctx context.Context, underlay guestvpn.Underlay, profile io.Reader) (guestvpn.Status, error) {
 	if connection.role != session.RoleWorkstation && connection.role != session.RoleDownloader {
 		return guestvpn.Status{}, ErrNetworkedStart
 	}
@@ -80,7 +83,28 @@ func (connection *vsockGuestConnection) ConfigureVPN(ctx context.Context, _ gues
 	if err != nil {
 		return guestvpn.Status{}, err
 	}
-	response, err := connection.downloader.ConfigureWireGuard(ctx, &privatevmv1.ConfigureWireGuardRequest{Context: request, Profile: data})
+	protoUnderlay, protoTargets := guest.EncodeDownloaderNetworkRequest(underlay, connection.probeTargets)
+	configure := &privatevmv1.ConfigureWireGuardRequest{Context: request, Profile: data, Underlay: protoUnderlay, ProbeTargets: protoTargets}
+	defer func() {
+		clear(protoUnderlay.Ipv4Address)
+		clear(protoUnderlay.Ipv4Gateway)
+		clear(protoUnderlay.Ipv6Address)
+		clear(protoUnderlay.Ipv6Gateway)
+		clear(protoTargets.Ipv4Address)
+		clear(protoTargets.Ipv6Address)
+		protoTargets.DnsName = ""
+	}()
+	var response *privatevmv1.VPNStatus
+	switch connection.role {
+	case session.RoleWorkstation:
+		response, err = connection.workstation.ConfigureWireGuard(ctx, configure)
+	case session.RoleDownloader:
+		response, err = connection.downloader.ConfigureWireGuard(ctx, configure)
+	default:
+		err = ErrNetworkedStart
+	}
+	clear(configure.Profile)
+	configure.Profile = nil
 	return vpnStatus(response, connection.role), err
 }
 
@@ -89,7 +113,15 @@ func (connection *vsockGuestConnection) VerifyVPN(ctx context.Context) (guestvpn
 	if err != nil {
 		return guestvpn.Status{}, err
 	}
-	response, err := connection.downloader.VerifyVPN(ctx, &privatevmv1.VerifyVPNRequest{Context: request})
+	var response *privatevmv1.VPNStatus
+	switch connection.role {
+	case session.RoleWorkstation:
+		response, err = connection.workstation.VerifyVPN(ctx, &privatevmv1.VerifyVPNRequest{Context: request})
+	case session.RoleDownloader:
+		response, err = connection.downloader.VerifyVPN(ctx, &privatevmv1.VerifyVPNRequest{Context: request})
+	default:
+		err = ErrNetworkedStart
+	}
 	return vpnStatus(response, connection.role), err
 }
 

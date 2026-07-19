@@ -185,8 +185,11 @@ adapters fail construction. The role matrix admits workstation, downloader,
 and scanner-update policies; scanner-scan and exporter networking fail closed.
 
 The host-selected point-to-point addresses and controlled leak-test fixtures
-cross authenticated VSOCK in typed protobuf fields defined by ADRs 0012 and
-0013. Both online role services expose the same named configure/verify methods,
+cross authenticated VSOCK in typed protobuf fields defined by ADRs 0013 and
+0014. The host loads the explicit non-secret fixtures from the immutable
+configuration snapshot and validates a bounded DNS name plus public
+global-unicast IPv4 and IPv6 address/port values before daemon startup. Both
+online role services expose the same named configure/verify methods,
 but exact role registration keeps workstation and downloader capabilities
 separate. The guest accepts only exact `/30` IPv4 and `/126` IPv6 underlays and validated
 public probe endpoints. It never derives, defaults, logs or persists these

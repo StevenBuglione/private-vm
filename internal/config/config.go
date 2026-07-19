@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/netip"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -23,6 +24,9 @@ const (
 	OfficialRepository  = "StevenBuglione/private-vm"
 	DefaultRegistry     = "ghcr.io"
 	DefaultCleanupLimit = 30
+	DefaultProbeDNSName = "one.one.one.one"
+	DefaultProbeIPv4    = "1.1.1.1:853"
+	DefaultProbeIPv6    = "[2606:4700:4700::1111]:853"
 )
 
 const (
@@ -32,9 +36,10 @@ const (
 )
 
 var (
-	repositoryPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]{0,62}/[A-Za-z0-9][A-Za-z0-9_.-]{0,62}$`)
-	registryPattern   = regexp.MustCompile(`^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)(?:\.(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?))*(?::(?:[1-9][0-9]{0,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5]))?$`)
-	profilePattern    = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$`)
+	repositoryPattern  = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]{0,62}/[A-Za-z0-9][A-Za-z0-9_.-]{0,62}$`)
+	registryPattern    = regexp.MustCompile(`^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)(?:\.(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?))*(?::(?:[1-9][0-9]{0,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5]))?$`)
+	profilePattern     = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$`)
+	probeDomainPattern = regexp.MustCompile(`^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.?$`)
 )
 
 // Config is one immutable effective configuration snapshot.
@@ -75,6 +80,9 @@ type Desktop struct {
 type VPN struct {
 	profileName              string
 	disableIPv6IfNotTunneled bool
+	probeDNSName             string
+	probeIPv4                string
+	probeIPv6                string
 }
 
 type USB struct {
@@ -112,6 +120,9 @@ func (c Desktop) MemoryBytes() uint64               { return c.memoryBytes }
 func (c Desktop) VCPUs() uint32                     { return c.vcpus }
 func (c VPN) ProfileName() string                   { return c.profileName }
 func (c VPN) DisableIPv6IfNotTunneled() bool        { return c.disableIPv6IfNotTunneled }
+func (c VPN) ProbeDNSName() string                  { return c.probeDNSName }
+func (c VPN) ProbeIPv4() string                     { return c.probeIPv4 }
+func (c VPN) ProbeIPv6() string                     { return c.probeIPv6 }
 func (c USB) RequireUSBGuard() bool                 { return c.requireUSBGuard }
 func (c USB) DefaultFilesystem() string             { return c.defaultFilesystem }
 func (c Logging) PersistentLifecycleMetadata() bool { return c.persistentLifecycleMetadata }
@@ -156,6 +167,9 @@ type wireDesktop struct {
 type wireVPN struct {
 	ProfileName              string `toml:"profile_name" json:"profile_name"`
 	DisableIPv6IfNotTunneled bool   `toml:"disable_ipv6_if_not_tunneled" json:"disable_ipv6_if_not_tunneled"`
+	ProbeDNSName             string `toml:"probe_dns_name" json:"probe_dns_name"`
+	ProbeIPv4                string `toml:"probe_ipv4" json:"probe_ipv4"`
+	ProbeIPv6                string `toml:"probe_ipv6" json:"probe_ipv6"`
 }
 
 type wireUSB struct {
@@ -185,7 +199,10 @@ func Defaults() Config {
 			Bundle: "development", Viewer: "remote-viewer",
 			MemoryBytes: 16 << 30, VCPUs: 8,
 		},
-		VPN: wireVPN{ProfileName: "proton-p2p", DisableIPv6IfNotTunneled: true},
+		VPN: wireVPN{
+			ProfileName: "proton-p2p", DisableIPv6IfNotTunneled: true,
+			ProbeDNSName: DefaultProbeDNSName, ProbeIPv4: DefaultProbeIPv4, ProbeIPv6: DefaultProbeIPv6,
+		},
 		USB: wireUSB{RequireUSBGuard: true, DefaultFilesystem: "luks2-ext4"},
 	})
 }
@@ -211,6 +228,9 @@ func configFromWire(value wireConfig) Config {
 		vpn: VPN{
 			profileName:              value.VPN.ProfileName,
 			disableIPv6IfNotTunneled: value.VPN.DisableIPv6IfNotTunneled,
+			probeDNSName:             value.VPN.ProbeDNSName,
+			probeIPv4:                value.VPN.ProbeIPv4,
+			probeIPv6:                value.VPN.ProbeIPv6,
 		},
 		usb: USB{
 			requireUSBGuard:   value.USB.RequireUSBGuard,
@@ -244,6 +264,9 @@ func (c Config) wire() wireConfig {
 		VPN: wireVPN{
 			ProfileName:              c.vpn.profileName,
 			DisableIPv6IfNotTunneled: c.vpn.disableIPv6IfNotTunneled,
+			ProbeDNSName:             c.vpn.probeDNSName,
+			ProbeIPv4:                c.vpn.probeIPv4,
+			ProbeIPv6:                c.vpn.probeIPv6,
 		},
 		USB: wireUSB{
 			RequireUSBGuard:   c.usb.requireUSBGuard,
@@ -303,6 +326,9 @@ func (c Config) Validate() error {
 	if !c.vpn.disableIPv6IfNotTunneled {
 		return invalid("IPv6 must fail closed when it is not tunneled.", "Set vpn.disable_ipv6_if_not_tunneled = true.")
 	}
+	if !validProbeDNSName(c.vpn.probeDNSName) || !validProbeAddress(c.vpn.probeIPv4, true) || !validProbeAddress(c.vpn.probeIPv6, false) {
+		return invalid("The VPN leak-test targets are invalid.", "Set one bounded DNS name and public global-unicast IPv4 and IPv6 address:port targets.")
+	}
 	if !c.usb.requireUSBGuard {
 		return invalid("USBGuard identity enforcement is mandatory.", "Set usb.require_usbguard = true.")
 	}
@@ -352,6 +378,23 @@ func validRegistry(registry string) bool {
 	return true
 }
 
+func validProbeDNSName(value string) bool {
+	value = strings.ToLower(strings.TrimSuffix(value, "."))
+	return len(value) > 0 && len(value) <= 253 && probeDomainPattern.MatchString(value)
+}
+
+func validProbeAddress(value string, ipv4 bool) bool {
+	target, err := netip.ParseAddrPort(value)
+	if err != nil || target.Port() == 0 {
+		return false
+	}
+	address := target.Addr()
+	if !address.IsValid() || address.Is4In6() || !address.IsGlobalUnicast() || address.IsPrivate() || address.IsLoopback() || address.IsLinkLocalUnicast() {
+		return false
+	}
+	return address.Is4() == ipv4
+}
+
 // Overrides is the closed set of non-secret command-line configuration
 // overrides. Pointers preserve the distinction between absent and zero/false.
 type Overrides struct {
@@ -382,6 +425,9 @@ type DesktopOverrides struct {
 type VPNOverrides struct {
 	ProfileName              *string
 	DisableIPv6IfNotTunneled *bool
+	ProbeDNSName             *string
+	ProbeIPv4                *string
+	ProbeIPv6                *string
 }
 type USBOverrides struct {
 	RequireUSBGuard   *bool
@@ -410,6 +456,9 @@ func applyOverrides(value *wireConfig, overrides Overrides) {
 	set(overrides.Desktop.VCPUs, &value.Desktop.VCPUs)
 	set(overrides.VPN.ProfileName, &value.VPN.ProfileName)
 	set(overrides.VPN.DisableIPv6IfNotTunneled, &value.VPN.DisableIPv6IfNotTunneled)
+	set(overrides.VPN.ProbeDNSName, &value.VPN.ProbeDNSName)
+	set(overrides.VPN.ProbeIPv4, &value.VPN.ProbeIPv4)
+	set(overrides.VPN.ProbeIPv6, &value.VPN.ProbeIPv6)
 	set(overrides.USB.RequireUSBGuard, &value.USB.RequireUSBGuard)
 	set(overrides.USB.DefaultFilesystem, &value.USB.DefaultFilesystem)
 	set(overrides.Logging.PersistentLifecycleMetadata, &value.Logging.PersistentLifecycleMetadata)

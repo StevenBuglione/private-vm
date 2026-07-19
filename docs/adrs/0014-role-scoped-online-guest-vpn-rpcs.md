@@ -1,4 +1,4 @@
-# ADR 0013: Role-scoped online guest VPN RPCs
+# ADR 0014: Role-scoped online guest VPN RPCs
 
 ## Status
 

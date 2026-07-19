@@ -5,12 +5,23 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/StevenBuglione/private-vm/internal/config"
 	"github.com/StevenBuglione/private-vm/internal/storage"
 )
 
 type versionRunner struct {
 	output []byte
 	err    error
+}
+
+func TestProductionProbeTargetsComeFromValidatedConfiguration(t *testing.T) {
+	targets, err := productionProbeTargets(config.Defaults().VPN())
+	if err != nil || targets.DNSName != config.DefaultProbeDNSName || targets.IPv4.String() != config.DefaultProbeIPv4 || targets.IPv6.String() != config.DefaultProbeIPv6 {
+		t.Fatalf("targets = (%v, %v)", targets, err)
+	}
+	if _, err := productionProbeTargets((config.Config{}).VPN()); err == nil {
+		t.Fatal("missing production probe targets were accepted")
+	}
 }
 
 func (runner versionRunner) Run(context.Context, storage.Command) (storage.Result, error) {

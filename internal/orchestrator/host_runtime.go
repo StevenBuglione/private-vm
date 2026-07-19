@@ -10,6 +10,7 @@ import (
 	"syscall"
 
 	"github.com/StevenBuglione/private-vm/internal/guest"
+	"github.com/StevenBuglione/private-vm/internal/guestvpn"
 	"github.com/StevenBuglione/private-vm/internal/image"
 	"github.com/StevenBuglione/private-vm/internal/network"
 	"github.com/StevenBuglione/private-vm/internal/qemu"
@@ -46,27 +47,32 @@ func (selector OfficialCacheSelector) Select(ctx context.Context, snapshot sessi
 type RuntimeStack struct {
 	mu sync.Mutex
 
-	RuntimeRoot string
-	QEMUBinary  string
-	ProfileName string
-	Profiles    *vpn.MemoryStore
-	Resolver    *vpn.EndpointResolver
-	Networks    *network.Manager
-	CIDs        *guest.CIDAllocator
-	Launcher    QEMULauncher
-	prepared    map[string]vpn.ResolutionPlan
+	RuntimeRoot  string
+	QEMUBinary   string
+	ProfileName  string
+	Profiles     *vpn.MemoryStore
+	Resolver     *vpn.EndpointResolver
+	Networks     *network.Manager
+	CIDs         *guest.CIDAllocator
+	Launcher     QEMULauncher
+	ProbeTargets guestvpn.ProbeTargets
+	prepared     map[string]vpn.ResolutionPlan
 }
 
-func NewRuntimeStack(runtimeRoot, qemuBinary, profileName string, profiles *vpn.MemoryStore, resolver *vpn.EndpointResolver, networks *network.Manager, cids *guest.CIDAllocator, launcher QEMULauncher) (*RuntimeStack, error) {
+func NewRuntimeStack(runtimeRoot, qemuBinary, profileName string, profiles *vpn.MemoryStore, resolver *vpn.EndpointResolver, networks *network.Manager, cids *guest.CIDAllocator, launcher QEMULauncher, probeTargets guestvpn.ProbeTargets) (*RuntimeStack, error) {
 	if !filepath.IsAbs(runtimeRoot) || filepath.Clean(runtimeRoot) != runtimeRoot || runtimeRoot == "/" ||
 		!filepath.IsAbs(qemuBinary) || filepath.Clean(qemuBinary) != qemuBinary || profileName == "" ||
 		profiles == nil || resolver == nil || networks == nil || cids == nil || nilLikeHost(launcher) {
 		return nil, errors.New("production runtime stack is incomplete")
 	}
+	validatedTargets, err := guestvpn.NewProbeTargets(probeTargets.DNSName, probeTargets.IPv4, probeTargets.IPv6)
+	if err != nil {
+		return nil, errors.New("production VPN probe targets are invalid")
+	}
 	return &RuntimeStack{
 		RuntimeRoot: runtimeRoot, QEMUBinary: qemuBinary, ProfileName: profileName,
 		Profiles: profiles, Resolver: resolver, Networks: networks, CIDs: cids,
-		Launcher: launcher, prepared: make(map[string]vpn.ResolutionPlan),
+		Launcher: launcher, ProbeTargets: validatedTargets, prepared: make(map[string]vpn.ResolutionPlan),
 	}, nil
 }
 
@@ -154,7 +160,7 @@ func (stack *RuntimeStack) Start(ctx context.Context, request HostRuntimeRequest
 	networked, startErr := StartNetworked(ctx, StartNetworkedRequest{
 		SessionID: request.Snapshot.ID, Role: request.Snapshot.Role, Spec: spec,
 		Network: NetworkAdapter{Handle: networkHandle}, Capability: token,
-		Launcher: stack.Launcher, Guests: VSOCKGuestConnector{Expected: expectation},
+		Launcher: stack.Launcher, Guests: VSOCKGuestConnector{Expected: expectation, ProbeTargets: stack.ProbeTargets},
 		Egress:        networkPolicyAuditor{sessionID: request.Snapshot.ID, handle: networkHandle},
 		LossResponder: inertHostLossResponder{},
 	})

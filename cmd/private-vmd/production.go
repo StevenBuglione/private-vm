@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"net/netip"
 	"os/exec"
 	"path/filepath"
 	"regexp"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/StevenBuglione/private-vm/internal/config"
 	"github.com/StevenBuglione/private-vm/internal/guest"
+	"github.com/StevenBuglione/private-vm/internal/guestvpn"
 	"github.com/StevenBuglione/private-vm/internal/image"
 	"github.com/StevenBuglione/private-vm/internal/network"
 	"github.com/StevenBuglione/private-vm/internal/orchestrator"
@@ -99,9 +101,15 @@ func composeProductionHost(ctx context.Context, cfg config.Config) (*productionH
 	}
 	profiles := vpn.NewMemoryStore()
 	resolver := vpn.NewEndpointResolver()
+	probeTargets, err := productionProbeTargets(cfg.VPN())
+	if err != nil {
+		profiles.Close()
+		return nil, err
+	}
 	runtimeStack, err := orchestrator.NewRuntimeStack(
 		runtimeConfig.Directory(), tools["qemu-system-x86_64"], cfg.VPN().ProfileName(),
 		profiles, resolver, networks, guest.NewDefaultCIDAllocator(), orchestrator.QEMUAdapter{Launcher: launcher},
+		probeTargets,
 	)
 	if err != nil {
 		profiles.Close()
@@ -115,6 +123,19 @@ func composeProductionHost(ctx context.Context, cfg config.Config) (*productionH
 		return nil, err
 	}
 	return &productionHostServices{profiles: profiles, resolver: resolver, roles: roles}, nil
+}
+
+func productionProbeTargets(configuration config.VPN) (guestvpn.ProbeTargets, error) {
+	ipv4, ipv4Err := netip.ParseAddrPort(configuration.ProbeIPv4())
+	ipv6, ipv6Err := netip.ParseAddrPort(configuration.ProbeIPv6())
+	if ipv4Err != nil || ipv6Err != nil {
+		return guestvpn.ProbeTargets{}, errors.New("the configured VPN probe targets are invalid")
+	}
+	targets, err := guestvpn.NewProbeTargets(configuration.ProbeDNSName(), ipv4, ipv6)
+	if err != nil {
+		return guestvpn.ProbeTargets{}, errors.New("the configured VPN probe targets are invalid")
+	}
+	return targets, nil
 }
 
 func resolveProductionTool(name string) (string, error) {

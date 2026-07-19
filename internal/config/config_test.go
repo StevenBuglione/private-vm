@@ -312,6 +312,24 @@ func TestValidationRejectsMalformedRegistryIdentity(t *testing.T) {
 	assertConfigCode(t, err, "CONFIG_INVALID")
 }
 
+func TestValidationRejectsUnsafeVPNProbeTargets(t *testing.T) {
+	tests := []VPNOverrides{
+		{ProbeDNSName: pointer("localhost")},
+		{ProbeIPv4: pointer("127.0.0.1:853")},
+		{ProbeIPv4: pointer("10.0.0.1:853")},
+		{ProbeIPv4: pointer("[2606:4700:4700::1111]:853")},
+		{ProbeIPv6: pointer("1.1.1.1:853")},
+		{ProbeIPv6: pointer("[fe80::1]:853")},
+		{ProbeIPv6: pointer("[2606:4700:4700::1111]:0")},
+	}
+	for index, vpnOverrides := range tests {
+		_, err := defaultLoader().Load(LoadOptions{Overrides: Overrides{VPN: vpnOverrides}})
+		if errorCode(err) != "CONFIG_INVALID" {
+			t.Fatalf("case %d returned %v", index, err)
+		}
+	}
+}
+
 func writeConfig(t *testing.T, path, value string) {
 	t.Helper()
 	if err := os.WriteFile(path, []byte(value), 0o600); err != nil {
