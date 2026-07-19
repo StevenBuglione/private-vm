@@ -18,11 +18,18 @@
 - redaction
 - cleanup idempotency
 - volatile secret zero/nil/copy safety, serialization rejection and size bounds
+- daemon request-context, role, selector, resource, and typed-error validation
+- bounded `/proc` stat, status, and pidfd-info parsing
+- Unix peer PID/start-time/UID/group revalidation and PID-reuse rejection
+- control-socket path, ownership, mode, stale-socket, and replacement-race policy
+- exact Polkit action, subject, timeout, empty environment, and output redaction
 
 ### Fuzz
 
 Targets:
 
+- active bounded `FuzzDaemonRPCInputs` coverage for daemon request protobufs,
+  context/resource validation, and `/proc` identity parsers
 - TOML/JSON/protobuf adapters
 - QMP parser
 - OCI/image manifest
@@ -49,6 +56,50 @@ Targets:
 - fake cryptsetup/nft/ip/usb processes
 - filesystem ownership/race tests
 - crash injection at every resource creation step
+
+### Daemon authorization and RPC boundary
+
+The active D-001 integration evidence exercises a real Unix listener and gRPC
+client, kernel-bound peer credentials, supplementary-group authorization,
+PID/start-time/effective-UID revalidation, session ownership, protocol mismatch
+details, active-socket refusal, and mode `0660`. Socket-hardening tests cover
+parent identity and write policy, symlink and non-socket rejection, valid stale
+socket removal, ambiguous dial failure, identity replacement during the stale
+probe, safe shutdown after endpoint replacement, the setup timeout, oversized
+headers, oversized messages, daemon-wide connection admission/recovery, and a
+real unauthorized Unix-gRPC call. Parser tests reject empty, missing, duplicated,
+malformed, NUL-containing, oversized, vanished, and identity-changing process
+evidence.
+
+Polkit adapter tests use only a fixture executable. They assert the exact
+`org.private-vm.usb.prepare` action and `PID,starttime,UID` subject, an empty
+environment, bounded cancellation, rejection of relative executables and other
+actions, and complete stdout/stderr suppression. `ClaimUSB` remains a
+`NOT_IMPLEMENTED` stub and is not treated as a destructive Polkit boundary.
+
+Contract tests cover `GetVersion` as the sole context-free method, the complete
+unary method/context map, request/session ID and protocol validation, image and
+policy selectors, resource defaulting and bounds, `TransferBegin` as the first
+import frame, stream correlation and first-frame deadline, cancellation/timeout
+mapping (including gRPC terminal status), canceled-create cleanup, immutable
+server configuration capture, RPC sentinel redaction, and the fail-closed USB
+claim stub.
+Completion evidence must continue to cover role rejection, every session-error
+mapping, and safe remediation on every typed error. No test may accept a race by
+unlinking an unverified path.
+
+The bounded fuzz smoke is reproducible with:
+
+```bash
+nix develop --command go test ./internal/daemon -run='^$' \
+  -fuzz='^FuzzDaemonRPCInputs$' -fuzztime=2s -parallel=1
+```
+
+Each input is limited to 64 KiB. The deterministic seed corpus covers all
+context-bearing daemon request shapes, resource and role validation, a
+contextual transfer begin, and the stat, status, and pidfd-info parsers. Stateful
+handlers are deliberately excluded. CI and the Nix `daemon-rpc-fuzz` check run
+the same two-second, single-worker gate.
 
 ### Volatile-secret evidence
 
@@ -195,3 +246,4 @@ Tests never:
 - write an unapproved physical USB on contributor machines
 - modify host firewall outside unique test namespaces/tables
 - require root without explicit integration-test opt-in
+- print or retain fixture `pkcheck` stdout/stderr or raw `/proc` identity data

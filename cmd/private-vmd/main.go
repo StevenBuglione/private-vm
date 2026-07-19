@@ -21,9 +21,11 @@ import (
 	"github.com/StevenBuglione/private-vm/internal/session"
 )
 
+const daemonStartupFailureMessage = "private-vmd: DAEMON_START_FAILED: the daemon could not start; inspect redacted system service diagnostics and verify the installed configuration"
+
 func main() {
 	if err := run(); err != nil {
-		fmt.Fprintf(os.Stderr, "private-vmd: %v\n", err)
+		fmt.Fprintln(os.Stderr, daemonStartupFailureMessage)
 		os.Exit(1)
 	}
 }
@@ -72,7 +74,7 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("resolve pkcheck: %w", err)
 	}
-	service := &daemon.Service{Sessions: manager, Polkit: daemon.PKCheck{Binary: pkcheck}}
+	service := &daemon.Service{Sessions: manager, Config: cfg, Polkit: daemon.PKCheck{Binary: pkcheck}}
 	server, err := daemon.NewServer(daemon.ServerOptions{
 		SocketPath: filepath.Join(runtimeConfig.Directory(), "control.sock"),
 		OwnerUID:   0,

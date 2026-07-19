@@ -349,6 +349,63 @@
           ${nixpkgs.lib.concatMapStringsSep "\n" verifyBinary binaries}
           touch "$out"
         '';
+
+      hostModuleContractCheckFor =
+        system:
+        let
+          pkgs = pkgsFor system;
+          customApplication = pkgs.writeShellScriptBin "private-vmd" "exit 1";
+          host = nixpkgs.lib.nixosSystem {
+            inherit system;
+            modules = [
+              ./nix/modules/host.nix
+              {
+                services.private-vm = {
+                  enable = true;
+                  group = "pvm-custom";
+                  package = customApplication;
+                };
+                system.stateVersion = "26.05";
+              }
+            ];
+          };
+          service = host.config.systemd.services.private-vmd;
+          policies = builtins.filter (
+            package: nixpkgs.lib.hasPrefix "private-vm-polkit-policy" package.name
+          ) host.config.environment.systemPackages;
+          requiredPath = with pkgs; [
+            host.config.security.polkit.package.bin
+            qemu
+            cryptsetup
+            nftables
+            iproute2
+            e2fsprogs
+            usbguard
+            virt-viewer
+            util-linux
+          ];
+          policySource = builtins.readFile ./packaging/polkit/org.private-vm.policy;
+        in
+        assert host.config.users.groups ? pvm-custom;
+        assert service.serviceConfig.Group == "pvm-custom";
+        assert nixpkgs.lib.hasInfix "--group pvm-custom" service.serviceConfig.ExecStart;
+        assert service.serviceConfig.RuntimeDirectoryMode == "0750";
+        assert service.serviceConfig.StateDirectoryMode == "0700";
+        assert builtins.length policies == 1;
+        assert nixpkgs.lib.all (package: nixpkgs.lib.elem package service.path) requiredPath;
+        assert builtins.length (nixpkgs.lib.splitString "<action id=" policySource) == 2;
+        assert nixpkgs.lib.hasInfix "<action id=\"org.private-vm.usb.prepare\">" policySource;
+        assert !nixpkgs.lib.hasInfix "org.private-vm.session.manage" policySource;
+        pkgs.writeText "private-vm-host-module-contract" (
+          builtins.toJSON {
+            group = service.serviceConfig.Group;
+            exec_start = service.serviceConfig.ExecStart;
+            runtime_mode = service.serviceConfig.RuntimeDirectoryMode;
+            state_mode = service.serviceConfig.StateDirectoryMode;
+            daemon_path = map (package: package.name) service.path;
+            policy_sha256 = builtins.hashString "sha256" policySource;
+          }
+        );
     in
     {
       packages = forAllSystems (
@@ -476,6 +533,10 @@
             go-race = sourceCheck "private-vm-go-race" ''
               go test -race ./...
             '';
+            daemon-rpc-fuzz = sourceCheck "private-vm-daemon-rpc-fuzz" ''
+              go test ./internal/daemon -run='^$' -fuzz='^FuzzDaemonRPCInputs$' -fuzztime=2s -parallel=1
+            '';
+            host-module-contract = hostModuleContractCheckFor system;
             static-binaries = staticBinariesCheckFor system;
             workflow-policy = sourceCheck "private-vm-workflow-policy" ''
               export PATH="${pkgs.actionlint}/bin:${pkgs.zizmor}/bin:$PATH"

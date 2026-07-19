@@ -6,16 +6,6 @@
   <vendor>private-vm</vendor>
   <vendor_url>https://github.com/StevenBuglione/private-vm</vendor_url>
 
-  <action id="org.private-vm.session.manage">
-    <description>Manage disposable private-vm sessions</description>
-    <message>Authentication is required to manage disposable virtual machines.</message>
-    <defaults>
-      <allow_any>no</allow_any>
-      <allow_inactive>no</allow_inactive>
-      <allow_active>auth_admin_keep</allow_active>
-    </defaults>
-  </action>
-
   <action id="org.private-vm.usb.prepare">
     <description>Prepare an enrolled USB device</description>
     <message>Authentication is required to erase and prepare the selected USB device.</message>

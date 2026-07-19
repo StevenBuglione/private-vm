@@ -3,18 +3,14 @@ package daemon
 import (
 	"context"
 	"errors"
-	"fmt"
 	"io"
-	"os"
 	"os/exec"
 	"strconv"
-	"strings"
 	"time"
 
+	privatevmv1 "github.com/StevenBuglione/private-vm/gen/privatevm/v1"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/peer"
-	"google.golang.org/grpc/status"
 )
 
 type identityContextKey struct{}
@@ -25,16 +21,18 @@ type Authorizer struct {
 }
 
 func (a Authorizer) Authorize(identity PeerIdentity) error {
+	groups, err := processGroups(identity)
+	if err != nil {
+		return errors.New("peer process identity could not be verified")
+	}
+	if a.Groups != nil {
+		groups, err = a.Groups(identity)
+		if err != nil {
+			return errors.New("peer process group membership could not be verified")
+		}
+	}
 	if identity.UID == 0 || identity.GID == a.AllowedGroup {
 		return nil
-	}
-	resolver := a.Groups
-	if resolver == nil {
-		resolver = processGroups
-	}
-	groups, err := resolver(identity)
-	if err != nil {
-		return err
 	}
 	for _, group := range groups {
 		if group == a.AllowedGroup {
@@ -47,7 +45,7 @@ func (a Authorizer) Authorize(identity PeerIdentity) error {
 func (a Authorizer) UnaryInterceptor(ctx context.Context, request any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 	identity, err := authenticatedIdentity(ctx)
 	if err != nil || a.Authorize(identity) != nil {
-		return nil, status.Error(codes.PermissionDenied, "AUTHORIZATION_DENIED: access to private-vmd is denied")
+		return nil, authorizationDenied()
 	}
 	ctx, cancel := boundedRPCContext(ctx, 2*time.Minute)
 	defer cancel()
@@ -57,9 +55,13 @@ func (a Authorizer) UnaryInterceptor(ctx context.Context, request any, info *grp
 func (a Authorizer) StreamInterceptor(service any, stream grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 	identity, err := authenticatedIdentity(stream.Context())
 	if err != nil || a.Authorize(identity) != nil {
-		return status.Error(codes.PermissionDenied, "AUTHORIZATION_DENIED: access to private-vmd is denied")
+		return authorizationDenied()
 	}
-	ctx, cancel := boundedRPCContext(stream.Context(), 30*time.Minute)
+	maximum := 30 * time.Minute
+	if info.FullMethod == privatevmv1.PrivateVMDaemonService_ImportWorkspaceFile_FullMethodName {
+		maximum = 10 * time.Second
+	}
+	ctx, cancel := boundedRPCContext(stream.Context(), maximum)
 	defer cancel()
 	wrapped := &contextServerStream{ServerStream: stream, ctx: context.WithValue(ctx, identityContextKey{}, identity)}
 	return handler(service, wrapped)
@@ -110,10 +112,10 @@ type PKCheck struct {
 
 func (p PKCheck) Authorize(ctx context.Context, identity PeerIdentity, action string) error {
 	if p.Binary == "" || p.Binary[0] != '/' {
-		return errors.New("pkcheck path must be absolute")
+		return errors.New("Polkit verifier configuration is invalid")
 	}
 	if action != "org.private-vm.usb.prepare" {
-		return errors.New("unknown Polkit action")
+		return errors.New("Polkit action is not permitted")
 	}
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
@@ -126,31 +128,21 @@ func (p PKCheck) Authorize(ctx context.Context, identity PeerIdentity, action st
 		"--process", process,
 		"--allow-user-interaction",
 	)
+	command.Env = []string{}
 	command.Stdout = io.Discard
 	command.Stderr = io.Discard
 	if err := command.Run(); err != nil {
-		return fmt.Errorf("Polkit authorization denied: %w", err)
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		return errors.New("Polkit authorization was denied")
 	}
 	return nil
 }
 
 func polkitProcessSubject(identity PeerIdentity) (string, error) {
-	data, err := os.ReadFile("/proc/" + strconv.FormatUint(uint64(identity.PID), 10) + "/stat")
-	if err != nil {
-		return "", fmt.Errorf("inspect Polkit process subject: %w", err)
+	if _, err := processGroups(identity); err != nil {
+		return "", errors.New("Polkit process subject could not be verified")
 	}
-	// The second stat field is parenthesized and may contain spaces. The start
-	// time is field 22, which is index 19 after the final ')'.
-	end := strings.LastIndexByte(string(data), ')')
-	if end < 0 {
-		return "", errors.New("Polkit process subject is malformed")
-	}
-	fields := strings.Fields(string(data[end+1:]))
-	if len(fields) <= 19 {
-		return "", errors.New("Polkit process subject is incomplete")
-	}
-	if _, err := strconv.ParseUint(fields[19], 10, 64); err != nil {
-		return "", errors.New("Polkit process start time is invalid")
-	}
-	return strconv.FormatUint(uint64(identity.PID), 10) + "," + fields[19] + "," + strconv.FormatUint(uint64(identity.UID), 10), nil
+	return strconv.FormatUint(uint64(identity.PID), 10) + "," + strconv.FormatUint(identity.StartTimeTicks, 10) + "," + strconv.FormatUint(uint64(identity.UID), 10), nil
 }

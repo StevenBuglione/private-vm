@@ -7,6 +7,29 @@
 
 let
   cfg = config.services.private-vm;
+  polkitPolicy = pkgs.runCommand "private-vm-polkit-policy" { } ''
+    install -Dm0444 \
+      ${../../packaging/polkit/org.private-vm.policy} \
+      "$out/share/polkit-1/actions/org.private-vm.policy"
+    test "$(grep -Fc '<action id=' "$out/share/polkit-1/actions/org.private-vm.policy")" -eq 1
+    grep -Fq '<action id="org.private-vm.usb.prepare">' \
+      "$out/share/polkit-1/actions/org.private-vm.policy"
+    ! grep -Fq 'org.private-vm.session.manage' \
+      "$out/share/polkit-1/actions/org.private-vm.policy"
+  '';
+  installedApplication = lib.lowPrio cfg.package;
+  installedPolkitPolicy = lib.hiPrio polkitPolicy;
+  daemonPath = with pkgs; [
+    config.security.polkit.package.bin
+    qemu
+    cryptsetup
+    nftables
+    iproute2
+    e2fsprogs
+    usbguard
+    virt-viewer
+    util-linux
+  ];
 in
 {
   options.services.private-vm = {
@@ -41,13 +64,16 @@ in
     users.groups.${cfg.group} = { };
 
     environment.systemPackages = with pkgs; [
-      cfg.package
+      installedApplication
+      installedPolkitPolicy
       qemu
       cryptsetup
       nftables
       iproute2
+      e2fsprogs
       usbguard
       virt-viewer
+      util-linux
     ];
 
     boot.kernelModules = [
@@ -57,6 +83,7 @@ in
     ];
     services.usbguard.enable = true;
     services.usbguard.implicitPolicyTarget = "block";
+    security.polkit.enable = true;
 
     systemd.tmpfiles.rules = [
       "d /var/lib/private-vm 0700 root root -"
@@ -68,17 +95,23 @@ in
     systemd.services.private-vmd = {
       description = "private-vm privileged orchestration daemon";
       wantedBy = [ "multi-user.target" ];
-      after = [ "local-fs.target" ];
+      after = [
+        "local-fs.target"
+        "polkit.service"
+      ];
+      path = daemonPath;
       serviceConfig = {
         Type = "simple";
-        ExecStart = "${cfg.package}/bin/private-vmd --config /etc/private-vm/config.toml";
+        ExecStart = "${cfg.package}/bin/private-vmd --config /etc/private-vm/config.toml --group ${lib.escapeShellArg cfg.group}";
         Restart = "on-failure";
         RestartSec = "2s";
         User = "root";
         Group = cfg.group;
         UMask = "0007";
         RuntimeDirectory = "private-vm";
+        RuntimeDirectoryMode = "0750";
         StateDirectory = "private-vm";
+        StateDirectoryMode = "0700";
         NoNewPrivileges = true;
         PrivateTmp = true;
         ProtectHome = true;
@@ -103,6 +136,33 @@ in
         LimitMEMLOCK = "infinity";
       };
     };
+
+    assertions = [
+      {
+        assertion = config.security.polkit.enable;
+        message = "services.private-vm requires Polkit for destructive USB authorization";
+      }
+      {
+        assertion = lib.all (package: lib.elem package config.systemd.services.private-vmd.path) daemonPath;
+        message = "private-vmd must retain its complete pinned probe and runtime PATH";
+      }
+      {
+        assertion = config.systemd.services.private-vmd.serviceConfig.RuntimeDirectoryMode == "0750";
+        message = "private-vmd RuntimeDirectoryMode must remain 0750";
+      }
+      {
+        assertion = config.systemd.services.private-vmd.serviceConfig.StateDirectoryMode == "0700";
+        message = "private-vmd StateDirectoryMode must remain 0700";
+      }
+      {
+        assertion = lib.elem installedPolkitPolicy config.environment.systemPackages;
+        message = "the independently packaged private-vm Polkit action must be in the system profile";
+      }
+      {
+        assertion = lib.elem "/share/polkit-1" config.environment.pathsToLink;
+        message = "the system profile must link private-vm's packaged Polkit action";
+      }
+    ];
 
     environment.etc."private-vm/config.toml".text = ''
       schema_version = 1

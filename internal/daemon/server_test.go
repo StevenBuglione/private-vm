@@ -6,10 +6,13 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strings"
+	"syscall"
 	"testing"
 	"time"
 
 	privatevmv1 "github.com/StevenBuglione/private-vm/gen/privatevm/v1"
+	"github.com/StevenBuglione/private-vm/internal/config"
 	"github.com/StevenBuglione/private-vm/internal/preflight"
 	"github.com/StevenBuglione/private-vm/internal/session"
 	"google.golang.org/grpc"
@@ -18,17 +21,22 @@ import (
 )
 
 func TestAuthorizerUsesSupplementaryGroupAndFailsClosed(t *testing.T) {
+	identity := currentProcessIdentity(t)
 	authorizer := Authorizer{AllowedGroup: 4242, Groups: func(identity PeerIdentity) ([]uint32, error) {
-		if identity.PID == 9 {
-			return nil, errors.New("process vanished")
-		}
 		return []uint32{1000, 4242}, nil
 	}}
-	if err := authorizer.Authorize(PeerIdentity{PID: 1, UID: 1000, GID: 1000}); err != nil {
+	if err := authorizer.Authorize(identity); err != nil {
 		t.Fatal(err)
 	}
-	if err := authorizer.Authorize(PeerIdentity{PID: 9, UID: 1000, GID: 1000}); err == nil {
+	authorizer.Groups = func(PeerIdentity) ([]uint32, error) { return nil, errors.New("process vanished") }
+	if err := authorizer.Authorize(identity); err == nil {
 		t.Fatal("authorization must fail when group evidence is unavailable")
+	}
+	reused := identity
+	reused.StartTimeTicks++
+	authorizer.Groups = func(PeerIdentity) ([]uint32, error) { return []uint32{4242}, nil }
+	if err := authorizer.Authorize(reused); err == nil {
+		t.Fatal("authorization must fail before the injected group resolver when process identity changed")
 	}
 }
 
@@ -44,18 +52,20 @@ func TestUnixGRPCPeerIdentityLifecycleAndSocketMode(t *testing.T) {
 	}
 	service := &Service{
 		Sessions: manager,
-		DoctorRun: func(bool) preflight.Report {
+		Config:   config.Defaults(),
+		DoctorRun: func(context.Context, bool) preflight.Report {
 			return preflight.Report{SchemaVersion: 1, Runnable: true}
 		},
 		Polkit: allowPolkit{},
 	}
 	socket := filepath.Join(runtimeDir, "control.sock")
 	server, err := NewServer(ServerOptions{
-		SocketPath: socket,
-		OwnerUID:   os.Geteuid(),
-		GroupGID:   os.Getegid(),
-		Service:    service,
-		Authorizer: Authorizer{AllowedGroup: uint32(os.Getegid())},
+		SocketPath:                      socket,
+		OwnerUID:                        os.Geteuid(),
+		GroupGID:                        os.Getegid(),
+		Service:                         service,
+		Authorizer:                      Authorizer{AllowedGroup: uint32(os.Getegid())},
+		testOnlyAllowUntrustedAncestors: true,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -78,7 +88,11 @@ func TestUnixGRPCPeerIdentityLifecycleAndSocketMode(t *testing.T) {
 	if info.Mode().Perm() != 0o660 || info.Mode()&os.ModeSocket == 0 {
 		t.Fatalf("unexpected control socket mode: %v", info.Mode())
 	}
-	if err := removeStaleSocket(socket, uint32(os.Geteuid())); err == nil {
+	stat, ok := info.Sys().(*syscall.Stat_t)
+	if !ok || stat.Uid != uint32(os.Geteuid()) || stat.Gid != uint32(os.Getegid()) {
+		t.Fatalf("unexpected control socket identity: %#v", info.Sys())
+	}
+	if err := removeStaleSocket(socket, uint32(os.Geteuid()), uint32(os.Getegid())); err == nil {
 		t.Fatal("active control socket was treated as stale")
 	}
 
@@ -108,6 +122,14 @@ func TestUnixGRPCPeerIdentityLifecycleAndSocketMode(t *testing.T) {
 	listed, err := client.ListSessions(ctx, &privatevmv1.ListSessionsRequest{Context: requestContext("")})
 	if err != nil || len(listed.GetSessions()) != 1 {
 		t.Fatalf("list sessions: count=%d err=%v", len(listed.GetSessions()), err)
+	}
+	const privateSentinel = "PRIVATE_RPC_SENTINEL_MUST_NOT_ESCAPE"
+	_, err = client.PlanSession(ctx, &privatevmv1.PlanSessionRequest{
+		Context: requestContext(""), Role: privatevmv1.GuestRole_GUEST_ROLE_WORKSTATION, ImageBundle: privateSentinel,
+	})
+	assertRPCError(t, err, codes.InvalidArgument, "IMAGE_BUNDLE_INVALID")
+	if strings.Contains(err.Error(), privateSentinel) {
+		t.Fatal("rejected RPC value escaped through the daemon error")
 	}
 	cleaned, err := client.CleanupSession(ctx, &privatevmv1.CleanupSessionRequest{Context: requestContext(created.GetId())})
 	if err != nil {
@@ -157,7 +179,15 @@ func TestProtocolMismatchReturnsTypedStatus(t *testing.T) {
 }
 
 func TestPolkitSubjectIncludesPIDStartTimeAndUID(t *testing.T) {
-	identity := PeerIdentity{PID: uint32(os.Getpid()), UID: uint32(os.Geteuid()), GID: uint32(os.Getegid())}
+	stat, err := readBoundedProcFile(procPIDPath(uint32(os.Getpid()), "stat"), maxProcStatBytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, startTime, err := parseProcStat(stat)
+	if err != nil {
+		t.Fatal(err)
+	}
+	identity := PeerIdentity{PID: uint32(os.Getpid()), UID: uint32(os.Geteuid()), GID: uint32(os.Getegid()), StartTimeTicks: startTime}
 	subject, err := polkitProcessSubject(identity)
 	if err != nil {
 		t.Fatal(err)

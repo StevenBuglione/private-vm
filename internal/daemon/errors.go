@@ -1,6 +1,7 @@
 package daemon
 
 import (
+	"context"
 	"errors"
 
 	privatevmv1 "github.com/StevenBuglione/private-vm/gen/privatevm/v1"
@@ -22,6 +23,10 @@ func rpcError(grpcCode codes.Code, code, message, remediation string, retryable 
 
 func sessionError(err error) error {
 	switch {
+	case errors.Is(err, context.Canceled) || status.Code(err) == codes.Canceled:
+		return rpcError(codes.Canceled, "REQUEST_CANCELED", "The request was canceled before it completed.", "Retry the operation only if its session state permits it.", true)
+	case errors.Is(err, context.DeadlineExceeded) || status.Code(err) == codes.DeadlineExceeded:
+		return rpcError(codes.DeadlineExceeded, "REQUEST_TIMEOUT", "The request exceeded its bounded deadline.", "Inspect session status before retrying the operation.", true)
 	case errors.Is(err, session.ErrNotFound):
 		return rpcError(codes.NotFound, "SESSION_NOT_FOUND", "The requested session does not exist.", "List sessions owned by the current user and retry with an active session ID.", false)
 	case errors.Is(err, session.ErrUnauthorized):
@@ -33,6 +38,10 @@ func sessionError(err error) error {
 	default:
 		return rpcError(codes.Internal, "INTERNAL_ERROR", "The daemon could not complete the request.", "Retry once; if the error persists, inspect redacted daemon diagnostics.", true)
 	}
+}
+
+func authorizationDenied() error {
+	return rpcError(codes.PermissionDenied, "AUTHORIZATION_DENIED", "Access to private-vmd is denied.", "Run the client as root or as a verified member of the private-vm group.", false)
 }
 
 func unimplemented(operation string) error {

@@ -21,8 +21,7 @@ Example host flake:
         {
           services.private-vm = {
             enable = true;
-            strictMode = true;
-            enableUSBGuardIntegration = true;
+            strict = true;
           };
         }
       ];
@@ -41,15 +40,32 @@ The module should:
 
 - install CLI/daemon/remote-viewer/QEMU/cryptsetup/nftables/iproute2/USBGuard
 - create `private-vm` group
-- enable systemd service/socket
+- enable the systemd daemon service, which creates the Unix control socket
 - create runtime/state directories
-- configure Polkit
+- enable Polkit, install `pkcheck`, and install only the
+  `org.private-vm.usb.prepare` action
 - configure tmpfiles
-- optionally merge USBGuard rules
+- enable USBGuard with a default-block policy
 - add the chosen user to group only when explicitly configured
 - avoid enabling libvirt
 
 After group changes, re-login.
+
+The daemon runtime directory is `root:<configured-group>` mode `0750`, its
+persistent state directory is mode `0700`, and the daemon creates
+`/run/private-vm/control.sock` as `root:<configured-group>` mode `0660`. The
+module installs the Polkit policy independently of a custom application-package
+override. Its sole action is reserved for the later implemented destructive USB
+prepare transition; the current unimplemented USB RPCs do not prompt. Ordinary
+session management remains governed by the daemon socket group and per-session
+owner checks.
+
+The service receives the configured group explicitly and has a pinned PATH for
+all read-only Doctor probes (`pkcheck`, QEMU, cryptsetup, nftables, iproute2,
+e2fsprogs, virt-viewer, USBGuard and util-linux). The
+`host-module-contract` flake check evaluates a custom group and a binary-only
+package override to prove these integration invariants without building an
+entire host closure.
 
 The daemon configuration is `/etc/private-vm/config.toml`. It must be a
 root-owned regular local file with no group/world write or executable bits; the
