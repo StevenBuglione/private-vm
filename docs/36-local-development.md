@@ -34,6 +34,27 @@ local Go gates. Build or boot role images one at a time; never run multiple
 checks may run while dependency-safe source work continues, but their required
 result is still enforced before merge.
 
+On this host, place every local heavy lane in a user cgroup so a failed build
+cannot invoke the kernel-wide OOM killer. Source/race gates use a 2 GiB ceiling;
+one Nix evaluation or VM gate uses a 3 GiB ceiling:
+
+```bash
+systemd-run --user --scope --quiet \
+  -p MemoryHigh=1536M -p MemoryMax=2G -p MemorySwapMax=0 \
+  -p CPUQuota=200% \
+  env GOMAXPROCS=2 go test -p 1 ./...
+
+systemd-run --user --scope --quiet \
+  -p MemoryHigh=2400M -p MemoryMax=3G -p MemorySwapMax=0 \
+  -p CPUQuota=200% \
+  nix --option max-jobs 1 --option cores 2 build --offline \
+  .#checks.x86_64-linux.workstation-desktop
+```
+
+Do not run these two examples concurrently. A cgroup out-of-memory result is a
+failed gate and must be investigated; it is not permission to raise the limit
+or enable swap. Use the role-specific check name for other images.
+
 `buf generate` removes stale generated files before invoking the immutable
 plugin version/revision pins in `buf.gen.yaml`. A clean checkout must remain
 unchanged after regeneration. When preparing a pull request, replace the branch
