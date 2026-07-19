@@ -11,12 +11,24 @@ import (
 
 type systemInstallInvoker struct {
 	installer systeminstall.Installer
+	fallback  Invoker
 }
 
-// NewSystemInstallInvoker composes the generic-archive installer adapter. It
-// deliberately fails closed for every command owned by another orchestrator.
+// NewSystemInstallInvoker composes the generic-archive installer adapter with
+// a fail-closed fallback for callers that do not have another orchestrator.
 func NewSystemInstallInvoker(installer systeminstall.Installer) Invoker {
-	return systemInstallInvoker{installer: installer}
+	return NewSystemInstallInvokerWithFallback(installer, failClosedInvoker{})
+}
+
+// NewSystemInstallInvokerWithFallback routes only the two package-owned host
+// transactions to the generic installer. Every other command is delegated to
+// the supplied production invoker so adding packaging support cannot disable
+// the daemon-backed workstation, VPN, torrent, or session command surface.
+func NewSystemInstallInvokerWithFallback(installer systeminstall.Installer, fallback Invoker) Invoker {
+	if fallback == nil {
+		fallback = failClosedInvoker{}
+	}
+	return systemInstallInvoker{installer: installer, fallback: fallback}
 }
 
 func (invoker systemInstallInvoker) Invoke(ctx context.Context, id CommandID, intent Intent) (Result, error) {
@@ -58,11 +70,7 @@ func (invoker systemInstallInvoker) Invoke(ctx context.Context, id CommandID, in
 		}
 		return Result{Code: CodeSystemPlan, Data: systemPlanPayload(plan, !request.DryRun)}, nil
 	default:
-		return Result{}, apperror.New(
-			"NOT_IMPLEMENTED", exitcode.Runtime,
-			"This security-sensitive workflow is not implemented.",
-			"Do not use this path until its backlog acceptance tests pass.",
-		)
+		return invoker.fallback.Invoke(ctx, id, intent)
 	}
 }
 
