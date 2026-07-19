@@ -23,6 +23,12 @@ const (
 	minimumDiskSectors   = 16384
 )
 
+var (
+	ErrQuarantineMountTargetUnsafe    = errors.New("quarantine mount target is unsafe")
+	ErrQuarantineMountSystemCall      = errors.New("quarantine mount system call failed")
+	ErrQuarantineMountEvidenceInvalid = errors.New("quarantine mount evidence is invalid")
+)
+
 type quarantineFormatState uint8
 
 const (
@@ -162,12 +168,12 @@ func (backend *linuxQuarantineBackend) Mount(ctx context.Context) error {
 	source := "/proc/self/fd/" + strconv.FormatUint(uint64(backend.device.Fd()), 10)
 	flags := uintptr(unix.MS_NODEV | unix.MS_NOSUID | unix.MS_NOEXEC)
 	if err := unix.Mount(source, backend.mountPath, "ext4", flags, "errors=remount-ro"); err != nil {
-		return errors.New("fixed quarantine mount failed")
+		return ErrQuarantineMountSystemCall
 	}
 	mounted, err := backend.mountEvidence()
 	if err != nil || !mounted {
 		_ = unix.Unmount(backend.mountPath, 0)
-		return errors.New("fixed quarantine mount evidence invalid")
+		return ErrQuarantineMountEvidenceInvalid
 	}
 	return nil
 }
@@ -345,11 +351,11 @@ func inspectQuarantineFormat(file *os.File) (quarantineFormatState, error) {
 func validateMountTarget(path string) error {
 	info, err := os.Lstat(path)
 	if err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 || info.Mode().Perm()&0o077 != 0 {
-		return errors.New("quarantine mount target unsafe")
+		return ErrQuarantineMountTargetUnsafe
 	}
 	stat, ok := info.Sys().(*unix.Stat_t)
 	if !ok || stat.Uid != 0 || stat.Nlink != 2 {
-		return errors.New("quarantine mount target unsafe")
+		return ErrQuarantineMountTargetUnsafe
 	}
 	return nil
 }

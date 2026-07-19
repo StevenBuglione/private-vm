@@ -279,6 +279,15 @@ func downloaderQuarantineFailure(err error) string {
 	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 		return "the downloader quarantine initialization timed out"
 	}
+	if errors.Is(err, torrent.ErrQuarantineMountTargetUnsafe) {
+		return "the downloader quarantine mount target is unsafe"
+	}
+	if errors.Is(err, torrent.ErrQuarantineMountSystemCall) {
+		return "the downloader quarantine mount system call failed"
+	}
+	if errors.Is(err, torrent.ErrQuarantineMountEvidenceInvalid) {
+		return "the downloader quarantine mounted without required evidence"
+	}
 	switch err.Error() {
 	case "fixed quarantine device unavailable":
 		return "the downloader quarantine device is unavailable"

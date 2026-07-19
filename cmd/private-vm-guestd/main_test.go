@@ -2,12 +2,14 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"slices"
 	"strings"
 	"testing"
 
 	"github.com/StevenBuglione/private-vm/internal/guest"
 	"github.com/StevenBuglione/private-vm/internal/session"
+	"github.com/StevenBuglione/private-vm/internal/torrent"
 )
 
 func TestGuestCompositionMessageExposesOnlyFixedStage(t *testing.T) {
@@ -20,6 +22,19 @@ func TestGuestCompositionMessageExposesOnlyFixedStage(t *testing.T) {
 	}
 	if got := downloaderQuarantineFailure(errors.New("PrivateKey=must-not-leak")); got != "the downloader quarantine initialization failed" {
 		t.Fatalf("untrusted quarantine error leaked: %q", got)
+	}
+}
+
+func TestDownloaderQuarantineFailureClassifiesSafeMountStages(t *testing.T) {
+	for cause, want := range map[error]string{
+		torrent.ErrQuarantineMountTargetUnsafe:    "the downloader quarantine mount target is unsafe",
+		torrent.ErrQuarantineMountSystemCall:      "the downloader quarantine mount system call failed",
+		torrent.ErrQuarantineMountEvidenceInvalid: "the downloader quarantine mounted without required evidence",
+	} {
+		err := fmt.Errorf("quarantine mount failed: %w", cause)
+		if got := downloaderQuarantineFailure(err); got != want {
+			t.Fatalf("failure %v classified as %q, want %q", cause, got, want)
+		}
 	}
 }
 

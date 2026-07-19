@@ -3,6 +3,7 @@ package torrent
 import (
 	"context"
 	"errors"
+	"fmt"
 	"reflect"
 	"sync"
 	"time"
@@ -69,7 +70,7 @@ func (owner *QuarantineOwner) Prepare(ctx context.Context) error {
 			return errors.New("quarantine filesystem preparation failed")
 		}
 		if err := owner.backend.Mount(ctx); err != nil {
-			return errors.New("quarantine mount failed")
+			return fmt.Errorf("quarantine mount failed: %w", err)
 		}
 	}
 	owner.mounted = true
