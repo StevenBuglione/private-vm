@@ -134,10 +134,6 @@ func decodeProvenanceStatement(data []byte, maximumDepth int) (provenanceStateme
 	return statement, nil
 }
 
-func (statement provenanceStatement) validate(ctx context.Context, manifest Manifest) error {
-	return statement.validateArtifact(ctx, imageProvenanceIdentity(manifest))
-}
-
 func (statement provenanceStatement) validateArtifact(ctx context.Context, artifact provenanceArtifactIdentity) error {
 	if err := ctx.Err(); err != nil {
 		return contextError(ctx, err)
