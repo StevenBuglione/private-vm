@@ -21,7 +21,7 @@ Do not persist:
 - tracker URLs
 - filenames
 - file hashes unless user exports report
-- VPN endpoint/private key
+- VPN endpoint/private key/profile source path
 - public IP
 - DNS answers
 - USB volume content
@@ -37,6 +37,20 @@ evidence is exposed only as `AUTHORIZATION_DENIED`; the response does not reveal
 which identity check failed. Request-context and selector failures likewise use
 the typed safe messages and remediation in `docs/33-error-catalog.md`, never the
 rejected raw value.
+
+VPN profile parse and endpoint-resolution errors deliberately discard the raw
+input, hostname, DNS answers and wrapped resolver cause. Profile and resolved
+endpoint types reject machine serialization and render fixed redaction tokens.
+`vpn inspect` uses only the reviewed aggregate status schema. Debug logging does
+not alter these contracts. A profile exists only in the daemon's protected
+memory store and the bounded guest-delivery callback; neither is included in a
+diagnostic bundle.
+
+The unprivileged CLI alone opens a selected profile file. Its source path is not
+sent over RPC. Profile bytes travel only in bounded client-streaming protobuf
+chunks over the authenticated Unix socket; they are never placed in argv or the
+environment and are not formatted into RPC errors. CLI, protobuf-chunk and
+daemon receive buffers are cleared after each ownership boundary.
 
 ## Session events
 

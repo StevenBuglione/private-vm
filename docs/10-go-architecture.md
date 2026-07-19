@@ -87,6 +87,7 @@ cli          command definitions and output
 config       typed TOML and migrations
 daemon       Unix gRPC server and authorization
 guest        VSOCK client/server and capability model
+guestvpn     guest kill switch, WireGuard state and verification monitor
 image        OCI pull/cache/manifest
 network      netns, TAP, veth, nftables
 orchestrator workflow state machines
@@ -111,6 +112,77 @@ VSOCK-only gRPC transport credentials, protected capability token, authenticatio
 and request-context interceptors, exact role service registration, and verified
 Hello handshake. Linux dialing uses a cancellable socket connect directly;
 there is no detached dial goroutine.
+
+`internal/vpn` owns the closed Proton WireGuard grammar, protected private-key
+handle, trusted-host endpoint resolver and daemon-lifetime memory store. Parsing
+is capped at 64 KiB and 256 lines. The private key is decoded directly from a
+byte slice into `secret.Bytes`; profile, key, endpoint, resolved-view and
+guest-configuration reader types reject serialization and redact diagnostic
+formatting. Only a schema-versioned aggregate inspection is serializable. The
+resolver accepts a narrow context-aware `LookupNetIP`
+interface, has a hard ten-second ceiling, resolves hostnames as absolute names,
+and returns at most 16 sorted unique addresses that pass the explicit reviewed
+public-endpoint range policy. Resolver errors discard hostname and external
+error text. DNS executes without the store mutex: an injected adapter that
+violates its context contract can strand only its own `Resolve` caller, not
+import, remove, close, or daemon shutdown.
+
+`internal/guestvpn` owns one serialized fail-closed state machine. Its Linux
+adapter accepts only fixed semantic operations, uses nftables/`ip -batch`/`wg`
+stdin for profile-derived values, and delegates DNS to a typed D-Bus boundary.
+An injected verifier can return only boolean proof results. The downloader
+guest RPC adapter lives in `internal/guest`, clears the received profile slice,
+and maps controller errors to stable safe gRPC details.
+
+The memory store has no path, marshal, restore or startup-loading operation and
+admits at most eight profile names per owner and 64 across the daemon.
+Generation counters are owner-local so one caller cannot infer another owner's
+import activity. Import atomically replaces a named generation and destroys the
+old key. Remove,
+close and daemon restart converge on owned-key destruction. A resolved guest
+configuration is reconstructed into a bounded byte buffer only while consuming
+the exact opaque owner/name/generation/resolution-epoch plan that also supplies
+the host firewall endpoints. The resolved view is usable only during its
+`UsePlan` callback and fails closed if retained. Re-resolution invalidates and
+clears the prior endpoint set before DNS starts; rotation, removal, failure and
+close invalidate and clear it as well. The
+private key is never converted to a Go string and the transient buffer is
+cleared after success, failure or cancellation.
+
+`internal/network` is the sole owner of deterministic per-session network
+allocation. It derives bounded netns, veth, TAP and nftables names only from an
+already validated opaque session ID, searches at most 64 deterministic address
+slots, and reserves a slot before mutation. The Linux adapter exposes semantic
+operations only; `ip`, `nft` and `sysctl` paths have exact package-controlled
+basenames, output is bounded, stderr is discarded, and nftables transactions
+arrive through stdin. A generic nonzero tool status is never interpreted as
+resource absence. Cleanup first inventories exact names, attempts every resource
+that creation may have touched, and releases ownership only after a final exact
+inventory proves absence.
+
+One lifecycle mutex is acquired before a network state becomes visible. It
+serializes provisioning, scoped TAP/static-address/VPN-config handoffs and the
+idempotent cleanup owner. Cleanup invalidates readiness immediately, uses its
+own bounded context after accepting the request, keeps all attempt markers
+until the final audit passes, and destroys the copied endpoint policy before
+releasing the slot. The TAP has already moved into the session namespace before
+`WithTAP` supplies a scoped duplicated descriptor and closes that parent-side
+duplicate on callback return; trusted callbacks must not duplicate it again.
+The QEMU process owner must terminate the child before network cleanup, so its
+inherited descriptor cannot outlive the VM lifecycle.
+No API reveals namespace/interface names, static addresses, endpoint tuples or
+raw rule text. Only the aggregate `network-status.schema.json` inspection is
+serializable.
+
+The daemon role boundary is semantic and serialized per opaque session ID.
+`StartRole` publishes `PREFLIGHTED`, `IMAGES_VERIFIED`, `STORAGE_READY`, and
+`ACTIVE` only after the corresponding typed gate succeeds. Storage and runtime
+allocations are registered with the session actor before a later state is
+visible. Any failed or canceled start submits the same independent cleanup
+owner and returns only after it either proves absence or leaves a retryable
+`CLEANUP_INCOMPLETE` record. `StopRole` verifies workstation output state before
+publishing `STOPPING`; `UNEXPORTED`, `CHANGED`, and unreachable state require an
+explicit destructive discard request.
 
 ## Volatile secret contract
 

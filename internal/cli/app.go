@@ -80,7 +80,11 @@ func New(dependencies Dependencies) *App {
 
 // Run executes one CLI invocation and returns the stable process exit code.
 func Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
-	return New(Dependencies{Stdout: stdout, Stderr: stderr}).Execute(ctx, args)
+	return New(Dependencies{
+		Stdout:  stdout,
+		Stderr:  stderr,
+		Invoker: NewProductionInvoker(config.DefaultRuntimePath+"/control.sock", nil, stderr),
+	}).Execute(ctx, args)
 }
 
 // Execute runs the already-constructed application exactly once.

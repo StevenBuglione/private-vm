@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/StevenBuglione/private-vm/schemas/network-status.schema.json",
+  "title": "private-vm redacted session network status",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": { "const": 1 },
+    "ready": { "type": "boolean" },
+    "ipv4_endpoint_count": { "type": "integer", "minimum": 0, "maximum": 16 },
+    "ipv6_endpoint_count": { "type": "integer", "minimum": 0, "maximum": 16 },
+    "tap_ready": { "type": "boolean" }
+  },
+  "required": ["schema_version", "ready", "ipv4_endpoint_count", "ipv6_endpoint_count", "tap_ready"],
+  "allOf": [
+    {
+      "if": { "properties": { "ready": { "const": false } }, "required": ["ready"] },
+      "then": { "properties": { "tap_ready": { "const": false } } }
+    }
+  ]
+}

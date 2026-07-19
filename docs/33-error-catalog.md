@@ -256,12 +256,72 @@ ordinary, detailed and structural `fmt` verbs cannot reveal that cause.
 
 - `VPN_PROFILE_INVALID`
 - `VPN_ENDPOINT_UNRESOLVED`
+- `NETWORK_REQUEST_INVALID`
+- `NETWORK_TOPOLOGY_EXISTS`
+- `NETWORK_COLLISION_EXHAUSTED`
+- `NETWORK_TOPOLOGY_FAILED`
 - `HOST_EGRESS_POLICY_FAILED`
+- `NETWORK_TOPOLOGY_NOT_READY`
+- `NETWORK_CLEANUP_INCOMPLETE`
+- `GUEST_VPN_REQUEST_INVALID`
+- `GUEST_KILL_SWITCH_FAILED`
+- `GUEST_VPN_CONFIGURATION_FAILED`
+- `GUEST_VPN_VERIFICATION_FAILED`
+- `GUEST_VPN_TUNNEL_LOST`
+- `GUEST_VPN_CLEANUP_INCOMPLETE`
 - `VPN_HANDSHAKE_FAILED`
 - `DNS_LEAK_DETECTED`
 - `IPV4_BYPASS_DETECTED`
 - `IPV6_BYPASS_DETECTED`
 - `TORRENT_INTERFACE_UNBOUND`
+
+VPN profile operations additionally use these stable safe codes:
+
+| Code | Exit | Safe meaning | Remediation |
+|---|---:|---|---|
+| `VPN_PROFILE_INVALID` | 13 | The bounded input does not match the frozen Proton WireGuard grammar. | Generate a profile with one peer, complete default routes, literal DNS addresses and no hooks. |
+| `VPN_ENDPOINT_UNRESOLVED` | 13 | The endpoint lookup failed, timed out, was empty/oversized or returned an unsafe address. | Generate and import a current Proton profile, then retry the bounded check. |
+| `VPN_PROFILE_NOT_IMPORTED` | 13 | The selected name has no daemon-memory profile generation. | Import a current profile before starting a networked role. |
+| `VPN_PROFILE_STORE_CLOSED` | 13 | Daemon-lifetime volatile storage has closed and cannot restore keys. | Restart the daemon and import the profile again. |
+| `VPN_ENDPOINT_CHECK_REQUIRED` | 13 | The imported generation has not completed endpoint verification. | Run the trusted-host endpoint check before delivery. |
+| `VPN_PROFILE_ROTATED` | 13 | The generation changed between endpoint planning and delivery. | Resolve the current generation and rebuild its endpoint policy. |
+| `VPN_PROFILE_LIMIT` | 13 | The daemon's bounded volatile profile-name limit was reached. | Remove an unused profile before importing another name. |
+| `VPN_PROFILE_BEGIN_REQUIRED` | 13 | The first import frame is absent or not a contextual begin frame. | Start the bounded stream with `VPNProfileImportBegin`. |
+| `VPN_PROFILE_STREAM_INVALID` | 13 | Import chunks are empty, oversized, excessive or use an unexpected frame shape. | Send at most 64 non-empty chunks of at most 16 KiB. |
+| `VPN_PROFILE_TOO_LARGE` | 13 | Sensitive input exceeds the 64-KiB profile limit. | Generate a standard bounded Proton WireGuard profile. |
+| `VPN_PROFILE_SOURCE_UNSAFE` | 13 | The selected source file fails owner, mode, regular-file or no-follow checks. | Use a caller-owned mode-0600 regular file without symlinks. |
+| `VPN_PROFILE_READ_FAILED` | 13 | The selected sensitive-input adapter could not read the profile safely. | Select a readable owner-only file or bounded standard input. |
+| `VPN_REQUEST_INVALID` | 13 | The CLI VPN intent or local control-socket configuration is invalid. | Use the documented VPN command syntax and installed control socket. |
+| `DAEMON_UNAVAILABLE` | 13 | A VPN RPC failed without a valid safe daemon `ErrorDetail`. | Verify `private-vmd` and its Unix control socket, then retry. |
+
+Host-network operations additionally use these stable safe codes:
+
+| Code | Exit | Safe meaning | Remediation |
+|---|---:|---|---|
+| `NETWORK_REQUEST_INVALID` | 13 | The internal session or opaque VPN-plan network contract is invalid. | Create networking only for an active internal session and current resolved VPN plan. |
+| `NETWORK_TOPOLOGY_EXISTS` | 13 | This session already owns a network topology. | Reuse it or complete its verified cleanup before retrying. |
+| `NETWORK_COLLISION_EXHAUSTED` | 13 | No collision-free slot was found within the bounded allocation search. | Clean verified private-vm network orphans and retry. |
+| `NETWORK_TOPOLOGY_FAILED` | 13 | A semantic namespace, veth, TAP, route or forwarding operation failed. | Run strict diagnostics, clean verified owned resources and retry. |
+| `HOST_EGRESS_POLICY_FAILED` | 13 | An exact endpoint nftables transaction failed. | Do not start QEMU; verify nftables support, clean the session network and rebuild from a current VPN plan. |
+| `NETWORK_TOPOLOGY_NOT_READY` | 13 | A stale or incomplete network handle was used for a guest handoff. | Complete topology and policy creation or create a new session after cleanup. |
+| `NETWORK_CLEANUP_INCOMPLETE` | 24 | At least one owned network resource could not be removed or audited absent. | Keep the session in cleanup state and retry verified cleanup. |
+| `GUEST_VPN_REQUEST_INVALID` | 13 | The requested guest role, underlay or lifecycle transition is invalid. | Use the typed online-role workflow and start from a fresh verified guest. |
+| `GUEST_KILL_SWITCH_FAILED` | 13 | The guest default-drop policy was not installed atomically. | Do not start guest applications; stop and clean the session. |
+| `GUEST_VPN_CONFIGURATION_FAILED` | 13 | WireGuard, routing or tunnel DNS configuration failed. | Keep the kill switch armed, stop the guest and retry with a current profile. |
+| `GUEST_VPN_VERIFICATION_FAILED` | 13 | At least one required handshake, tunnel, bypass or binding proof is absent. | Keep applications stopped and run the controlled verification again. |
+| `GUEST_VPN_TUNNEL_LOST` | 13 | Continuous verification detected a previously verified tunnel failure. | Keep the kill switch armed, pause network work, and reconnect or stop. |
+| `GUEST_VPN_CLEANUP_INCOMPLETE` | 24 | Tunnel or kill-switch teardown did not complete in safe order. | Retain cleanup state and retry tunnel removal before policy removal. |
+
+Guest RPC cancellation and deadline failures use `GUEST_VPN_CANCELLED` and
+`GUEST_VPN_TIMEOUT` in gRPC `ErrorDetail`; their CLI projection remains the
+canonical cancellation/runtime-timeout mapping.
+
+The redacted VPN status schema uses corresponding state codes
+`VPN_ENDPOINT_CHECK_REQUIRED`, `VPN_PROFILE_CURRENT` and
+`VPN_PROFILE_ROTATION_REQUIRED`. They contain remediation but never profile,
+endpoint, address, DNS, source-path or resolver details. Caller cancellation and
+operation timeouts continue to use the canonical CLI/RPC context mappings at
+their eventual boundary.
 
 ### Scanner
 
@@ -293,9 +353,30 @@ ordinary, detailed and structural `fmt` verbs cannot reveal that cause.
 
 ### Workspace
 
+- `ROLE_START_FAILED`
+- `WORKSPACE_DIRTY`
+- `WORKSPACE_UNREACHABLE`
 - `WORKSPACE_UNEXPORTED`
 - `WORKSPACE_CHANGED`
+- `WORKSPACE_INVENTORY_FAILED`
+- `WORKSPACE_ENTRY_UNSAFE`
+- `WORKSPACE_CAPACITY_EXCEEDED`
+- `WORKSPACE_HASH_FAILED`
+- `WORKSPACE_OUTPUT_NOT_FOUND`
+- `WORKSPACE_OUTPUT_CHANGED`
+- `IMPORT_STAGING_CONFLICT`
+- `IMPORT_TARGET_EXISTS`
+- `EXPORT_NOT_STREAMED`
+- `EXPORT_VERIFICATION_MISMATCH`
 - `IMPORT_PATH_UNSAFE`
+- `TRANSFER_BEGIN_REQUIRED`
+- `TRANSFER_ID_INVALID`
+- `TRANSFER_DESCRIPTOR_INVALID`
+- `TRANSFER_SEQUENCE_INVALID`
+- `TRANSFER_END_INVALID`
+- `TRANSFER_INCOMPLETE`
+- `TRANSFER_CANCELED`
+- `TRANSFER_SYNC_FAILED`
 - `TRANSFER_SIZE_EXCEEDED`
 - `TRANSFER_OFFSET_INVALID`
 - `TRANSFER_HASH_MISMATCH`

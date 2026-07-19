@@ -31,7 +31,15 @@ type Launcher struct {
 	qmpWait        time.Duration
 	graceWait      time.Duration
 	termWait       time.Duration
-	commandBuilder func(Spec, *os.File) (*exec.Cmd, error)
+	commandBuilder func(Spec, InheritedFiles) (*exec.Cmd, error)
+}
+
+// InheritedFiles is the complete typed QEMU descriptor contract. Capability
+// is always fd 3. A networked role receives TAP as fd 4; offline roles must not
+// supply it. Callers retain ownership of the parent descriptors.
+type InheritedFiles struct {
+	Capability *os.File
+	TAP        *os.File
 }
 
 func NewLauncher(cgroups CgroupFactory) (*Launcher, error) {
@@ -67,9 +75,12 @@ type Process struct {
 	termWait      time.Duration
 }
 
-func (l *Launcher) Launch(ctx context.Context, spec Spec, capability *os.File) (launched *Process, returnErr error) {
-	if capability == nil {
+func (l *Launcher) Launch(ctx context.Context, spec Spec, files InheritedFiles) (launched *Process, returnErr error) {
+	if files.Capability == nil {
 		return nil, errors.New("inherited fw_cfg capability file is required")
+	}
+	if (spec.Networked && files.TAP == nil) || (!spec.Networked && files.TAP != nil) {
+		return nil, errors.New("inherited TAP descriptor does not match the typed QEMU role")
 	}
 	if err := spec.Validate(); err != nil {
 		return nil, err
@@ -81,7 +92,7 @@ func (l *Launcher) Launch(ctx context.Context, spec Spec, capability *os.File) (
 	if builder == nil {
 		builder = productionCommand
 	}
-	command, err := builder(spec, capability)
+	command, err := builder(spec, files)
 	if err != nil {
 		return nil, err
 	}
@@ -163,14 +174,17 @@ func (l *Launcher) Launch(ctx context.Context, spec Spec, capability *os.File) (
 	return process, nil
 }
 
-func productionCommand(spec Spec, capability *os.File) (*exec.Cmd, error) {
+func productionCommand(spec Spec, files InheritedFiles) (*exec.Cmd, error) {
 	args, err := spec.Args()
 	if err != nil {
 		return nil, err
 	}
 	command := exec.Command(spec.Binary, args...)
 	command.Env = []string{"LANG=C.UTF-8"}
-	command.ExtraFiles = []*os.File{capability}
+	command.ExtraFiles = []*os.File{files.Capability}
+	if files.TAP != nil {
+		command.ExtraFiles = append(command.ExtraFiles, files.TAP)
+	}
 	return command, nil
 }
 

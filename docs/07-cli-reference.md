@@ -122,6 +122,14 @@ private-vm desktop bundles list
 private-vm desktop bundles inspect NAME
 ```
 
+`desktop start` performs strict planning before it creates a volatile session,
+then invokes the daemon's serialized role start. If the start RPC does not
+complete, the CLI submits a bounded abort so a created record cannot be
+abandoned. Omitting `--session` is accepted only when exactly one owned
+workstation matches. `desktop stop` permits `CLEAN` and, unless
+`--require-clean` is set, fully verified `READY`; other states require the
+explicit destructive `--discard` choice.
+
 ### Workspace
 
 ```text
@@ -171,11 +179,39 @@ private-vm scan reject --session ID
 private-vm vpn import [--from-file FILE|--stdin]
 private-vm vpn inspect
 private-vm vpn test
-private-vm vpn rotate
+private-vm vpn rotate [--from-file FILE|--stdin]
 private-vm vpn remove
 ```
 
 `inspect` redacts private key and sensitive fields.
+
+`import` accepts at most 64 KiB after the selected sensitive-input adapter has
+applied its ownership, mode, filesystem and deadline checks. The daemon parses
+the bytes directly into protected volatile storage. A successful import
+atomically replaces and destroys the prior generation; it creates no profile
+file. `remove` is idempotent, and daemon shutdown or restart destroys every
+imported generation.
+
+Without a source flag, an interactive invocation securely prompts on
+`/dev/tty` for the path of an existing profile; it does not attempt to accept a
+multi-line WireGuard file as one terminal line. The selected file must pass the
+same caller-owner, mode-0600, regular-file and no-symlink checks as
+`--from-file`. Non-interactive callers must select `--from-file` or `--stdin`.
+
+The CLI sends one contextual begin frame followed by at most 64 non-empty
+16-KiB chunks over `/run/private-vm/control.sock`. The source path is consumed
+only by the unprivileged CLI and is not part of the RPC. Chunks and input
+buffers are cleared after use; the profile is never placed in argv or the
+environment. `rotate` uses this exact import path and source-selection contract.
+
+`inspect` returns only the versioned status in
+`schemas/vpn-profile-status.schema.json`: presence, an opaque generation,
+IPv4/IPv6 booleans, address/DNS counts and rotation state. It never returns the
+profile source path, key, endpoint, address, DNS value or resolver output.
+`test` performs the bounded trusted-host endpoint check before guest launch.
+The state is `current` only after that succeeds. Resolution failure sets
+`rotation_required`; `rotate` prompts for a newly generated Proton profile and
+uses the same atomic import path. It never generates or persists a key itself.
 
 ### USB
 
@@ -221,6 +257,11 @@ private-vm session stop --session ID
 private-vm session abort --session ID
 private-vm session cleanup [--session ID|--all]
 ```
+
+Session and desktop lifecycle commands use only semantic RPCs on the private
+Unix control socket. Their `--json` success record uses `SESSION_STATUS` and the
+closed `cli-success` schema. It contains only the opaque session ID, role,
+lifecycle phase, and workflow state.
 
 ### Policy
 

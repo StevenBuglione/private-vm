@@ -104,6 +104,27 @@ shared infrastructure rather than bundle entries.
 
 No guest should contain user credentials at image-build time.
 
+## Workstation transfer boundary
+
+The workstation guestd is the only process that receives host-import frames or
+enumerates `~/Export`. It accepts one flat logical filename, stages it under an
+exclusive `.<transfer-id>.partial` file in `~/Inbox`, verifies the declared and
+received SHA-256 values, synchronizes it, and uses a no-replace rename. Links,
+directories, traversal names, reordered chunks, extra bytes, hash mismatch,
+cancellation and timeout all remove the partial file.
+
+The host opens a trusted import once through a no-follow descriptor. Preflight
+hashing and transfer reuse that descriptor, and the transfer hash plus final
+file identity must still equal the preflight descriptor. Parent or final path
+symlinks are rejected.
+
+`~/Export` is a flat, bounded regular-file set. Guestd hashes every entry and
+returns boot-random HMAC-derived output identifiers rather than filenames in
+workspace state. A completed stream is not marked exported until its received
+SHA-256 is confirmed. Subsequent byte changes produce `CHANGED`; current files
+that have not been confirmed produce `UNEXPORTED`; an empty directory is
+`CLEAN`, and an entirely confirmed set is `READY`.
+
 ## Browser defaults
 
 - private browsing default

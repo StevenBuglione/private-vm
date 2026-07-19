@@ -20,7 +20,6 @@ const maxUnixSocketPath = 107
 var (
 	qemuNamePattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$`)
 	deviceIDPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$`)
-	tapNamePattern  = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]{0,14}$`)
 )
 
 type Disk struct {
@@ -56,8 +55,8 @@ type Spec struct {
 	QMPSocket    string
 	SPICESocket  string
 	VSOCKCID     uint32
-	TAPName      string
 	Networked    bool
+	NetworkFD    int
 	EnableAudio  bool
 	FWCfgTokenFD int
 	USB          *USBDevice
@@ -107,11 +106,11 @@ func (s Spec) Validate() error {
 	if s.VSOCKCID < 3 || s.VSOCKCID == ^uint32(0) {
 		return errors.New("VSOCK CID must be an allocatable guest CID")
 	}
-	if s.Networked && !tapNamePattern.MatchString(s.TAPName) {
-		return errors.New("networked guest requires TAP")
+	if s.Networked && s.NetworkFD != 4 {
+		return errors.New("networked guest requires the second inherited descriptor as TAP")
 	}
-	if !s.Networked && s.TAPName != "" {
-		return errors.New("offline guest cannot have TAP")
+	if !s.Networked && s.NetworkFD != 0 {
+		return errors.New("offline guest cannot inherit a TAP descriptor")
 	}
 	if s.FWCfgTokenFD < 3 {
 		return errors.New("fw_cfg capability FD must be inherited and >= 3")
@@ -294,7 +293,7 @@ func (s Spec) Args() ([]string, error) {
 	}
 	if s.Networked {
 		args = append(args,
-			"-netdev", "tap,id=net0,ifname="+s.TAPName+",script=no,downscript=no,vhost=on",
+			"-netdev", "tap,id=net0,fd="+strconv.Itoa(s.NetworkFD)+",vhost=on",
 			"-device", "virtio-net-pci,netdev=net0",
 		)
 	} else {

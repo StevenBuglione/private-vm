@@ -303,30 +303,44 @@ func (factory commandFactory) scan() *cobra.Command {
 }
 
 func (factory commandFactory) vpn() *cobra.Command {
-	var fromFile string
-	var stdin bool
-	importCommand := factory.operation("import", "Import a volatile WireGuard profile", "vpn.import", noArgs, func(*cobra.Command) error {
-		if err := validateExclusive(boolCount(fromFile != "", stdin), false,
-			"VPN import sources are mutually exclusive.",
-			"Choose at most one of --from-file and --stdin."); err != nil {
-			return err
-		}
-		if factory.app.options.NonInteractive && fromFile == "" && !stdin {
-			return usageError("Non-interactive VPN import requires an explicit source.", "Choose --from-file or --stdin.")
-		}
-		if fromFile != "" {
-			return validatePath(fromFile)
-		}
-		return nil
-	}, func([]string) Intent { return VPNImportIntent{FromFile: fromFile, Stdin: stdin} })
-	importCommand.Flags().StringVar(&fromFile, "from-file", "", "read a caller-owned private profile file")
-	importCommand.Flags().BoolVar(&stdin, "stdin", false, "read a bounded profile from standard input")
+	secureImport := func(use string, id CommandID) *cobra.Command {
+		var fromFile string
+		var stdin bool
+		command := factory.operation(use, "Import a volatile WireGuard profile", id, noArgs, func(*cobra.Command) error {
+			if err := validateExclusive(boolCount(fromFile != "", stdin), false,
+				"VPN import sources are mutually exclusive.",
+				"Choose at most one of --from-file and --stdin."); err != nil {
+				return err
+			}
+			if factory.app.options.NonInteractive && fromFile == "" && !stdin {
+				return usageError("Non-interactive VPN import requires an explicit source.", "Choose --from-file or --stdin.")
+			}
+			if fromFile != "" {
+				return validatePath(fromFile)
+			}
+			return nil
+		}, func([]string) Intent {
+			return VPNImportIntent{
+				ProfileName: factory.app.configuration.VPN().ProfileName(),
+				FromFile:    fromFile,
+				Stdin:       stdin,
+			}
+		})
+		command.Flags().StringVar(&fromFile, "from-file", "", "read a caller-owned private profile file")
+		command.Flags().BoolVar(&stdin, "stdin", false, "read a bounded profile from standard input")
+		return command
+	}
+	profileOperation := func(use string, id CommandID) *cobra.Command {
+		return factory.operation(use, "Inspect or mutate the configured volatile VPN profile", id, noArgs, nil, func([]string) Intent {
+			return VPNProfileIntent{ProfileName: factory.app.configuration.VPN().ProfileName()}
+		})
+	}
 	return factory.group("vpn", "Manage a volatile Proton WireGuard profile",
-		importCommand,
-		factory.simple("inspect", "vpn.inspect"),
-		factory.simple("test", "vpn.test"),
-		factory.simple("rotate", "vpn.rotate"),
-		factory.simple("remove", "vpn.remove"),
+		secureImport("import", CommandVPNImport),
+		profileOperation("inspect", CommandVPNInspect),
+		profileOperation("test", CommandVPNTest),
+		secureImport("rotate", CommandVPNRotate),
+		profileOperation("remove", CommandVPNRemove),
 	)
 }
 

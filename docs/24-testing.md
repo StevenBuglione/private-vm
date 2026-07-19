@@ -399,6 +399,74 @@ maintainers; do not expose secrets to public PR jobs.
 
 ## Network tests
 
+VPN-001 unit and fuzz evidence uses synthetic WireGuard keys and mock resolvers
+only. Parser tables cover the accepted IPv4/IPv6 profile, every hook and unknown
+field, multiple peers, duplicate fields, invalid key shapes, unsafe DNS and
+addresses, missing/partial/additional default routes, missing endpoint ports,
+IPv4-mapped public/loopback values, special-use ranges, malformed key padding,
+`PersistentKeepalive`, zoned addresses, line/input bounds, read failure and
+destroyed input. Formatting and serialization tests prove that the private key,
+endpoint, resolved view, guest-configuration reader, address and DNS values
+cannot enter status JSON or diagnostic formatting. Typed-nil input and resolver
+adapters are rejected without invocation, and Linux source tests include legacy
+CIFS as well as SMB2/FUSE/NFS/9P remote-filesystem rejection.
+
+Resolver tests prove literal-IP behavior, trusted-host hostname resolution,
+absolute-name lookup, mapped/special/empty/oversized result rejection,
+deduplication/order, cancellation and a bounded timeout. Memory-store tests
+prove owner isolation, owner-local generation counters, atomic generation
+replacement, exact-plan binding and post-callback resolved-view expiry,
+cross-profile and cross-owner substitution rejection, invalidation on every
+resolution attempt, non-cooperative resolver isolation, actionable rotation
+status, idempotent remove/close and no restore after daemon shutdown.
+Daemon/CLI tests cover bounded import framing, authenticated Unix transport,
+source destruction on every outcome, stable local/RPC error mapping, shutdown
+cleanup, and aggregate-only status output. Guest-config tests consume the ephemeral
+reader and cover success, callback failure and cancellation; fixtures never use
+a real Proton credential.
+
+NET-001/NET-002 source tests use only a semantic in-memory Linux backend and
+synthetic VPN plans. They cover deterministic collision-bounded naming,
+overlapping host-route rejection and static IPv4/IPv6 allocation; partial
+failure after namespace, veth, host and namespace configuration, TAP and each
+policy transaction; cancellation and
+timeout rollback; repeated cleanup after false-success deletion; and final
+absence auditing. Concurrent tests prove provisioning, scoped TAP/config
+handoffs and cleanup cannot overlap, caller cancellation cannot abandon an
+accepted cleanup, stale handles fail closed, and VPN rotation invalidates every
+handoff without obstructing cleanup.
+
+Rule-model tests prove exact IPv4/IPv6 guest source, endpoint destination and
+return destination matching, interface-bound default drops, and exact NAT.
+Linux-adapter tests prove endpoints appear only in transient nft stdin, those
+buffers are cleared on success and failure, endpoint-like stdout never enters
+an error, generic exit status `1` cannot claim absence, and repeated exact
+inventory of already absent resources performs no mutation. These tests do not
+exercise host privileges or a real credential.
+
+NET-003 source tests prove that the guest kill switch is installed before any
+underlay/tunnel configuration, permits only `proton0`, the exact UDP endpoint
+and required neighbor discovery, and contains no clear-interface DNS or TCP
+allowance. Adapter tests prove profile-derived nftables, address, route and
+WireGuard values do not enter argv/environment; they travel through bounded
+stdin readers, while DNS uses only the typed D-Bus boundary. Controller tests
+cover complete/incomplete proofs, downloader binding, cancellation, timeout,
+tunnel loss, role response and retryable tunnel-before-policy cleanup. Guest
+RPC tests prove the protobuf profile slice is detached and cleared on success
+and rejection. QEMU tests prove descriptors 3 and 4 are inherited and no TAP
+name enters argv.
+
+These tests remain unprivileged and synthetic. They also exercise the concrete
+systemd-resolved D-Bus call model, fixed WireGuard handshake command, bounded
+interface-bound connection adapter, loopback-only qBittorrent binding check,
+typed workstation-warning/downloader-pause responses, and host lifecycle
+composition. The orchestration fault matrix proves ordered start, refusal of
+incomplete guest/counter proofs, cancellation, dirty-stop protection,
+unexpected QEMU exit cleanup, retry and idempotence. Namespace packet tests, a
+mock WireGuard peer, production namespace counters, image composition, live
+QEMU ordering and the controlled Proton smoke test remain image/acceptance
+gates.
+
 Mock Proton endpoint:
 
 - underlay permitted only to mock endpoint
@@ -423,18 +491,41 @@ Inject failure after each:
 6. overlay create
 7. netns create
 8. veth create
-9. nft apply
-10. TAP create
-11. QEMU start
-12. QMP connect
-13. guest handshake
-14. USB claim
+9. TAP create/configure
+10. namespace nft apply
+11. host nft apply
+12. QEMU start
+13. QMP connect
+14. guest handshake
+15. USB claim
 
 Then assert zero remaining resources or a specific recoverable cleanup record.
 
 ## Acceptance tests
 
 A release must pass all entries in `project/acceptance-tests.yaml`.
+
+Workstation transfer unit tests use only private temporary directories. They
+cover a complete import/export, traversal and symlink rejection, digest failure
+cleanup, no-overwrite staging, opaque inventory identities, verification, and
+changed-after-export detection. The host/daemon/VSOCK relay and dirty-stop
+acceptance remain separate integration gates; guest-only evidence cannot mark
+those gates complete.
+
+Daemon role-lifecycle tests run every workstation startup gate through the
+session actor, prove storage and runtime cleanup execute in reverse allocation
+order, and inject failure at preflight, image verification, storage allocation,
+and runtime allocation. Each failed start must converge to `DESTROYED` with no
+active fake resource. Protected-stop tests prove dirty, changed, unreachable,
+and `--require-clean`/`READY` states remain `ACTIVE` until explicit discard.
+These tests establish the daemon ownership contract; real image, network,
+VSOCK, display, and workspace-relay composition remain system gates.
+
+Production-invoker tests run workstation plan/create/start, implicit
+single-session selection, listing, protected stop, start-failure abort, request
+ID failure, stable error-to-exit mapping, and the closed `SESSION_STATUS`
+renderer over a private Unix gRPC fixture. No runtime path, guest endpoint, or
+workspace content is representable in that payload.
 
 ## Test safety
 

@@ -39,14 +39,9 @@ func TestRuntimeAllocationQMPFailureTriggersSessionCleanup(t *testing.T) {
 	launcher.qmpWait = 2 * time.Second
 	launcher.graceWait = 20 * time.Millisecond
 	launcher.termWait = 100 * time.Millisecond
-	capability, err := os.CreateTemp(t.TempDir(), "capability")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer capability.Close()
 	lease := &fakeRuntimeImageLease{}
 	lease.active.Store(true)
-	allocation := RuntimeAllocation(manager, launcher, 1000, spec, capability, func() (RuntimeImageLease, error) {
+	allocation := RuntimeAllocation(manager, launcher, 1000, spec, testInheritedFiles(t, true), func() (RuntimeImageLease, error) {
 		return lease, nil
 	})
 	if err := manager.AcquireResource(t.Context(), snapshot.ID, 1000, "qemu-runtime", allocation); err != nil {

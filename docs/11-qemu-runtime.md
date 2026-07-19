@@ -170,7 +170,11 @@ before launch and releases it only after process cleanup. If QMP disconnects or
 QEMU exits unexpectedly, the supervisor submits daemon-owned cleanup; client
 death cannot revoke it.
 
-The argument renderer is role-aware. Exporter specs reject SPICE, GPU, network,
+The argument renderer is role-aware. The capability is the first inherited
+descriptor (guest fd 3); a networked spec must receive the TAP as the second
+inherited descriptor (guest fd 4) and renders `-netdev tap,...,fd=4`. TAP and
+namespace names never enter QEMU argv. Offline specs reject a TAP descriptor.
+Exporter specs reject SPICE, GPU, network,
 audio, and quarantine devices. Scanner scan specs require `-nic none` and one
 read-only quarantine disk. Workstation and downloader specs require a TAP and
 cannot receive devices outside their role matrix.

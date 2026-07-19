@@ -58,7 +58,8 @@ func (a Authorizer) StreamInterceptor(service any, stream grpc.ServerStream, inf
 		return authorizationDenied()
 	}
 	maximum := 30 * time.Minute
-	if info.FullMethod == privatevmv1.PrivateVMDaemonService_ImportWorkspaceFile_FullMethodName {
+	if info.FullMethod == privatevmv1.PrivateVMDaemonService_ImportWorkspaceFile_FullMethodName ||
+		info.FullMethod == privatevmv1.PrivateVMDaemonService_ImportVPNProfile_FullMethodName {
 		maximum = 10 * time.Second
 	}
 	ctx, cancel := boundedRPCContext(stream.Context(), maximum)

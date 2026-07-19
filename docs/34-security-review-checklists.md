@@ -17,14 +17,25 @@
 
 ## Network review
 
+- [ ] profile grammar admits exactly one peer, fixed fields and complete default routes;
+- [ ] private key remains byte-backed and profile/endpoint serialization is rejected;
+- [ ] profile names, bytes, lines, addresses, DNS entries and resolution results are bounded;
+- [ ] endpoint resolution is host-side, context-bounded and rejects any unsafe answer;
+- [ ] profile replacement/remove/shutdown destroys every daemon-owned key;
+- [ ] inspection and errors exclude keys, endpoints, addresses, DNS answers and source paths;
 - [ ] namespace and interface names derive from internal session IDs;
+- [ ] address allocation is collision-bounded and reserved before mutation;
 - [ ] nftables rules are installed atomically before VM start;
-- [ ] default forward/output policy is drop;
-- [ ] clear-interface destination is limited to Proton endpoint;
+- [ ] namespace forward/output policy is drop and host veth traffic has explicit terminal drops;
+- [ ] clear-interface source and destination are limited to the exact guest and Proton tuple for IPv4/IPv6;
+- [ ] return traffic and NAT require the exact guest destination/source;
 - [ ] host/LAN/link-local/metadata ranges are blocked;
 - [ ] guest kill switch is active before applications;
 - [ ] DNS and IPv6 behavior is tested;
-- [ ] teardown removes rules and interfaces by stored handles;
+- [ ] TAP is handed off only by scoped inherited descriptor after its namespace move;
+- [ ] provisioning, active handoffs and cleanup have one serialized lifecycle owner;
+- [ ] teardown retries all attempted rules/interfaces until exact inventory proves absence;
+- [ ] generic tool exit status is never accepted as proof of absence;
 - [ ] endpoint changes force re-plan.
 
 ## Storage review

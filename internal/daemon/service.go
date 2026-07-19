@@ -11,14 +11,18 @@ import (
 	"github.com/StevenBuglione/private-vm/internal/buildinfo"
 	"github.com/StevenBuglione/private-vm/internal/config"
 	"github.com/StevenBuglione/private-vm/internal/preflight"
+	"github.com/StevenBuglione/private-vm/internal/secret"
 	"github.com/StevenBuglione/private-vm/internal/session"
+	"github.com/StevenBuglione/private-vm/internal/vpn"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 )
 
 const (
-	protocolMajor = 1
-	protocolMinor = 0
+	protocolMajor               = 1
+	protocolMinor               = 0
+	maximumVPNProfileChunkBytes = 16 << 10
+	maximumVPNProfileFrames     = 64
 )
 
 var requestIDPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{7,127}$`)
@@ -29,6 +33,10 @@ type Service struct {
 	Config                config.Config
 	DoctorRun             func(context.Context, bool) preflight.Report
 	Polkit                Polkit
+	Profiles              *vpn.MemoryStore
+	VPNResolver           *vpn.EndpointResolver
+	Roles                 RoleOrchestrator
+	roleOperations        *roleOperationSet
 	afterCreate           func()
 	cleanupCanceledCreate func(context.Context, string, uint32) error
 }
@@ -171,18 +179,208 @@ func (s *Service) ListSessions(ctx context.Context, request *privatevmv1.ListSes
 	return result, nil
 }
 
-func (s *Service) StartRole(_ context.Context, request *privatevmv1.StartRoleRequest) (*privatevmv1.Session, error) {
+func (s *Service) ImportVPNProfile(stream privatevmv1.PrivateVMDaemonService_ImportVPNProfileServer) error {
+	first, err := stream.Recv()
+	if err != nil {
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return sessionError(err)
+		}
+		return rpcError(codes.InvalidArgument, "VPN_PROFILE_BEGIN_REQUIRED", "The first VPN import frame must contain its request context and profile name.", "Start the bounded stream with VPNProfileImportBegin.", false)
+	}
+	if first.GetBegin() == nil {
+		if chunk := first.GetChunk(); chunk != nil {
+			clear(chunk.Data)
+		}
+		return rpcError(codes.InvalidArgument, "VPN_PROFILE_BEGIN_REQUIRED", "The first VPN import frame must contain its request context and profile name.", "Start the bounded stream with VPNProfileImportBegin.", false)
+	}
+	ctx, err := requestContextWithMetadata(stream.Context(), first.GetBegin().GetContext(), false)
+	if err != nil {
+		return err
+	}
+	identity, err := identityFromContext(ctx)
+	if err != nil {
+		return sessionError(err)
+	}
+	if s.Profiles == nil {
+		return vpnRPCError(vpn.ErrStoreClosed)
+	}
+	buffer := make([]byte, vpn.MaximumProfileBytes+1)
+	defer func() { clear(buffer) }()
+	used := 0
+	frames := 0
+	for {
+		frame, recvErr := stream.Recv()
+		if errors.Is(recvErr, io.EOF) {
+			break
+		}
+		if recvErr != nil {
+			return sessionError(recvErr)
+		}
+		frames++
+		chunk := frame.GetChunk()
+		if chunk == nil || len(chunk.GetData()) == 0 || len(chunk.GetData()) > maximumVPNProfileChunkBytes || frames > maximumVPNProfileFrames {
+			if chunk != nil {
+				clear(chunk.Data)
+			}
+			return rpcError(codes.InvalidArgument, "VPN_PROFILE_STREAM_INVALID", "The VPN profile stream framing is invalid.", "Send one begin frame followed by at most 64 non-empty chunks of at most 16 KiB.", false)
+		}
+		data := chunk.Data
+		if len(data) > len(buffer)-used {
+			clear(data)
+			return rpcError(codes.ResourceExhausted, "VPN_PROFILE_TOO_LARGE", "The VPN profile exceeds its 64 KiB limit.", "Generate a standard bounded Proton WireGuard profile.", false)
+		}
+		used += copy(buffer[used:], data)
+		clear(data)
+		if err := ctx.Err(); err != nil {
+			return sessionError(err)
+		}
+	}
+	if used == 0 || used > vpn.MaximumProfileBytes {
+		return rpcError(codes.InvalidArgument, "VPN_PROFILE_INVALID", "The Proton WireGuard profile is invalid.", "Generate a current bounded Proton WireGuard profile and retry.", false)
+	}
+	if err := ctx.Err(); err != nil {
+		return sessionError(err)
+	}
+	source, err := secret.New(buffer[:used])
+	if err != nil {
+		return vpnRPCError(err)
+	}
+	defer source.Destroy()
+	status, err := s.Profiles.Import(identity.UID, first.GetBegin().GetProfileName(), source)
+	if err != nil {
+		return vpnRPCError(err)
+	}
+	return stream.SendAndClose(vpnStatusToProto(status))
+}
+
+func (s *Service) InspectVPNProfile(ctx context.Context, request *privatevmv1.VPNProfileRequest) (*privatevmv1.VPNProfileStatus, error) {
+	if err := validateRequestContext(request.GetContext(), false); err != nil {
+		return nil, err
+	}
+	identity, err := identityFromContext(ctx)
+	if err != nil {
+		return nil, sessionError(err)
+	}
+	if s.Profiles == nil {
+		return nil, vpnRPCError(vpn.ErrStoreClosed)
+	}
+	return vpnStatusToProto(s.Profiles.Inspect(identity.UID, request.GetProfileName())), nil
+}
+
+func (s *Service) TestVPNProfile(ctx context.Context, request *privatevmv1.VPNProfileRequest) (*privatevmv1.VPNProfileStatus, error) {
+	if err := validateRequestContext(request.GetContext(), false); err != nil {
+		return nil, err
+	}
+	identity, err := identityFromContext(ctx)
+	if err != nil {
+		return nil, sessionError(err)
+	}
+	if s.Profiles == nil {
+		return nil, vpnRPCError(vpn.ErrStoreClosed)
+	}
+	resolver := s.VPNResolver
+	if resolver == nil {
+		resolver = vpn.NewEndpointResolver()
+	}
+	_, status, err := s.Profiles.Resolve(ctx, identity.UID, request.GetProfileName(), resolver)
+	if err != nil {
+		return nil, vpnRPCError(err)
+	}
+	return vpnStatusToProto(status), nil
+}
+
+func (s *Service) RemoveVPNProfile(ctx context.Context, request *privatevmv1.VPNProfileRequest) (*privatevmv1.VPNProfileStatus, error) {
+	if err := validateRequestContext(request.GetContext(), false); err != nil {
+		return nil, err
+	}
+	identity, err := identityFromContext(ctx)
+	if err != nil {
+		return nil, sessionError(err)
+	}
+	if s.Profiles == nil {
+		return nil, vpnRPCError(vpn.ErrStoreClosed)
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, sessionError(err)
+	}
+	s.Profiles.Remove(identity.UID, request.GetProfileName())
+	return vpnStatusToProto(s.Profiles.Inspect(identity.UID, request.GetProfileName())), nil
+}
+
+func vpnStatusToProto(status vpn.Status) *privatevmv1.VPNProfileStatus {
+	result := &privatevmv1.VPNProfileStatus{
+		SchemaVersion: uint32(status.SchemaVersion),
+		Present:       status.Present,
+		Generation:    status.Generation,
+		Rotation:      string(status.Rotation),
+		Code:          status.Code,
+		Remediation:   status.Remediation,
+	}
+	if status.Profile != nil {
+		result.Ipv4Enabled = status.Profile.IPv4Enabled
+		result.Ipv6Enabled = status.Profile.IPv6Enabled
+		result.InterfaceAddressCount = uint32(status.Profile.InterfaceAddressCount)
+		result.DnsServerCount = uint32(status.Profile.DNSServerCount)
+	}
+	return result
+}
+
+func (s *Service) StartRole(ctx context.Context, request *privatevmv1.StartRoleRequest) (*privatevmv1.Session, error) {
 	if err := validateRequestContext(request.GetContext(), true); err != nil {
 		return nil, err
 	}
-	return nil, unimplemented("Role launch")
+	if s.Roles == nil {
+		return nil, unimplemented("Role launch")
+	}
+	identity, err := identityFromContext(ctx)
+	if err != nil {
+		return nil, sessionError(err)
+	}
+	lock := s.roleOperation(request.GetContext().GetSessionId())
+	lock.Lock()
+	defer lock.Unlock()
+	snapshot, err := s.startRole(ctx, request.GetContext().GetSessionId(), identity.UID)
+	if err != nil {
+		return nil, roleStartRPCError(err)
+	}
+	return sessionToProto(*snapshot), nil
 }
 
 func (s *Service) StopRole(ctx context.Context, request *privatevmv1.StopRoleRequest) (*privatevmv1.Session, error) {
 	if err := validateRequestContext(request.GetContext(), true); err != nil {
 		return nil, err
 	}
-	return nil, unimplemented("Protected role stop")
+	if s.Roles == nil {
+		return nil, unimplemented("Protected role stop")
+	}
+	identity, err := identityFromContext(ctx)
+	if err != nil {
+		return nil, sessionError(err)
+	}
+	id := request.GetContext().GetSessionId()
+	lock := s.roleOperation(id)
+	lock.Lock()
+	defer lock.Unlock()
+	snapshot, err := s.Sessions.Get(id, identity.UID)
+	if err != nil {
+		return nil, sessionError(err)
+	}
+	if snapshot.Phase != session.PhaseActive {
+		return nil, sessionError(session.ErrInvalidTransition)
+	}
+	if snapshot.Role == session.RoleWorkstation {
+		state, stateErr := s.Roles.WorkspaceState(ctx, snapshot)
+		if stateErr != nil && !request.GetDiscardUnexported() {
+			return nil, rpcError(codes.FailedPrecondition, "WORKSPACE_UNREACHABLE", "The workstation output state could not be verified.", "Restore the authenticated guest connection, or explicitly confirm destructive discard.", false)
+		}
+		if err := validateWorkspaceStop(state, request.GetRequireClean(), request.GetDiscardUnexported()); err != nil {
+			return nil, err
+		}
+	}
+	if _, err := s.Sessions.Transition(ctx, id, identity.UID, session.PhaseStopping); err != nil {
+		return nil, sessionError(err)
+	}
+	return s.cleanup(ctx, id)
 }
 
 func (s *Service) AbortSession(ctx context.Context, request *privatevmv1.AbortSessionRequest) (*privatevmv1.Session, error) {
@@ -387,17 +585,20 @@ type contextualDaemonRequest interface {
 }
 
 var unarySessionRequirement = map[string]bool{
-	privatevmv1.PrivateVMDaemonService_Doctor_FullMethodName:         false,
-	privatevmv1.PrivateVMDaemonService_PlanSession_FullMethodName:    false,
-	privatevmv1.PrivateVMDaemonService_CreateSession_FullMethodName:  false,
-	privatevmv1.PrivateVMDaemonService_GetSession_FullMethodName:     true,
-	privatevmv1.PrivateVMDaemonService_ListSessions_FullMethodName:   false,
-	privatevmv1.PrivateVMDaemonService_StartRole_FullMethodName:      true,
-	privatevmv1.PrivateVMDaemonService_StopRole_FullMethodName:       true,
-	privatevmv1.PrivateVMDaemonService_AbortSession_FullMethodName:   true,
-	privatevmv1.PrivateVMDaemonService_CleanupSession_FullMethodName: true,
-	privatevmv1.PrivateVMDaemonService_ClaimUSB_FullMethodName:       true,
-	privatevmv1.PrivateVMDaemonService_ReleaseUSB_FullMethodName:     true,
+	privatevmv1.PrivateVMDaemonService_Doctor_FullMethodName:            false,
+	privatevmv1.PrivateVMDaemonService_PlanSession_FullMethodName:       false,
+	privatevmv1.PrivateVMDaemonService_CreateSession_FullMethodName:     false,
+	privatevmv1.PrivateVMDaemonService_GetSession_FullMethodName:        true,
+	privatevmv1.PrivateVMDaemonService_ListSessions_FullMethodName:      false,
+	privatevmv1.PrivateVMDaemonService_InspectVPNProfile_FullMethodName: false,
+	privatevmv1.PrivateVMDaemonService_TestVPNProfile_FullMethodName:    false,
+	privatevmv1.PrivateVMDaemonService_RemoveVPNProfile_FullMethodName:  false,
+	privatevmv1.PrivateVMDaemonService_StartRole_FullMethodName:         true,
+	privatevmv1.PrivateVMDaemonService_StopRole_FullMethodName:          true,
+	privatevmv1.PrivateVMDaemonService_AbortSession_FullMethodName:      true,
+	privatevmv1.PrivateVMDaemonService_CleanupSession_FullMethodName:    true,
+	privatevmv1.PrivateVMDaemonService_ClaimUSB_FullMethodName:          true,
+	privatevmv1.PrivateVMDaemonService_ReleaseUSB_FullMethodName:        true,
 }
 
 func requestContextUnaryInterceptor(ctx context.Context, request any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {

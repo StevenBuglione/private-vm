@@ -13,6 +13,7 @@ pairs = [
     ("schemas/cli-error.schema.json", "examples/cli-error.example.json", "json"),
     ("schemas/cli-event.schema.json", "examples/cli-event.example.json", "json"),
     ("schemas/cli-success.schema.json", "examples/cli-success.example.json", "json"),
+    ("schemas/cli-success.schema.json", "examples/cli-session-success.example.json", "json"),
     ("schemas/config.schema.json", "examples/config.example.toml", "toml"),
     ("schemas/policy.schema.json", "examples/policy.safe.toml", "toml"),
     ("schemas/policy.schema.json", "examples/policy.quarantine.toml", "toml"),
@@ -37,12 +38,15 @@ pairs = [
         "json",
     ),
     ("schemas/guest-image-identity.schema.json", "examples/guest-image-identity.example.json", "json"),
+    ("schemas/guest-vpn-status.schema.json", "examples/guest-vpn-status.example.json", "json"),
     ("schemas/image-cache-entry.schema.json", "examples/image-cache-entry.example.json", "json"),
     ("schemas/image-manifest.schema.json", "examples/image-manifest.example.json", "json"),
     ("schemas/image-provenance-payload.schema.json", "examples/image-provenance-payload.example.json", "json"),
     ("schemas/image-release-receipt.schema.json", "examples/image-release-receipt.example.json", "json"),
     ("schemas/image-sbom.schema.json", "examples/image-sbom.spdx.example.json", "json"),
+    ("schemas/network-status.schema.json", "examples/network-status.example.json", "json"),
     ("schemas/scan-report.schema.json", "examples/scan-report.example.json", "json"),
+    ("schemas/vpn-profile-status.schema.json", "examples/vpn-profile-status.example.json", "json"),
     ("schemas/workstation-bundles.schema.json", "project/workstation-bundles.json", "json"),
 ]
 
@@ -134,6 +138,39 @@ negative_cases.append(("overlapping runtime paths", config_schema, overlapping_p
 secret = deepcopy(config)
 secret["private_key"] = "redacted-test-value"
 negative_cases.append(("secret field config", config_schema, secret))
+vpn_status_schema = json.loads((ROOT / "schemas/vpn-profile-status.schema.json").read_text(encoding="utf-8"))
+vpn_status = json.loads((ROOT / "examples/vpn-profile-status.example.json").read_text(encoding="utf-8"))
+vpn_endpoint = deepcopy(vpn_status)
+vpn_endpoint["endpoint"] = "198.51.100.20:51820"
+negative_cases.append(("VPN endpoint in status", vpn_status_schema, vpn_endpoint))
+vpn_key = deepcopy(vpn_status)
+vpn_key["profile"]["private_key"] = "redacted-test-value"
+negative_cases.append(("VPN private key in status", vpn_status_schema, vpn_key))
+network_status_schema = json.loads((ROOT / "schemas/network-status.schema.json").read_text(encoding="utf-8"))
+network_status = json.loads((ROOT / "examples/network-status.example.json").read_text(encoding="utf-8"))
+forbidden_network_fields = {
+    "endpoint": "1.1.1.1:51820",
+    "address": "10.240.0.2/30",
+    "interface": "pvt-example",
+    "namespace": "pvmn-example",
+    "profile": "proton-p2p",
+}
+for field, value in forbidden_network_fields.items():
+    unsafe_network = deepcopy(network_status)
+    unsafe_network[field] = value
+    negative_cases.append((f"network {field} in status", network_status_schema, unsafe_network))
+guest_vpn_status_schema = json.loads((ROOT / "schemas/guest-vpn-status.schema.json").read_text(encoding="utf-8"))
+guest_vpn_status = json.loads((ROOT / "examples/guest-vpn-status.example.json").read_text(encoding="utf-8"))
+for field, value in {
+    "endpoint": "1.1.1.1:51820",
+    "address": "10.2.0.2/32",
+    "dns_server": "10.2.0.1",
+    "public_ip": "1.0.0.1",
+    "raw_output": "synthetic command output",
+}.items():
+    unsafe_guest_vpn = deepcopy(guest_vpn_status)
+    unsafe_guest_vpn[field] = value
+    negative_cases.append((f"guest VPN {field} in status", guest_vpn_status_schema, unsafe_guest_vpn))
 weakened = deepcopy(safe_policy)
 weakened["rules"]["sanitize_documents"] = False
 negative_cases.append(("weakened safe policy", policy_schema, weakened))

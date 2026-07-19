@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/StevenBuglione/private-vm/schemas/vpn-profile-status.schema.json",
+  "title": "private-vm redacted volatile VPN profile status",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": { "const": 1 },
+    "present": { "type": "boolean" },
+    "generation": { "type": "integer", "minimum": 0 },
+    "rotation": { "enum": ["not_imported", "resolution_required", "current", "rotation_required"] },
+    "code": {
+      "enum": [
+        "VPN_PROFILE_NOT_IMPORTED",
+        "VPN_ENDPOINT_CHECK_REQUIRED",
+        "VPN_PROFILE_CURRENT",
+        "VPN_PROFILE_ROTATION_REQUIRED"
+      ]
+    },
+    "remediation": { "type": "string", "minLength": 1, "maxLength": 256 },
+    "profile": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": { "const": 1 },
+        "ipv4_enabled": { "const": true },
+        "ipv6_enabled": { "type": "boolean" },
+        "interface_address_count": { "type": "integer", "minimum": 1, "maximum": 8 },
+        "dns_server_count": { "type": "integer", "minimum": 1, "maximum": 8 }
+      },
+      "required": ["schema_version", "ipv4_enabled", "ipv6_enabled", "interface_address_count", "dns_server_count"]
+    }
+  },
+  "required": ["schema_version", "present", "generation", "rotation", "code", "remediation"],
+  "allOf": [
+    {
+      "if": { "properties": { "present": { "const": true } }, "required": ["present"] },
+      "then": {
+        "required": ["profile"],
+        "properties": {
+          "generation": { "minimum": 1 },
+          "rotation": { "enum": ["resolution_required", "current", "rotation_required"] },
+          "code": { "enum": ["VPN_ENDPOINT_CHECK_REQUIRED", "VPN_PROFILE_CURRENT", "VPN_PROFILE_ROTATION_REQUIRED"] }
+        }
+      },
+      "else": {
+        "not": { "required": ["profile"] },
+        "properties": {
+          "generation": { "const": 0 },
+          "rotation": { "const": "not_imported" },
+          "code": { "const": "VPN_PROFILE_NOT_IMPORTED" }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "rotation": { "const": "resolution_required" } }, "required": ["rotation"] },
+      "then": { "properties": { "code": { "const": "VPN_ENDPOINT_CHECK_REQUIRED" } } }
+    },
+    {
+      "if": { "properties": { "rotation": { "const": "current" } }, "required": ["rotation"] },
+      "then": { "properties": { "code": { "const": "VPN_PROFILE_CURRENT" } } }
+    },
+    {
+      "if": { "properties": { "rotation": { "const": "rotation_required" } }, "required": ["rotation"] },
+      "then": { "properties": { "code": { "const": "VPN_PROFILE_ROTATION_REQUIRED" } } }
+    }
+  ]
+}

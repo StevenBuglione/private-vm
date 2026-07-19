@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"hash"
 	"io"
+	"strings"
 )
 
 const DefaultMaxChunk = 1 << 20
@@ -18,14 +19,20 @@ type Header struct {
 }
 
 func (h Header) Validate(maxSize uint64) error {
-	if h.Name == "" {
-		return errors.New("logical name required")
+	if h.Name == "" || h.Name == "." || h.Name == ".." || len(h.Name) > 255 ||
+		strings.ContainsAny(h.Name, "/\\\x00\r\n") {
+		return errors.New("logical name must be one safe path component")
+	}
+	for _, value := range h.Name {
+		if value < 0x20 || value == 0x7f {
+			return errors.New("logical name contains a control character")
+		}
 	}
 	if h.Size > maxSize {
 		return fmt.Errorf("size %d exceeds limit %d", h.Size, maxSize)
 	}
-	if len(h.Name) > 255 {
-		return errors.New("logical name too long")
+	if len(h.MediaType) > 255 || strings.ContainsAny(h.MediaType, "\x00\r\n") {
+		return errors.New("media type is invalid")
 	}
 	return nil
 }

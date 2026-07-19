@@ -13,6 +13,7 @@ import (
 	"time"
 
 	privatevmv1 "github.com/StevenBuglione/private-vm/gen/privatevm/v1"
+	"github.com/StevenBuglione/private-vm/internal/vpn"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/keepalive"
 )
@@ -34,6 +35,7 @@ type Server struct {
 	serve       net.Listener
 	socket      socketIdentity
 	connections chan struct{}
+	profiles    *vpn.MemoryStore
 }
 
 const (
@@ -71,6 +73,9 @@ func NewServer(options ServerOptions) (*Server, error) {
 		return nil, errors.New("daemon connection timeout is outside supported bounds")
 	}
 	service := *options.Service
+	if service.Profiles == nil {
+		service.Profiles = vpn.NewMemoryStore()
+	}
 	options.Service = &service
 	server := grpc.NewServer(
 		grpc.Creds(NewUnixPeerCredentials()),
@@ -88,7 +93,10 @@ func NewServer(options ServerOptions) (*Server, error) {
 		grpc.StreamInterceptor(options.Authorizer.StreamInterceptor),
 	)
 	privatevmv1.RegisterPrivateVMDaemonServiceServer(server, options.Service)
-	return &Server{options: options, grpc: server, connections: make(chan struct{}, maximumDaemonConnections)}, nil
+	return &Server{
+		options: options, grpc: server, profiles: service.Profiles,
+		connections: make(chan struct{}, maximumDaemonConnections),
+	}, nil
 }
 
 func (s *Server) Listen() error {
@@ -165,6 +173,9 @@ func (s *Server) Serve() error {
 	if s.listen == nil {
 		return errors.New("daemon server is not listening")
 	}
+	// Serve returning is a daemon-lifetime boundary even when the listener or
+	// gRPC stack fails unexpectedly. Volatile VPN profiles must not survive it.
+	defer s.closeProfiles()
 	if err := s.grpc.Serve(s.serve); err != nil && !errors.Is(err, grpc.ErrServerStopped) {
 		return fmt.Errorf("serve private-vmd RPC: %w", err)
 	}
@@ -177,9 +188,11 @@ func (s *Server) Stop() {
 		_ = s.listen.Close()
 	}
 	s.removeSocket()
+	s.closeProfiles()
 }
 
 func (s *Server) Shutdown(ctx context.Context) error {
+	defer s.closeProfiles()
 	done := make(chan struct{})
 	go func() {
 		s.grpc.GracefulStop()
@@ -201,6 +214,12 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	}
 	s.removeSocket()
 	return nil
+}
+
+func (s *Server) closeProfiles() {
+	if s.profiles != nil {
+		s.profiles.Close()
+	}
 }
 
 func (s *Server) removeSocket() {

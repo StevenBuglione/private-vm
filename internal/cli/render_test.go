@@ -64,6 +64,34 @@ func TestRendererDoctorUsesEmptyArrayForNoDiagnostics(t *testing.T) {
 	}
 }
 
+func TestRendererVPNStatusMatchesAggregateSchemaShape(t *testing.T) {
+	t.Parallel()
+	var output bytes.Buffer
+	payload := VPNStatusPayload{
+		SchemaVersion: 1, Present: true, Generation: 7, Rotation: "current",
+		Code: "VPN_PROFILE_CURRENT", Remediation: "No profile rotation is currently required.",
+		Profile: &VPNInspectionPayload{
+			SchemaVersion: 1, IPv4Enabled: true, IPv6Enabled: true,
+			InterfaceAddressCount: 2, DNSServerCount: 2,
+		},
+	}
+	if err := NewRenderer(true).Success(&output, CodeVPNProfile, payload); err != nil {
+		t.Fatal(err)
+	}
+	want := "{\"schema_version\":1,\"ok\":true,\"code\":\"VPN_PROFILE_STATUS\",\"data\":{\"schema_version\":1,\"present\":true,\"generation\":7,\"rotation\":\"current\",\"code\":\"VPN_PROFILE_CURRENT\",\"remediation\":\"No profile rotation is currently required.\",\"profile\":{\"schema_version\":1,\"ipv4_enabled\":true,\"ipv6_enabled\":true,\"interface_address_count\":2,\"dns_server_count\":2}}}\n"
+	if output.String() != want {
+		t.Fatalf("unexpected VPN JSON\nwant: %s\n got: %s", want, output.String())
+	}
+
+	invalid := payload
+	invalid.Code = "VPN_ENDPOINT_CHECK_REQUIRED"
+	writer := &countingWriter{}
+	assertRenderFailure(t, NewRenderer(true).Success(writer, CodeVPNProfile, invalid))
+	if writer.calls != 0 {
+		t.Fatal("schema-invalid VPN status reached output")
+	}
+}
+
 func TestRendererErrorJSONGoldenOmitsWrappedCause(t *testing.T) {
 	t.Parallel()
 	const secret = "PRIVATE-KEY-MUST-NOT-APPEAR"

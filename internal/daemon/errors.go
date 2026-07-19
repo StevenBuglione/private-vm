@@ -5,7 +5,9 @@ import (
 	"errors"
 
 	privatevmv1 "github.com/StevenBuglione/private-vm/gen/privatevm/v1"
+	"github.com/StevenBuglione/private-vm/internal/apperror"
 	"github.com/StevenBuglione/private-vm/internal/session"
+	"github.com/StevenBuglione/private-vm/internal/vpn"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -19,6 +21,35 @@ func rpcError(grpcCode codes.Code, code, message, remediation string, retryable 
 		return base.Err()
 	}
 	return withDetail.Err()
+}
+
+func vpnRPCError(err error) error {
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) ||
+		status.Code(err) == codes.Canceled || status.Code(err) == codes.DeadlineExceeded {
+		return sessionError(err)
+	}
+	var application *apperror.Error
+	if errors.As(err, &application) {
+		grpcCode := codes.FailedPrecondition
+		switch {
+		case errors.Is(err, vpn.ErrInvalidProfile):
+			grpcCode = codes.InvalidArgument
+		case errors.Is(err, vpn.ErrProfileNotFound):
+			grpcCode = codes.NotFound
+		case errors.Is(err, vpn.ErrProfileLimit):
+			grpcCode = codes.ResourceExhausted
+		case errors.Is(err, vpn.ErrStoreClosed):
+			grpcCode = codes.Unavailable
+		case errors.Is(err, vpn.ErrProfileRotated):
+			grpcCode = codes.Aborted
+		case errors.Is(err, vpn.ErrEndpointUnresolved), errors.Is(err, vpn.ErrProfileNotReady):
+			grpcCode = codes.FailedPrecondition
+		default:
+			return sessionError(err)
+		}
+		return rpcError(grpcCode, application.Code, application.Message, application.Remediation, false)
+	}
+	return sessionError(err)
 }
 
 func sessionError(err error) error {

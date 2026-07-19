@@ -25,6 +25,10 @@ const (
 	PrivateVMDaemonService_CreateSession_FullMethodName       = "/privatevm.v1.PrivateVMDaemonService/CreateSession"
 	PrivateVMDaemonService_GetSession_FullMethodName          = "/privatevm.v1.PrivateVMDaemonService/GetSession"
 	PrivateVMDaemonService_ListSessions_FullMethodName        = "/privatevm.v1.PrivateVMDaemonService/ListSessions"
+	PrivateVMDaemonService_ImportVPNProfile_FullMethodName    = "/privatevm.v1.PrivateVMDaemonService/ImportVPNProfile"
+	PrivateVMDaemonService_InspectVPNProfile_FullMethodName   = "/privatevm.v1.PrivateVMDaemonService/InspectVPNProfile"
+	PrivateVMDaemonService_TestVPNProfile_FullMethodName      = "/privatevm.v1.PrivateVMDaemonService/TestVPNProfile"
+	PrivateVMDaemonService_RemoveVPNProfile_FullMethodName    = "/privatevm.v1.PrivateVMDaemonService/RemoveVPNProfile"
 	PrivateVMDaemonService_StartRole_FullMethodName           = "/privatevm.v1.PrivateVMDaemonService/StartRole"
 	PrivateVMDaemonService_StopRole_FullMethodName            = "/privatevm.v1.PrivateVMDaemonService/StopRole"
 	PrivateVMDaemonService_AbortSession_FullMethodName        = "/privatevm.v1.PrivateVMDaemonService/AbortSession"
@@ -46,6 +50,10 @@ type PrivateVMDaemonServiceClient interface {
 	CreateSession(ctx context.Context, in *CreateSessionRequest, opts ...grpc.CallOption) (*Session, error)
 	GetSession(ctx context.Context, in *GetSessionRequest, opts ...grpc.CallOption) (*Session, error)
 	ListSessions(ctx context.Context, in *ListSessionsRequest, opts ...grpc.CallOption) (*ListSessionsResponse, error)
+	ImportVPNProfile(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[VPNProfileImportFrame, VPNProfileStatus], error)
+	InspectVPNProfile(ctx context.Context, in *VPNProfileRequest, opts ...grpc.CallOption) (*VPNProfileStatus, error)
+	TestVPNProfile(ctx context.Context, in *VPNProfileRequest, opts ...grpc.CallOption) (*VPNProfileStatus, error)
+	RemoveVPNProfile(ctx context.Context, in *VPNProfileRequest, opts ...grpc.CallOption) (*VPNProfileStatus, error)
 	StartRole(ctx context.Context, in *StartRoleRequest, opts ...grpc.CallOption) (*Session, error)
 	StopRole(ctx context.Context, in *StopRoleRequest, opts ...grpc.CallOption) (*Session, error)
 	AbortSession(ctx context.Context, in *AbortSessionRequest, opts ...grpc.CallOption) (*Session, error)
@@ -125,6 +133,49 @@ func (c *privateVMDaemonServiceClient) ListSessions(ctx context.Context, in *Lis
 	return out, nil
 }
 
+func (c *privateVMDaemonServiceClient) ImportVPNProfile(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[VPNProfileImportFrame, VPNProfileStatus], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &PrivateVMDaemonService_ServiceDesc.Streams[0], PrivateVMDaemonService_ImportVPNProfile_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[VPNProfileImportFrame, VPNProfileStatus]{ClientStream: stream}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type PrivateVMDaemonService_ImportVPNProfileClient = grpc.ClientStreamingClient[VPNProfileImportFrame, VPNProfileStatus]
+
+func (c *privateVMDaemonServiceClient) InspectVPNProfile(ctx context.Context, in *VPNProfileRequest, opts ...grpc.CallOption) (*VPNProfileStatus, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(VPNProfileStatus)
+	err := c.cc.Invoke(ctx, PrivateVMDaemonService_InspectVPNProfile_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *privateVMDaemonServiceClient) TestVPNProfile(ctx context.Context, in *VPNProfileRequest, opts ...grpc.CallOption) (*VPNProfileStatus, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(VPNProfileStatus)
+	err := c.cc.Invoke(ctx, PrivateVMDaemonService_TestVPNProfile_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *privateVMDaemonServiceClient) RemoveVPNProfile(ctx context.Context, in *VPNProfileRequest, opts ...grpc.CallOption) (*VPNProfileStatus, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(VPNProfileStatus)
+	err := c.cc.Invoke(ctx, PrivateVMDaemonService_RemoveVPNProfile_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *privateVMDaemonServiceClient) StartRole(ctx context.Context, in *StartRoleRequest, opts ...grpc.CallOption) (*Session, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(Session)
@@ -167,7 +218,7 @@ func (c *privateVMDaemonServiceClient) CleanupSession(ctx context.Context, in *C
 
 func (c *privateVMDaemonServiceClient) StreamEvents(ctx context.Context, in *GetSessionRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[SessionEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &PrivateVMDaemonService_ServiceDesc.Streams[0], PrivateVMDaemonService_StreamEvents_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &PrivateVMDaemonService_ServiceDesc.Streams[1], PrivateVMDaemonService_StreamEvents_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -186,7 +237,7 @@ type PrivateVMDaemonService_StreamEventsClient = grpc.ServerStreamingClient[Sess
 
 func (c *privateVMDaemonServiceClient) ImportWorkspaceFile(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[TransferFrame, TransferReceipt], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &PrivateVMDaemonService_ServiceDesc.Streams[1], PrivateVMDaemonService_ImportWorkspaceFile_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &PrivateVMDaemonService_ServiceDesc.Streams[2], PrivateVMDaemonService_ImportWorkspaceFile_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -199,7 +250,7 @@ type PrivateVMDaemonService_ImportWorkspaceFileClient = grpc.ClientStreamingClie
 
 func (c *privateVMDaemonServiceClient) ExportWorkspaceFile(ctx context.Context, in *ExportWorkspaceRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[TransferFrame], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &PrivateVMDaemonService_ServiceDesc.Streams[2], PrivateVMDaemonService_ExportWorkspaceFile_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &PrivateVMDaemonService_ServiceDesc.Streams[3], PrivateVMDaemonService_ExportWorkspaceFile_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -246,6 +297,10 @@ type PrivateVMDaemonServiceServer interface {
 	CreateSession(context.Context, *CreateSessionRequest) (*Session, error)
 	GetSession(context.Context, *GetSessionRequest) (*Session, error)
 	ListSessions(context.Context, *ListSessionsRequest) (*ListSessionsResponse, error)
+	ImportVPNProfile(grpc.ClientStreamingServer[VPNProfileImportFrame, VPNProfileStatus]) error
+	InspectVPNProfile(context.Context, *VPNProfileRequest) (*VPNProfileStatus, error)
+	TestVPNProfile(context.Context, *VPNProfileRequest) (*VPNProfileStatus, error)
+	RemoveVPNProfile(context.Context, *VPNProfileRequest) (*VPNProfileStatus, error)
 	StartRole(context.Context, *StartRoleRequest) (*Session, error)
 	StopRole(context.Context, *StopRoleRequest) (*Session, error)
 	AbortSession(context.Context, *AbortSessionRequest) (*Session, error)
@@ -282,6 +337,18 @@ func (UnimplementedPrivateVMDaemonServiceServer) GetSession(context.Context, *Ge
 }
 func (UnimplementedPrivateVMDaemonServiceServer) ListSessions(context.Context, *ListSessionsRequest) (*ListSessionsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListSessions not implemented")
+}
+func (UnimplementedPrivateVMDaemonServiceServer) ImportVPNProfile(grpc.ClientStreamingServer[VPNProfileImportFrame, VPNProfileStatus]) error {
+	return status.Error(codes.Unimplemented, "method ImportVPNProfile not implemented")
+}
+func (UnimplementedPrivateVMDaemonServiceServer) InspectVPNProfile(context.Context, *VPNProfileRequest) (*VPNProfileStatus, error) {
+	return nil, status.Error(codes.Unimplemented, "method InspectVPNProfile not implemented")
+}
+func (UnimplementedPrivateVMDaemonServiceServer) TestVPNProfile(context.Context, *VPNProfileRequest) (*VPNProfileStatus, error) {
+	return nil, status.Error(codes.Unimplemented, "method TestVPNProfile not implemented")
+}
+func (UnimplementedPrivateVMDaemonServiceServer) RemoveVPNProfile(context.Context, *VPNProfileRequest) (*VPNProfileStatus, error) {
+	return nil, status.Error(codes.Unimplemented, "method RemoveVPNProfile not implemented")
 }
 func (UnimplementedPrivateVMDaemonServiceServer) StartRole(context.Context, *StartRoleRequest) (*Session, error) {
 	return nil, status.Error(codes.Unimplemented, "method StartRole not implemented")
@@ -436,6 +503,67 @@ func _PrivateVMDaemonService_ListSessions_Handler(srv interface{}, ctx context.C
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(PrivateVMDaemonServiceServer).ListSessions(ctx, req.(*ListSessionsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PrivateVMDaemonService_ImportVPNProfile_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(PrivateVMDaemonServiceServer).ImportVPNProfile(&grpc.GenericServerStream[VPNProfileImportFrame, VPNProfileStatus]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type PrivateVMDaemonService_ImportVPNProfileServer = grpc.ClientStreamingServer[VPNProfileImportFrame, VPNProfileStatus]
+
+func _PrivateVMDaemonService_InspectVPNProfile_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(VPNProfileRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PrivateVMDaemonServiceServer).InspectVPNProfile(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PrivateVMDaemonService_InspectVPNProfile_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PrivateVMDaemonServiceServer).InspectVPNProfile(ctx, req.(*VPNProfileRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PrivateVMDaemonService_TestVPNProfile_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(VPNProfileRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PrivateVMDaemonServiceServer).TestVPNProfile(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PrivateVMDaemonService_TestVPNProfile_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PrivateVMDaemonServiceServer).TestVPNProfile(ctx, req.(*VPNProfileRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PrivateVMDaemonService_RemoveVPNProfile_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(VPNProfileRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PrivateVMDaemonServiceServer).RemoveVPNProfile(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PrivateVMDaemonService_RemoveVPNProfile_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PrivateVMDaemonServiceServer).RemoveVPNProfile(ctx, req.(*VPNProfileRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -609,6 +737,18 @@ var PrivateVMDaemonService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _PrivateVMDaemonService_ListSessions_Handler,
 		},
 		{
+			MethodName: "InspectVPNProfile",
+			Handler:    _PrivateVMDaemonService_InspectVPNProfile_Handler,
+		},
+		{
+			MethodName: "TestVPNProfile",
+			Handler:    _PrivateVMDaemonService_TestVPNProfile_Handler,
+		},
+		{
+			MethodName: "RemoveVPNProfile",
+			Handler:    _PrivateVMDaemonService_RemoveVPNProfile_Handler,
+		},
+		{
 			MethodName: "StartRole",
 			Handler:    _PrivateVMDaemonService_StartRole_Handler,
 		},
@@ -634,6 +774,11 @@ var PrivateVMDaemonService_ServiceDesc = grpc.ServiceDesc{
 		},
 	},
 	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "ImportVPNProfile",
+			Handler:       _PrivateVMDaemonService_ImportVPNProfile_Handler,
+			ClientStreams: true,
+		},
 		{
 			StreamName:    "StreamEvents",
 			Handler:       _PrivateVMDaemonService_StreamEvents_Handler,

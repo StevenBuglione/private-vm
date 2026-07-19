@@ -120,6 +120,25 @@ missing field cannot approve a transfer.
 - `CHANGED`: at least one file changed after its receipt.
 - `UNREACHABLE`: transport status, not a persisted guest state.
 
+## Redacted session network status
+
+The serializable network inspection is limited to:
+
+```text
+schema_version
+ready
+ipv4_endpoint_count
+ipv6_endpoint_count
+tap_ready
+```
+
+It intentionally omits the VPN profile association, endpoint IP/port, static
+addresses, namespace, interface and nftables names. The opaque runtime handle
+rejects JSON, text, binary, gob and XML serialization. Its callback-only APIs
+provide static guest addressing, a scoped TAP descriptor or the ephemeral guest
+VPN configuration only while the same current VPN resolution plan and network
+lifecycle lease remain valid.
+
 ## Sensitive versus non-sensitive fields
 
 Sensitive by default:

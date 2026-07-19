@@ -13,6 +13,11 @@ const (
 	CommandWorkstationStart CommandID = "workstation.start"
 	CommandTorrentRun       CommandID = "torrent.run"
 	CommandScannerStart     CommandID = "scanner.start"
+	CommandVPNImport        CommandID = "vpn.import"
+	CommandVPNInspect       CommandID = "vpn.inspect"
+	CommandVPNTest          CommandID = "vpn.test"
+	CommandVPNRotate        CommandID = "vpn.rotate"
+	CommandVPNRemove        CommandID = "vpn.remove"
 )
 
 type Intent interface {
@@ -127,11 +132,18 @@ type ScanApprovalIntent struct {
 func (ScanApprovalIntent) privateVMIntent() {}
 
 type VPNImportIntent struct {
-	FromFile string
-	Stdin    bool
+	ProfileName string
+	FromFile    string
+	Stdin       bool
 }
 
 func (VPNImportIntent) privateVMIntent() {}
+
+type VPNProfileIntent struct {
+	ProfileName string
+}
+
+func (VPNProfileIntent) privateVMIntent() {}
 
 type USBDeviceIntent struct {
 	DeviceID string

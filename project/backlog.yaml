@@ -407,7 +407,11 @@
           "acceptance": [
             "private key never converted to string in logs",
             "invalid AllowedIPs rejected",
-            "stale endpoint gives actionable failure"
+            "stale endpoint gives actionable failure",
+            "mapped and special-use endpoint answers rejected before normalization",
+            "owner/name/generation/epoch endpoint plan cannot be substituted",
+            "CLI streams bounded input to the authenticated daemon without source path, argv, environment, disk or log exposure",
+            "daemon shutdown destroys every volatile profile generation"
           ]
         },
         {
@@ -426,7 +430,10 @@
           "acceptance": [
             "namespace isolated from host services",
             "address collisions prevented",
-            "all interfaces removed after cleanup"
+            "TAP is handed to QEMU only as a scoped inherited descriptor after it moves into the namespace",
+            "provisioning, handoffs and cleanup share one serialized lifecycle owner",
+            "all interfaces removed after exact inventory-based cleanup",
+            "partial cleanup is retryable until the final absence audit passes"
           ]
         },
         {
@@ -444,8 +451,10 @@
           ],
           "acceptance": [
             "guest clear interface reaches only Proton endpoint",
-            "host LAN and metadata addresses blocked",
-            "rule failure prevents QEMU start"
+            "IPv4 and IPv6 source/destination anti-spoofing blocks host LAN, metadata and unrelated public addresses",
+            "nftables receives endpoints only through destroyed stdin buffers, never argv, environment or errors",
+            "rule failure prevents QEMU start",
+            "the exact opaque VPN resolution plan is shared by the host policy and guest configuration"
           ]
         },
         {
@@ -460,12 +469,15 @@
             "guest nftables kill switch",
             "WireGuard setup",
             "DNS/IPv4/IPv6 tests",
-            "desktop status"
+            "desktop status",
+            "typed continuous tunnel-loss monitor and role response"
           ],
           "acceptance": [
             "removing proton0 immediately stops app traffic",
             "direct IPv4 and IPv6 tests fail",
-            "VPN handshake required before online state"
+            "VPN handshake required before online state",
+            "QEMU inherits the session TAP by descriptor without receiving its host name",
+            "partial guest cleanup retains the kill switch until tunnel removal succeeds"
           ]
         }
       ]

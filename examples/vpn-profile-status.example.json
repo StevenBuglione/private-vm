@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "present": true,
+  "generation": 1,
+  "rotation": "resolution_required",
+  "code": "VPN_ENDPOINT_CHECK_REQUIRED",
+  "remediation": "Run the bounded trusted-host endpoint check before starting a networked role.",
+  "profile": {
+    "schema_version": 1,
+    "ipv4_enabled": true,
+    "ipv6_enabled": true,
+    "interface_address_count": 2,
+    "dns_server_count": 2
+  }
+}
