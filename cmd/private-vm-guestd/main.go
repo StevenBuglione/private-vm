@@ -16,6 +16,8 @@ import (
 
 	"github.com/StevenBuglione/private-vm/internal/buildinfo"
 	"github.com/StevenBuglione/private-vm/internal/guest"
+	"github.com/StevenBuglione/private-vm/internal/session"
+	"github.com/StevenBuglione/private-vm/internal/workstation"
 	"google.golang.org/grpc"
 )
 
@@ -51,7 +53,15 @@ func main() {
 	if err != nil {
 		fatal("GUESTD_IDENTITY_INVALID", err.Error(), "Install a verified role image with complete build identity metadata.")
 	}
-	server, err := guest.NewServer(guest.ServerConfig{Identity: identity, Token: token})
+	serverConfig := guest.ServerConfig{Identity: identity, Token: token}
+	if role == session.RoleWorkstation {
+		workspace, workspaceErr := workstation.New(workstation.Config{Root: "/home/private"})
+		if workspaceErr != nil {
+			fatal("GUESTD_WORKSPACE_INVALID", workspaceErr.Error(), "Recreate the verified workstation so its private Inbox and Export directories are available.")
+		}
+		serverConfig.Workstation = workspace
+	}
+	server, err := guest.NewServer(serverConfig)
 	if err != nil {
 		fatal("GUESTD_SERVER_INVALID", err.Error(), "Destroy the guest and install a compatible verified image.")
 	}

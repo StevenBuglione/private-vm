@@ -32,3 +32,12 @@ func TestReceiverRejectsOffset(t *testing.T) {
 		t.Fatal("expected offset error")
 	}
 }
+
+func TestHeaderRejectsTraversalAndControlCharacters(t *testing.T) {
+	for _, name := range []string{"../escape", "sub/file", `sub\\file`, ".", "..", "bad\nname"} {
+		header := Header{Name: name, Size: 1}
+		if err := header.Validate(1); err == nil {
+			t.Fatalf("name %q was accepted", name)
+		}
+	}
+}
