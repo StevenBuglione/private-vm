@@ -316,7 +316,7 @@ ports, never display strings. Each online role validates them before creating
 its one VPN controller and rejects a second configuration attempt. These
 request-only values never appear in status, diagnostics, events or durable
 state. The shared internal lifecycle does not change exact role registration:
-the workstation exposes no torrent RPC. See ADRs 0012 and 0013.
+the workstation exposes no torrent RPC. See ADRs 0013 and 0014.
 
 Scanner:
 
