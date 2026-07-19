@@ -28,6 +28,7 @@ aarch64 variants
 - QEMU guest profile and virtio kernel modules
 - systemd-networkd or NetworkManager according to role
 - no SSH server
+- no inherited NixOS curl/OpenSSH core clients; roles add network tools explicitly
 - no reusable password
 - no sudo for desktop user
 - volatile journald
@@ -41,6 +42,12 @@ aarch64 variants
 - no host keys baked in
 - role and build metadata in `/etc/private-vm/image.json`
 - automatic poweroff on guestd completion when role requires it
+
+The common image replaces NixOS's normal interactive core package set with a
+small audited shell/diagnostic set. This prevents `curl`, the stock OpenSSH
+output and unrelated administration tools from appearing in every role by
+default. Workstation bundles add curl and a server-pruned OpenSSH client
+explicitly; the scanner contract rejects both in its update and offline boots.
 
 ## XFCE workstation
 

@@ -587,6 +587,8 @@
           offlineConfiguration = scannerConfiguration.config.specialisation.scan-offline.configuration;
           scannerPath = scannerConfiguration.config.system.path;
           offlinePath = offlineConfiguration.system.path;
+          scannerEtc = scannerConfiguration.config.system.build.etc;
+          offlineEtc = offlineConfiguration.system.build.etc;
           toolchain = scannerToolchainFor system;
           sbom = scannerSBOMFor system;
           updatePhase = pkgs.writeText "private-vm-scanner-update-phase.json" (
@@ -596,8 +598,8 @@
             offlineConfiguration.environment.etc."private-vm/scanner-phase.json".text
           );
           verifyCommand = command: ''
-            test -x "${scannerPath}/bin/${command}"
-            test -x "${offlinePath}/bin/${command}"
+            test -x "${scannerPath}/bin/${command}" || { echo "scanner update path is missing required command: ${command}" >&2; exit 1; }
+            test -x "${offlinePath}/bin/${command}" || { echo "scanner offline path is missing required command: ${command}" >&2; exit 1; }
           '';
           verifyTool =
             tool:
@@ -608,14 +610,14 @@
             ''
               jq -e --arg id "${tool.id}" --arg package "${packageName}" --arg version "${packageVersion}" \
                 '.tools | any(.id == $id and .package == $package and .version == $version)' \
-                "${scannerPath}/etc/private-vm/scanner-toolchain.json" >/dev/null
+                "${scannerEtc}/etc/private-vm/scanner-toolchain.json" >/dev/null || { echo "scanner tool inventory mismatch: ${tool.id}" >&2; exit 1; }
               jq -e --arg id "${tool.spdxID}" --arg package "${packageName}" --arg version "${packageVersion}" \
                 '.packages | any(.SPDXID == $id and .name == $package and .versionInfo == $version)' \
-                "${sbom}/share/private-vm/sbom/scanner.spdx.json" >/dev/null
+                "${sbom}/share/private-vm/sbom/scanner.spdx.json" >/dev/null || { echo "scanner SPDX mismatch: ${tool.id}" >&2; exit 1; }
             '';
           verifyForbiddenCommand = command: ''
-            test ! -e "${scannerPath}/bin/${command}"
-            test ! -e "${offlinePath}/bin/${command}"
+            test ! -e "${scannerPath}/bin/${command}" || { echo "scanner update path contains forbidden command: ${command}" >&2; exit 1; }
+            test ! -e "${offlinePath}/bin/${command}" || { echo "scanner offline path contains forbidden command: ${command}" >&2; exit 1; }
           '';
         in
         assert scannerConfiguration.config.networking.networkmanager.enable;
@@ -632,20 +634,20 @@
           jq -e '.phase == "definitions-update" and .network_device_policy == "proton-only" and .quarantine_device_policy == "forbidden" and .definitions_update == "enabled"' ${updatePhase} >/dev/null
           jq -e '.phase == "scan-offline" and .network_device_policy == "forbidden" and .quarantine_device_policy == "required-read-only" and .quarantine_mount_options == ["nodev", "noexec", "nosuid", "ro"] and .definitions_update == "disabled"' ${offlinePhase} >/dev/null
           jq -e '.spdxVersion == "SPDX-2.3" and .dataLicense == "CC0-1.0" and (.packages | length) == ${toString (builtins.length toolchain.tools)}' "${sbom}/share/private-vm/sbom/scanner.spdx.json" >/dev/null
-          jq -e '.archive_execution_contract == "guestd-bounded-unprivileged-private-namespace"' "${scannerPath}/etc/private-vm/scanner-toolchain.json" >/dev/null
-          cmp "${scannerPath}/etc/private-vm/scanner-sbom.spdx.json" "${sbom}/share/private-vm/sbom/scanner.spdx.json"
-          cmp "${offlinePath}/etc/private-vm/scanner-sbom.spdx.json" "${sbom}/share/private-vm/sbom/scanner.spdx.json"
-          grep -Fx 'MaxFiles 100000' "${scannerPath}/etc/clamav/clamd.conf"
-          grep -Fx 'MaxRecursion 16' "${scannerPath}/etc/clamav/clamd.conf"
-          grep -Fx 'MaxScanSize 4G' "${scannerPath}/etc/clamav/clamd.conf"
-          grep -Fx 'MaxFileSize 4G' "${scannerPath}/etc/clamav/clamd.conf"
-          grep -Fx 'MaxScanTime 300000' "${scannerPath}/etc/clamav/clamd.conf"
-          grep -Fx 'AlertEncrypted true' "${scannerPath}/etc/clamav/clamd.conf"
-          grep -Fx 'DatabaseMirror database.clamav.net' "${scannerPath}/etc/clamav/freshclam.conf"
-          grep -Fx 'ConnectTimeout 10' "${scannerPath}/etc/clamav/freshclam.conf"
-          grep -Fx 'ReceiveTimeout 60' "${scannerPath}/etc/clamav/freshclam.conf"
-          grep -Fx 'MaxAttempts 3' "${scannerPath}/etc/clamav/freshclam.conf"
-          ! grep -Eq '^(DatabaseCustomURL|PrivateMirror) ' "${scannerPath}/etc/clamav/freshclam.conf"
+          jq -e '.archive_execution_contract == "guestd-bounded-unprivileged-private-namespace"' "${scannerEtc}/etc/private-vm/scanner-toolchain.json" >/dev/null
+          cmp "${scannerEtc}/etc/private-vm/scanner-sbom.spdx.json" "${sbom}/share/private-vm/sbom/scanner.spdx.json"
+          cmp "${offlineEtc}/etc/private-vm/scanner-sbom.spdx.json" "${sbom}/share/private-vm/sbom/scanner.spdx.json"
+          grep -Fx 'MaxFiles 100000' "${scannerEtc}/etc/clamav/clamd.conf"
+          grep -Fx 'MaxRecursion 16' "${scannerEtc}/etc/clamav/clamd.conf"
+          grep -Fx 'MaxScanSize 4G' "${scannerEtc}/etc/clamav/clamd.conf"
+          grep -Fx 'MaxFileSize 4G' "${scannerEtc}/etc/clamav/clamd.conf"
+          grep -Fx 'MaxScanTime 300000' "${scannerEtc}/etc/clamav/clamd.conf"
+          grep -Fx 'AlertEncrypted true' "${scannerEtc}/etc/clamav/clamd.conf"
+          grep -Fx 'DatabaseMirror database.clamav.net' "${scannerEtc}/etc/clamav/freshclam.conf"
+          grep -Fx 'ConnectTimeout 10' "${scannerEtc}/etc/clamav/freshclam.conf"
+          grep -Fx 'ReceiveTimeout 60' "${scannerEtc}/etc/clamav/freshclam.conf"
+          grep -Fx 'MaxAttempts 3' "${scannerEtc}/etc/clamav/freshclam.conf"
+          ! grep -Eq '^(DatabaseCustomURL|PrivateMirror) ' "${scannerEtc}/etc/clamav/freshclam.conf"
           ${nixpkgs.lib.concatMapStringsSep "\n" verifyCommand toolchain.requiredCommands}
           ${nixpkgs.lib.concatMapStringsSep "\n" verifyTool toolchain.tools}
           ${nixpkgs.lib.concatMapStringsSep "\n" verifyForbiddenCommand scannerForbiddenCommands}
