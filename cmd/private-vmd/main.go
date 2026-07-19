@@ -18,6 +18,7 @@ import (
 	"github.com/StevenBuglione/private-vm/internal/buildinfo"
 	"github.com/StevenBuglione/private-vm/internal/config"
 	"github.com/StevenBuglione/private-vm/internal/daemon"
+	"github.com/StevenBuglione/private-vm/internal/recovery"
 	"github.com/StevenBuglione/private-vm/internal/session"
 )
 
@@ -60,6 +61,43 @@ func run() error {
 	runtimeConfig := cfg.Runtime()
 	store, err := session.NewStore(runtimeConfig.Directory())
 	if err != nil {
+		return err
+	}
+	cryptsetup, err := trustedToolPath("cryptsetup")
+	if err != nil {
+		return err
+	}
+	losetup, err := trustedToolPath("losetup")
+	if err != nil {
+		return err
+	}
+	backend, err := recovery.NewLinuxBackend(recovery.LinuxBackendConfig{
+		Store: store, ScratchRoot: runtimeConfig.ScratchDirectory(),
+		DaemonUID: uint32(os.Geteuid()), DaemonGID: uint32(os.Getegid()), ControlGID: uint32(gid),
+		Cryptsetup: cryptsetup, Losetup: losetup,
+		Runner: recovery.OSRecoveryRunner{}, Mounter: recovery.UnixMountCleaner{},
+	})
+	if err != nil {
+		return err
+	}
+	cleanupTimeout := time.Duration(runtimeConfig.CleanupTimeoutSeconds()) * time.Second
+	reconciler, err := recovery.New(
+		backend,
+		recovery.NewStartupRegistry(),
+		recovery.VolatileKeyEvidence{RuntimeRoot: runtimeConfig.Directory(), DaemonUID: uint32(os.Geteuid()), DaemonGID: uint32(os.Getegid())},
+		recovery.FilesystemBaseAuditor{Root: runtimeConfig.ImageCache(), OwnerUID: uint32(os.Geteuid())},
+		recovery.Config{
+			DaemonUID: uint32(os.Geteuid()), InventoryTimeout: cleanupTimeout,
+			StepTimeout: cleanupTimeout, SessionTimeout: boundedRecoverySessionTimeout(cleanupTimeout),
+		},
+	)
+	if err != nil {
+		return err
+	}
+	recoveryReportPath := filepath.Join(filepath.Dir(runtimeConfig.Directory()), "private-vm-recovery-"+filepath.Base(runtimeConfig.Directory())+".json")
+	if err := runStartupRecovery(context.Background(), reconciler.Run, func(report recovery.Report) error {
+		return recovery.WriteReportAtomic(recoveryReportPath, report)
+	}); err != nil {
 		return err
 	}
 	manager, err := session.NewManager(store, session.DefaultMaxSessionsPerOwner)
@@ -106,12 +144,56 @@ func run() error {
 		return err
 	case <-ctx.Done():
 		return shutdownServices(
-			time.Duration(runtimeConfig.CleanupTimeoutSeconds())*time.Second,
+			cleanupTimeout,
 			server.Shutdown,
 			done,
 			manager.Shutdown,
 		)
 	}
+}
+
+type startupRecoveryRun func(context.Context) (recovery.Report, error)
+
+func runStartupRecovery(ctx context.Context, run startupRecoveryRun, write func(recovery.Report) error) error {
+	if ctx == nil || run == nil || write == nil {
+		return errors.New("startup recovery composition is invalid")
+	}
+	report, recoveryErr := run(ctx)
+	writeErr := write(report)
+	if writeErr != nil {
+		return errors.Join(errors.New("startup recovery report could not be published"), writeErr)
+	}
+	if recoveryErr != nil || report.Status != recovery.StatusComplete || !report.BaseImagesVerified {
+		return errors.Join(recovery.ErrIncomplete, recoveryErr)
+	}
+	return nil
+}
+
+func boundedRecoverySessionTimeout(step time.Duration) time.Duration {
+	timeout := step * 4
+	if timeout < step {
+		return 5 * time.Minute
+	}
+	if timeout > 5*time.Minute {
+		return 5 * time.Minute
+	}
+	return timeout
+}
+
+func trustedToolPath(name string) (string, error) {
+	path, err := exec.LookPath(name)
+	if err != nil {
+		return "", errors.New("required recovery tool is unavailable")
+	}
+	path, err = filepath.Abs(path)
+	if err != nil {
+		return "", errors.New("required recovery tool path is invalid")
+	}
+	resolved, err := filepath.EvalSymlinks(path)
+	if err != nil || filepath.Base(resolved) != name {
+		return "", errors.New("required recovery tool identity is invalid")
+	}
+	return resolved, nil
 }
 
 func shutdownServices(

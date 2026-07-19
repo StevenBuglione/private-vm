@@ -1,8 +1,9 @@
 # Startup recovery source acceptance
 
 This record describes the local source-only D-005 recovery evidence. It does
-not claim a host reboot, a real daemon crash, or mutation of QEMU, networking,
-storage, mapper, mount, USB or ciphertext resources.
+not claim a host reboot, a real daemon crash, or mutation of real QEMU,
+networking, mapper, mount, USB or ciphertext resources. Filesystem tests remove
+only private temporary records and synthetic ciphertext.
 
 ## Implemented boundary
 
@@ -45,13 +46,36 @@ whole-session pin, cancellation, timeout, cleanup failure, individual and
 whole-session audit failure, retry convergence, independent-session progress,
 immutable-base drift, stable ordering, fixed bounds and report redaction.
 
+## Production integration now present
+
+`private-vmd` constructs the Linux backend, volatile-key evidence, startup-only
+claim registry and immutable-cache auditor before it creates the ordinary
+session manager or opens the control socket. It writes the closed report
+atomically under `/run`; an incomplete recovery or report-write failure refuses
+startup.
+
+The Linux adapter uses the pinned session store and a root-owned mode-`0700`
+scratch root with the required no-backup marker. It supports exact
+descriptor-relative socket/runtime cleanup and typed outer mount,
+`cryptsetup close`, `losetup --detach` and ciphertext unlink operations. Every
+candidate is re-inventoried immediately before mutation and individually audited
+afterward. External command output is discarded and never enters errors or the
+report.
+
+Source tests use only private temporary roots and fakes. They cover early-record
+and ciphertext success, key-unknown retention, advanced-session refusal,
+identity replacement, cancellation/timeout propagation, cleanup/audit,
+immutable-cache drift, closed report publication and daemon startup refusal.
+
 ## Remaining D-005 system gates
 
-D-005 remains open until the concrete Linux inventories and typed cleanup
-adapters are composed into `private-vmd` before session admission. That
-integration must reuse the verified identities already owned by the session,
-QEMU, storage, network, VSOCK and USB packages; it must not replace them with
-name-only discovery.
+D-005 remains open for advanced daemon-restart recovery. The current volatile
+journal does not retain the exact QEMU pidfd/start-time/executable/cgroup,
+network, VSOCK CID and USB claim identities. When such a journal is at
+`STORAGE_READY` or later, startup stops before any mutation with a closed
+identity failure. Completing this gate must reuse the verified identities
+already owned by the session, QEMU, network, VSOCK and USB packages; it must not
+replace them with name-only discovery.
 
 The final acceptance run must then prove:
 

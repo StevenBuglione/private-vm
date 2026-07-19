@@ -21,7 +21,7 @@ private-vm session cleanup --all
 private-vm doctor --strict
 ```
 
-The daemon validates ownership/naming before deleting.
+The daemon validates exact ownership and object identity before deleting.
 
 Startup recovery additionally pins exact object identity, proves there is no
 current registry owner, verifies loss of the volatile session key source,
@@ -30,6 +30,20 @@ images did not change. A machine-readable report is valid only against
 `schemas/recovery-report.schema.json`; it intentionally contains counts and
 stable codes but no session ID, path, process identity, device identity or
 backend output.
+
+For the default installation, inspect only the closed volatile startup report:
+
+```bash
+sudo python3 -m json.tool /run/private-vm-recovery-private-vm.json
+sudo systemctl status private-vmd --no-pager
+```
+
+Do not treat a report with `status` other than `complete`,
+`base_images_verified` other than `true`, or any failure entry as success. The
+current source can converge an early journal or reboot-orphaned ciphertext, but
+an advanced journal intentionally returns an identity failure until the exact
+QEMU/cgroup/network/VSOCK/USB recovery integration is complete. Never delete
+that record merely to make the service start.
 
 An `ORPHAN_CLEANUP_FAILED` or `CLEANUP_INCOMPLETE` result is blocking. Preserve
 the volatile report, correct the reported host condition, and retry the command.

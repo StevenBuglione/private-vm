@@ -229,6 +229,18 @@ No API reveals namespace/interface names, static addresses, endpoint tuples or
 raw rule text. Only the aggregate `network-status.schema.json` inspection is
 serializable.
 
+`internal/recovery` runs before the session manager and control listener are
+created. Its startup registry excludes concurrent admission, its Linux backend
+enumerates only pinned volatile-store and scratch-root objects, and every
+cleanup repeats exact identity validation immediately before a typed operation.
+The backend has fixed adapters for private QMP/SPICE sockets and outer-storage
+mount/mapper/loop/ciphertext teardown. It refuses an advanced surviving journal
+because the current journal schema does not preserve enough exact evidence to
+kill a process or mutate cgroup, network, VSOCK or USB state safely. A closed
+aggregate report is atomically written outside the session-store root under
+volatile `/run`; candidates, locators, fingerprints and tool output are never
+serialized.
+
 The daemon role boundary is semantic and serialized per opaque session ID.
 `StartRole` publishes `PREFLIGHTED`, `IMAGES_VERIFIED`, `STORAGE_READY`, and
 `ACTIVE` only after the corresponding typed gate succeeds. Storage and runtime
