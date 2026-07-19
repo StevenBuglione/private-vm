@@ -26,11 +26,15 @@ packages.x86_64-linux.image-workstation-development
 packages.x86_64-linux.image-downloader
 packages.x86_64-linux.image-scanner
 packages.x86_64-linux.image-exporter
+packages.x86_64-linux.sbom-scanner
 nixosModules.default
 checks.x86_64-linux.default
 checks.x86_64-linux.desktop-role-isolation
 checks.x86_64-linux.downloader-desktop
 checks.x86_64-linux.guest-common
+checks.x86_64-linux.scanner-image-contract
+checks.x86_64-linux.scanner-update
+checks.x86_64-linux.scanner-offline
 checks.x86_64-linux.workstation-bundles
 checks.x86_64-linux.workstation-desktop
 devShells.x86_64-linux.default
@@ -109,6 +113,9 @@ nix build .#image-workstation-basic
 nix build .#image-downloader
 nix build .#checks.x86_64-linux.guest-common
 nix build .#checks.x86_64-linux.workstation-desktop
+nix build .#checks.x86_64-linux.scanner-image-contract
+nix build .#checks.x86_64-linux.scanner-update
+nix build .#checks.x86_64-linux.scanner-offline
 ```
 
 ## Image tests
@@ -156,3 +163,17 @@ service and loopback-only listeners, the immutable `proton0` binding, volatile
 logging/profile paths, bounded stop, fail-closed restart, and syntax of both
 typed endpoint firewall templates. NET-003 remains responsible for rendering
 those templates and continuously withdrawing readiness on tunnel failure.
+
+The scanner has three focused gates. `scanner-image-contract` checks both boot
+configurations, every required executable, fail-closed ClamAV limits, absence of
+workstation/downloader tools, and one-to-one package/version coverage between
+the embedded tool inventory and SPDX document. `scanner-update` boots the online
+phase without quarantine and performs a deterministic FreshClam database update
+from a non-secret local test database, rather than treating `--version` as an
+update proof. `scanner-offline` passes explicit `-nic none`, attaches a generated
+quarantine filesystem through a read-only QEMU block backend, verifies that only
+loopback exists, mounts it `ro,nodev,nosuid,noexec`, and proves a write fails.
+Both boot tests compare the scanner role and exact sorted RPC capability list.
+
+Run the two scanner VM gates serially. Each is configured for 2 GiB of guest RAM;
+do not run them together on a 16 GiB development host.

@@ -19,6 +19,21 @@
       projectVersion = "0.0.0-dev";
       sourceCommit = self.rev or (self.dirtyRev or "unknown");
       sourceDirty = if self ? rev then "false" else "true";
+      sourceLastModifiedDate = self.lastModifiedDate or "19700101000000";
+      spdxCreationTime = builtins.concatStringsSep "" [
+        (builtins.substring 0 4 sourceLastModifiedDate)
+        "-"
+        (builtins.substring 4 2 sourceLastModifiedDate)
+        "-"
+        (builtins.substring 6 2 sourceLastModifiedDate)
+        "T"
+        (builtins.substring 8 2 sourceLastModifiedDate)
+        ":"
+        (builtins.substring 10 2 sourceLastModifiedDate)
+        ":"
+        (builtins.substring 12 2 sourceLastModifiedDate)
+        "Z"
+      ];
       flakeLockSHA256 = builtins.hashFile "sha256" ./flake.lock;
       workstationBundleCatalog = builtins.fromJSON (builtins.readFile ./project/workstation-bundles.json);
 
@@ -64,6 +79,37 @@
           .${role}
         );
 
+      scannerForbiddenCommands = [
+        "cargo"
+        "cmake"
+        "code"
+        "codium"
+        "curl"
+        "evince"
+        "file-roller"
+        "firefox"
+        "gcc"
+        "gdb"
+        "git"
+        "go"
+        "gradle"
+        "javac"
+        "keepassxc"
+        "kotlin"
+        "make"
+        "mousepad"
+        "node"
+        "npm"
+        "python"
+        "python3"
+        "qbittorrent"
+        "ristretto"
+        "rustc"
+        "ssh"
+        "vscodium"
+        "zenity"
+      ];
+
       privateVMFor =
         system:
         let
@@ -105,6 +151,7 @@
         guestCapabilities = capabilitiesFor role;
         guestSourceCommit = sourceCommit;
         guestFlakeLockSHA256 = flakeLockSHA256;
+        guestSBOMCreated = spdxCreationTime;
         guestdVersion = projectVersion;
       };
 
@@ -404,6 +451,233 @@
           touch "$out"
         '';
 
+      scannerToolchainFor =
+        system:
+        let
+          pkgs = pkgsFor system;
+          guestArgs = guestArgsFor system "scanner" null;
+        in
+        import ./nix/guests/scanner-toolchain.nix {
+          inherit pkgs;
+          inherit (guestArgs)
+            guestArchitecture
+            guestFlakeLockSHA256
+            guestSBOMCreated
+            guestSourceCommit
+            ;
+          lib = nixpkgs.lib;
+        };
+
+      scannerSBOMFor =
+        system:
+        let
+          pkgs = pkgsFor system;
+          toolchain = scannerToolchainFor system;
+        in
+        pkgs.writeTextDir "share/private-vm/sbom/scanner.spdx.json" (builtins.toJSON toolchain.sbom);
+
+      scannerImageContractCheckFor =
+        system:
+        let
+          pkgs = pkgsFor system;
+          scannerConfiguration = guest system "scanner" null ./nix/guests/scanner.nix;
+          offlineConfiguration = scannerConfiguration.config.specialisation.scan-offline.configuration;
+          scannerPath = scannerConfiguration.config.system.path;
+          offlinePath = offlineConfiguration.system.path;
+          toolchain = scannerToolchainFor system;
+          sbom = scannerSBOMFor system;
+          updatePhase = pkgs.writeText "private-vm-scanner-update-phase.json" (
+            scannerConfiguration.config.environment.etc."private-vm/scanner-phase.json".text
+          );
+          offlinePhase = pkgs.writeText "private-vm-scanner-offline-phase.json" (
+            offlineConfiguration.environment.etc."private-vm/scanner-phase.json".text
+          );
+          verifyCommand = command: ''
+            test -x "${scannerPath}/bin/${command}"
+            test -x "${offlinePath}/bin/${command}"
+          '';
+          verifyTool =
+            tool:
+            let
+              packageName = tool.package.pname or (nixpkgs.lib.getName tool.package);
+              packageVersion = tool.package.version or (nixpkgs.lib.getVersion tool.package);
+            in
+            ''
+              jq -e --arg id "${tool.id}" --arg package "${packageName}" --arg version "${packageVersion}" \
+                '.tools | any(.id == $id and .package == $package and .version == $version)' \
+                "${scannerPath}/etc/private-vm/scanner-toolchain.json" >/dev/null
+              jq -e --arg id "${tool.spdxID}" --arg package "${packageName}" --arg version "${packageVersion}" \
+                '.packages | any(.SPDXID == $id and .name == $package and .versionInfo == $version)' \
+                "${sbom}/share/private-vm/sbom/scanner.spdx.json" >/dev/null
+            '';
+          verifyForbiddenCommand = command: ''
+            test ! -e "${scannerPath}/bin/${command}"
+            test ! -e "${offlinePath}/bin/${command}"
+          '';
+        in
+        assert scannerConfiguration.config.networking.networkmanager.enable;
+        assert scannerConfiguration.config.services.clamav.updater.enable;
+        assert builtins.hasAttr "clamav-freshclam" scannerConfiguration.config.systemd.services;
+        assert builtins.hasAttr "clamav-freshclam" scannerConfiguration.config.systemd.timers;
+        assert !offlineConfiguration.networking.networkmanager.enable;
+        assert !offlineConfiguration.networking.dhcpcd.enable;
+        assert !offlineConfiguration.services.resolved.enable;
+        assert !offlineConfiguration.services.clamav.updater.enable;
+        assert !(builtins.hasAttr "clamav-freshclam" offlineConfiguration.systemd.services);
+        assert !(builtins.hasAttr "clamav-freshclam" offlineConfiguration.systemd.timers);
+        pkgs.runCommand "private-vm-scanner-image-contract" { nativeBuildInputs = [ pkgs.jq ]; } ''
+          jq -e '.phase == "definitions-update" and .network_device_policy == "proton-only" and .quarantine_device_policy == "forbidden" and .definitions_update == "enabled"' ${updatePhase} >/dev/null
+          jq -e '.phase == "scan-offline" and .network_device_policy == "forbidden" and .quarantine_device_policy == "required-read-only" and .quarantine_mount_options == ["nodev", "noexec", "nosuid", "ro"] and .definitions_update == "disabled"' ${offlinePhase} >/dev/null
+          jq -e '.spdxVersion == "SPDX-2.3" and .dataLicense == "CC0-1.0" and (.packages | length) == ${toString (builtins.length toolchain.tools)}' "${sbom}/share/private-vm/sbom/scanner.spdx.json" >/dev/null
+          jq -e '.archive_execution_contract == "guestd-bounded-unprivileged-private-namespace"' "${scannerPath}/etc/private-vm/scanner-toolchain.json" >/dev/null
+          cmp "${scannerPath}/etc/private-vm/scanner-sbom.spdx.json" "${sbom}/share/private-vm/sbom/scanner.spdx.json"
+          cmp "${offlinePath}/etc/private-vm/scanner-sbom.spdx.json" "${sbom}/share/private-vm/sbom/scanner.spdx.json"
+          grep -Fx 'MaxFiles 100000' "${scannerPath}/etc/clamav/clamd.conf"
+          grep -Fx 'MaxRecursion 16' "${scannerPath}/etc/clamav/clamd.conf"
+          grep -Fx 'MaxScanSize 4G' "${scannerPath}/etc/clamav/clamd.conf"
+          grep -Fx 'MaxFileSize 4G' "${scannerPath}/etc/clamav/clamd.conf"
+          grep -Fx 'MaxScanTime 300000' "${scannerPath}/etc/clamav/clamd.conf"
+          grep -Fx 'AlertEncrypted true' "${scannerPath}/etc/clamav/clamd.conf"
+          grep -Fx 'DatabaseMirror database.clamav.net' "${scannerPath}/etc/clamav/freshclam.conf"
+          grep -Fx 'ConnectTimeout 10' "${scannerPath}/etc/clamav/freshclam.conf"
+          grep -Fx 'ReceiveTimeout 60' "${scannerPath}/etc/clamav/freshclam.conf"
+          grep -Fx 'MaxAttempts 3' "${scannerPath}/etc/clamav/freshclam.conf"
+          ! grep -Eq '^(DatabaseCustomURL|PrivateMirror) ' "${scannerPath}/etc/clamav/freshclam.conf"
+          ${nixpkgs.lib.concatMapStringsSep "\n" verifyCommand toolchain.requiredCommands}
+          ${nixpkgs.lib.concatMapStringsSep "\n" verifyTool toolchain.tools}
+          ${nixpkgs.lib.concatMapStringsSep "\n" verifyForbiddenCommand scannerForbiddenCommands}
+          touch "$out"
+        '';
+
+      scannerUpdateTestFor =
+        system:
+        let
+          pkgs = pkgsFor system;
+          freshclamTestDatabase = pkgs.writeText "private-vm-test.hdb" ''
+            44d88612fea8a8f36de82e1278abb02f:68:Eicar-Test-Signature
+          '';
+          freshclamTestConfig = pkgs.writeText "private-vm-freshclam-test.conf" ''
+            DatabaseDirectory /var/lib/clamav-test
+            DatabaseOwner clamav
+            DatabaseCustomURL file:///run/private-vm-freshclam-fixture/private-vm-test.hdb
+            ConnectTimeout 10
+            ReceiveTimeout 10
+            MaxAttempts 1
+            Checks 1
+          '';
+        in
+        pkgs.testers.runNixOSTest {
+          name = "private-vm-scanner-update";
+          requiredFeatures.kvm = false;
+          node.specialArgs = guestArgsFor system "scanner" null;
+          nodes.machine = { lib, ... }: {
+            imports = [
+              ./nix/guests/image-base.nix
+              ./nix/guests/scanner.nix
+            ];
+            users.users.root.hashedPasswordFile = lib.mkForce null;
+            virtualisation.memorySize = 2048;
+            virtualisation.cores = 2;
+            virtualisation.vlans = [ 1 ];
+            virtualisation.qemu.options = tcgQEMUOptionsFor system;
+          };
+          testScript = ''
+            machine.wait_for_unit("graphical.target")
+            machine.wait_for_unit("display-manager.service")
+            machine.wait_for_unit("private-vm-guestd.service")
+            machine.wait_for_x()
+            machine.wait_until_succeeds("loginctl user-status private --no-pager | grep -F xfce4-session")
+            machine.succeed("test -x /run/current-system/sw/bin/freshclam")
+            machine.succeed("install -d -o clamav -g clamav -m 0750 /var/lib/clamav-test")
+            machine.succeed("install -d -m 0755 /run/private-vm-freshclam-fixture && ln -s ${freshclamTestDatabase} /run/private-vm-freshclam-fixture/private-vm-test.hdb")
+            machine.succeed("freshclam --config-file=${freshclamTestConfig} --datadir=/var/lib/clamav-test --no-dns --stdout")
+            machine.succeed("test -s /var/lib/clamav-test/private-vm-test.hdb")
+            machine.succeed("grep -Fx '44d88612fea8a8f36de82e1278abb02f:68:Eicar-Test-Signature' /var/lib/clamav-test/private-vm-test.hdb")
+            machine.succeed("systemctl is-enabled clamav-freshclam.timer")
+            machine.succeed("systemctl is-active clamav-freshclam.timer")
+            machine.succeed("systemctl is-active NetworkManager.service")
+            machine.succeed("test $(find /sys/class/net -mindepth 1 -maxdepth 1 ! -name lo | wc -l) -ge 1")
+            machine.succeed("jq -e '.phase == \"definitions-update\" and .network_device_policy == \"proton-only\" and .quarantine_device_policy == \"forbidden\"' /etc/private-vm/scanner-phase.json")
+            machine.succeed("jq -e '.role == \"scanner\" and (.tools | length) > 0 and ([.tools[].version | length > 0] | all)' /etc/private-vm/scanner-toolchain.json")
+            machine.succeed("jq -s -e '.[0].tools as $tools | .[1].packages as $packages | ($packages | length) == ($tools | length) and all($tools[]; . as $tool | any($packages[]; .name == $tool.package and .versionInfo == $tool.version))' /etc/private-vm/scanner-toolchain.json /etc/private-vm/scanner-sbom.spdx.json")
+            machine.succeed("private-vm-guestd --version | jq -e '.guestRole == \"scanner\" and .guestApiMajor == 1 and .guestApiMinor == 0 and .capabilities == [\"approved-export\", \"definitions-update\", \"guest-events\", \"guest-shutdown\", \"guest-status\", \"inventory\", \"offline-verification\", \"reconstruct\", \"scan\", \"scan-report\"]'")
+            machine.succeed("jq -e '.role == \"scanner\" and .bundle == null and .capabilities == [\"approved-export\", \"definitions-update\", \"guest-events\", \"guest-shutdown\", \"guest-status\", \"inventory\", \"offline-verification\", \"reconstruct\", \"scan\", \"scan-report\"]' /etc/private-vm/image.json")
+            machine.succeed("test ! -e /dev/disk/by-label/PVM_QUARANTINE")
+            machine.succeed("for command in ${nixpkgs.lib.concatStringsSep " " scannerForbiddenCommands}; do ! command -v $command >/dev/null || exit 1; done")
+            machine.succeed("for path in /root/.ssh /home/private/.ssh /root/.config/gh /home/private/.config/gh /root/.config/protonvpn /home/private/.config/protonvpn; do test ! -e $path || exit 1; done")
+            machine.succeed("! systemctl is-enabled sshd.service")
+            machine.succeed("test ! -e /run/current-system/sw/bin/sudo")
+          '';
+        };
+
+      scannerOfflineTestFor =
+        system:
+        let
+          pkgs = pkgsFor system;
+          quarantineFixture =
+            pkgs.runCommand "private-vm-scanner-quarantine.ext4"
+              {
+                nativeBuildInputs = [ pkgs.e2fsprogs ];
+              }
+              ''
+                truncate -s 64M "$out"
+                mkfs.ext4 -q -F -L PVM_QUARANTINE "$out"
+              '';
+        in
+        pkgs.testers.runNixOSTest {
+          name = "private-vm-scanner-offline";
+          requiredFeatures.kvm = false;
+          node.specialArgs = guestArgsFor system "scanner" null;
+          nodes.machine = { lib, ... }: {
+            imports = [
+              ./nix/guests/image-base.nix
+              ./nix/guests/scanner.nix
+              ./nix/guests/scanner-offline.nix
+            ];
+            users.users.root.hashedPasswordFile = lib.mkForce null;
+            virtualisation.memorySize = 2048;
+            virtualisation.cores = 2;
+            virtualisation.vlans = [ ];
+            virtualisation.qemu.options = tcgQEMUOptionsFor system ++ [
+              "-nic"
+              "none"
+              "-drive"
+              "file=${quarantineFixture},if=none,format=raw,readonly=on,id=quarantine"
+              "-device"
+              "virtio-blk-pci,drive=quarantine"
+            ];
+          };
+          testScript = ''
+            machine.wait_for_unit("graphical.target")
+            machine.wait_for_unit("display-manager.service")
+            machine.wait_for_unit("private-vm-guestd.service")
+            machine.wait_for_x()
+            machine.wait_until_succeeds("loginctl user-status private --no-pager | grep -F xfce4-session")
+            machine.succeed("test $(find /sys/class/net -mindepth 1 -maxdepth 1 ! -name lo | wc -l) -eq 0")
+            machine.succeed("! systemctl is-active NetworkManager.service")
+            machine.succeed("! systemctl list-unit-files --no-legend clamav-freshclam.service | grep -F clamav-freshclam.service")
+            machine.succeed("! systemctl list-unit-files --no-legend clamav-freshclam.timer | grep -F clamav-freshclam.timer")
+            machine.succeed("jq -e '.phase == \"scan-offline\" and .network_device_policy == \"forbidden\" and .quarantine_device_policy == \"required-read-only\" and .quarantine_mount_options == [\"nodev\", \"noexec\", \"nosuid\", \"ro\"] and .definitions_update == \"disabled\"' /etc/private-vm/scanner-phase.json")
+            machine.succeed("test -x /run/current-system/sw/bin/startxfce4")
+            machine.succeed("test -x /run/current-system/sw/bin/clamscan")
+            machine.succeed("test -x /run/current-system/sw/bin/bsdtar")
+            machine.succeed("test -x /run/current-system/sw/bin/libreoffice")
+            machine.succeed("test -x /run/current-system/sw/bin/ffmpeg")
+            machine.succeed("private-vm-guestd --version | jq -e '.guestRole == \"scanner\" and .guestApiMajor == 1 and .guestApiMinor == 0 and .capabilities == [\"approved-export\", \"definitions-update\", \"guest-events\", \"guest-shutdown\", \"guest-status\", \"inventory\", \"offline-verification\", \"reconstruct\", \"scan\", \"scan-report\"]'")
+            machine.succeed("test $(blockdev --getro /dev/disk/by-label/PVM_QUARANTINE) -eq 1")
+            machine.succeed("install -d -m 0700 /mnt/quarantine && mount -t ext4 -o ro,nodev,nosuid,noexec /dev/disk/by-label/PVM_QUARANTINE /mnt/quarantine")
+            machine.succeed("for option in ro nodev nosuid noexec; do findmnt -n -o OPTIONS -T /mnt/quarantine | tr ',' '\\n' | grep -Fx $option || exit 1; done")
+            machine.fail("touch /mnt/quarantine/write-must-fail")
+            machine.succeed("umount /mnt/quarantine")
+            machine.succeed("for command in ${nixpkgs.lib.concatStringsSep " " scannerForbiddenCommands}; do ! command -v $command >/dev/null || exit 1; done")
+            machine.succeed("for path in /root/.ssh /home/private/.ssh /root/.config/gh /home/private/.config/gh /root/.config/protonvpn /home/private/.config/protonvpn; do test ! -e $path || exit 1; done")
+            machine.succeed("! systemctl is-enabled sshd.service")
+            machine.succeed("test ! -e /run/current-system/sw/bin/sudo")
+            listeners = machine.succeed("ss -H -lntu")
+            assert listeners.strip() == "", f"unexpected TCP/UDP listeners: {listeners}"
+          '';
+        };
+
       staticBinariesCheckFor =
         system:
         let
@@ -535,6 +809,7 @@
             image-workstation-development = workstationDevelopment.config.system.build.images.qemu-efi;
             image-downloader = downloader.config.system.build.images.qemu-efi;
             image-scanner = scanner.config.system.build.images.qemu-efi;
+            sbom-scanner = scannerSBOMFor system;
             image-exporter = exporter.config.system.build.images.qemu-efi;
           };
         in
@@ -650,6 +925,9 @@
           desktop-role-isolation = desktopRoleIsolationCheckFor system;
           downloader-desktop = downloaderDesktopTestFor system;
           guest-common = commonGuestTestFor system;
+          scanner-image-contract = scannerImageContractCheckFor system;
+          scanner-update = scannerUpdateTestFor system;
+          scanner-offline = scannerOfflineTestFor system;
           workstation-bundles = workstationBundlesCheckFor system;
           workstation-desktop = workstationDesktopTestFor system;
         }

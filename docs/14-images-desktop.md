@@ -132,6 +132,29 @@ Applications are intentionally limited:
 - no browser in offline scan boot if it can be omitted
 - no file auto-open
 
+The scanner is one immutable image with two boot configurations over the same
+per-session root overlay. The default `definitions-update` configuration enables
+NetworkManager and `freshclam` but declares quarantine attachment forbidden. The
+`scan-offline` specialization disables NetworkManager, DHCP, resolved and the
+FreshClam service/timer. The daemon must also render the scan launch with no NIC;
+disabling guest services is not accepted as evidence that a network device is
+absent.
+
+`/etc/private-vm/scanner-toolchain.json` records the exact Nix package name and
+version for ClamAV, file identification, bounded archive primitives, parser
+containment, PDF/Office/image/media reconstruction and metadata inspection.
+Those same direct tool identities appear in the embedded SPDX 2.3 document at
+`/etc/private-vm/scanner-sbom.spdx.json` and the separate `sbom-scanner` flake
+output. This toolchain SBOM is immutable image identity evidence; release
+publication later augments it with the complete image-closure SBOM and artifact
+digest.
+
+The image contains no browser, password manager, source-control/SSH client,
+development toolchain or downloader client. LibreOffice is present only as the
+required headless Office-to-PDF reconstruction backend. Thunar and the terminal
+remain for the explicitly graphical inspection role, with thumbnailing, GVFS
+and UDisks disabled.
+
 ## Downloader desktop
 
 - qBittorrent graphical interface

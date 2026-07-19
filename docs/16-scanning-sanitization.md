@@ -159,3 +159,9 @@ See `schemas/scan-report.schema.json`.
 
 The report includes each tool version and exact decision reason. It remains
 volatile unless the user explicitly exports it.
+
+The immutable scanner image embeds its direct parser/reconstruction package
+versions in `/etc/private-vm/scanner-toolchain.json` and repeats those identities
+in `/etc/private-vm/scanner-sbom.spdx.json`. A missing, empty or mismatched entry
+is an image-build failure; the scanner workflow must copy the verified versions
+into the eventual scan report rather than probing an untracked host tool.

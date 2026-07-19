@@ -163,6 +163,25 @@ fallback are absent.
 and scanner system paths so an implicit XFCE application cannot silently leak
 across role boundaries.
 
+Scanner acceptance is split so each TCG process stays within the public-runner
+and 16 GiB maintainer-host budget:
+
+- `scanner-image-contract` checks the online/offline module contract, ClamAV
+  bounds, required tool commands, forbidden cross-role commands, and exact
+  package/version coverage in the embedded and exported SPDX documents.
+- `scanner-update` boots only the update role, proves quarantine is absent, and
+  runs FreshClam against a deterministic local `.hdb` fixture. This exercises an
+  actual database installation without relying on Internet availability or a
+  real credential.
+- `scanner-offline` uses explicit QEMU `-nic none`, verifies zero non-loopback
+  interfaces, attaches one read-only ext4 fixture, verifies the block read-only
+  bit and `ro,nodev,nosuid,noexec` mount flags, then proves writing fails.
+
+Both scanner boots verify the compiled `scanner` role and the exact advertised
+common-plus-scanner capability list. They also reject SSH/sudo, credential
+directories and workstation/downloader commands. Run the VM checks one at a
+time; they are deliberately not a multi-node test.
+
 ### KVM acceptance
 
 Run locally and optionally on a public documented volunteer/self-hosted runner:
