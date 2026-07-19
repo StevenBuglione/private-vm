@@ -53,15 +53,15 @@ func main() {
 	if err != nil {
 		fatal("GUESTD_IDENTITY_INVALID", err.Error(), "Install a verified role image with complete build identity metadata.")
 	}
-	serverConfig, scannerService, err := composeGuestServerConfig(identity, token)
+	serverConfig, roleService, err := composeGuestServerConfig(identity, token)
 	if err != nil {
 		fatal("GUESTD_SERVER_INVALID", "the role-specific guest service could not be composed", "Destroy the guest and install a compatible verified image.")
 	}
-	if scannerService != nil {
+	if roleService != nil {
 		defer func() {
 			cleanupContext, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
-			_ = scannerService.Close(cleanupContext)
+			_ = roleService.Close(cleanupContext)
 		}()
 	}
 	server, err := guest.NewServer(serverConfig)
@@ -102,7 +102,13 @@ func main() {
 	}
 }
 
-func composeGuestServerConfig(identity guest.Identity, token *guest.Token) (guest.ServerConfig, *guest.ScannerService, error) {
+type roleServiceCloser interface {
+	Close(context.Context) error
+}
+
+var newFixedExporterAdapter = guest.NewFixedExporterAdapter
+
+func composeGuestServerConfig(identity guest.Identity, token *guest.Token) (guest.ServerConfig, roleServiceCloser, error) {
 	config := guest.ServerConfig{Identity: identity, Token: token}
 	switch identity.Role {
 	case session.RoleWorkstation:
@@ -115,7 +121,16 @@ func composeGuestServerConfig(identity guest.Identity, token *guest.Token) (gues
 	case session.RoleScanner:
 		// Continue below and install only the scanner service compiled for this role.
 	case session.RoleExporter:
-		return guest.ServerConfig{}, nil, errors.New("fixed-path exporter LUKS2/ext4 adapter is not configured")
+		adapter, err := newFixedExporterAdapter()
+		if err != nil {
+			return guest.ServerConfig{}, nil, err
+		}
+		exporter, err := guest.NewExporterService(guest.ExporterServiceConfig{Identity: identity, Adapter: adapter})
+		if err != nil {
+			return guest.ServerConfig{}, nil, err
+		}
+		config.Exporter = exporter
+		return config, exporter, nil
 	default:
 		return config, nil, nil
 	}

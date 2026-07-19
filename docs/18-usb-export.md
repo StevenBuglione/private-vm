@@ -175,9 +175,13 @@ preparation and approved-output export interfaces. The exporter guest boundary
 implements the five role methods behind a fixed-policy adapter and verifies
 identity, no-network evidence, LUKS2/ext4 preparation, monotonic stream bounds,
 receive/reread hashes, both fsyncs, atomic rename, unmount and LUKS close. The
-generic daemon/guestd composition returns `USB_WORKFLOW_UNAVAILABLE` or refuses
-exporter startup until the image-specific QEMU, scanner and fixed-path
-cryptsetup/mkfs/mount adapters are installed.
+generic host daemon returns `USB_WORKFLOW_UNAVAILABLE` until its QEMU,
+scanner-source and relay adapters are installed. The exporter-compiled guestd
+uses one image-owned Linux adapter: it discovers exactly one unmounted
+mass-storage-only USB device, matches VID/PID/serial/capacity, proves that only
+loopback networking exists, and owns fixed LUKS2/ext4, mapper, mount and output
+paths. Its external tools and arguments are fixed; only the passphrase stream
+is connected to command stdin.
 
 ## Interrupted export
 

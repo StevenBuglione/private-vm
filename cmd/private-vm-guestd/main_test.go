@@ -1,13 +1,36 @@
 package main
 
 import (
+	"context"
+	"crypto/sha256"
 	"slices"
 	"strings"
 	"testing"
 
 	"github.com/StevenBuglione/private-vm/internal/guest"
+	"github.com/StevenBuglione/private-vm/internal/secret"
 	"github.com/StevenBuglione/private-vm/internal/session"
+	"github.com/StevenBuglione/private-vm/internal/transfer"
 )
+
+type guestdExporterAdapter struct{}
+
+func (guestdExporterAdapter) Inspect(context.Context, guest.ExporterDeviceExpectation) (guest.ExporterDeviceEvidence, error) {
+	return guest.ExporterDeviceEvidence{}, nil
+}
+func (guestdExporterAdapter) Prepare(context.Context, *secret.Bytes) (guest.ExporterPrepareEvidence, error) {
+	return guest.ExporterPrepareEvidence{}, nil
+}
+func (guestdExporterAdapter) BeginWrite(context.Context, transfer.Header, string) (guest.ExporterWriter, error) {
+	return nil, nil
+}
+func (guestdExporterAdapter) Reread(context.Context, string) ([sha256.Size]byte, error) {
+	return [sha256.Size]byte{}, nil
+}
+func (guestdExporterAdapter) Finalize(context.Context) (guest.ExporterFinalizeEvidence, error) {
+	return guest.ExporterFinalizeEvidence{}, nil
+}
+func (guestdExporterAdapter) Cleanup(context.Context) error { return nil }
 
 func TestCurrentVersionReportsCompiledRoleAndCapabilities(t *testing.T) {
 	previous := guest.CompiledRole
@@ -42,7 +65,7 @@ func TestComposeGuestServerConfigWiresOnlyScannerCompiledRole(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if scannerService == nil || config.Scanner != scannerService || config.Workstation != nil || config.Downloader != nil || config.Exporter != nil {
+	if scannerService == nil || any(config.Scanner) != any(scannerService) || config.Workstation != nil || config.Downloader != nil || config.Exporter != nil {
 		t.Fatalf("scanner composition = %#v", config)
 	}
 	if err := scannerService.Close(t.Context()); err != nil {
@@ -70,7 +93,10 @@ func TestCurrentVersionGenericBuildFailsClosed(t *testing.T) {
 	}
 }
 
-func TestComposeExporterFailsClosedWithoutFixedPathAdapter(t *testing.T) {
+func TestComposeExporterUsesOnlyFixedPathAdapter(t *testing.T) {
+	previous := newFixedExporterAdapter
+	newFixedExporterAdapter = func() (guest.ExporterAdapter, error) { return guestdExporterAdapter{}, nil }
+	t.Cleanup(func() { newFixedExporterAdapter = previous })
 	token, err := guest.TokenFromBytes(make([]byte, guest.TokenSize))
 	if err != nil {
 		t.Fatal(err)
@@ -82,7 +108,10 @@ func TestComposeExporterFailsClosedWithoutFixedPathAdapter(t *testing.T) {
 		OSRelease: "26.05", GuestdVersion: "test",
 	}
 	config, service, err := composeGuestServerConfig(identity, token)
-	if err == nil || service != nil || config.Exporter != nil {
-		t.Fatalf("generic exporter composition did not fail closed: config=%#v service=%v err=%v", config, service, err)
+	if err != nil || service == nil || any(config.Exporter) != any(service) || config.Workstation != nil || config.Downloader != nil || config.Scanner != nil {
+		t.Fatalf("exporter composition = config=%#v service=%v err=%v", config, service, err)
+	}
+	if err := service.Close(t.Context()); err != nil {
+		t.Fatal(err)
 	}
 }
