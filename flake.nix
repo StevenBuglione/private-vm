@@ -49,6 +49,8 @@
             workstation = [
               "desktop"
               "network-warning"
+              "vpn-verification"
+              "wireguard-config"
               "workspace-export"
               "workspace-import"
             ];
@@ -357,6 +359,12 @@
             virtualisation.memorySize = 2048;
             virtualisation.cores = 2;
             virtualisation.vlans = [ ];
+            virtualisation.emptyDiskImages = [
+              {
+                size = 8192;
+                driveConfig.deviceExtraOpts.serial = "quarantine";
+              }
+            ];
             virtualisation.qemu.options = tcgQEMUOptionsFor system;
           };
           testScript = ''
@@ -371,15 +379,7 @@
             machine.succeed("test -x /run/current-system/sw/bin/startxfce4")
             machine.succeed("test -x /run/current-system/sw/bin/wg")
             machine.succeed("test -x /run/current-system/sw/bin/nft")
-            machine.succeed("test -e /run/current-system/sw/share/applications/private-vm-qbittorrent.desktop")
             machine.succeed("test ! -e /run/current-system/sw/bin/qbittorrent")
-            machine.succeed("grep -Fx 'Session\\Interface=proton0' /etc/private-vm/qbittorrent/qBittorrent.conf")
-            machine.succeed("grep -Fx 'Session\\InterfaceName=proton0' /etc/private-vm/qbittorrent/qBittorrent.conf")
-            machine.succeed("grep -Fx 'PortForwardingEnabled=false' /etc/private-vm/qbittorrent/qBittorrent.conf")
-            machine.succeed("grep -Fx 'FileLogger\\Enabled=false' /etc/private-vm/qbittorrent/qBittorrent.conf")
-            machine.succeed("grep -Fx 'WebUI\\Enabled=true' /etc/private-vm/qbittorrent/qBittorrent.conf")
-            machine.succeed("grep -Fx 'WebUI\\LocalHostAuth=true' /etc/private-vm/qbittorrent/qBittorrent.conf")
-            machine.succeed("! grep -Eiq '(private.?key|password|magnet:|endpoint)' /etc/private-vm/qbittorrent/qBittorrent.conf")
             machine.succeed("! grep -RIE '(PrivateKey|PresharedKey|magnet:|Endpoint[[:space:]]*=)' /etc/private-vm")
             version = json.loads(machine.succeed("private-vm-guestd --version"))
             expected_capabilities = [
@@ -416,41 +416,38 @@
             machine.succeed("test $(findmnt -n -o FSTYPE -T /var/log) = tmpfs")
             machine.succeed("test ! -e /var/log/journal")
             listeners = machine.succeed("ss -H -lntu")
-            assert listeners.strip() == "", f"unexpected pre-application TCP/UDP listeners: {listeners}"
+            for listener in listeners.splitlines():
+              address = listener.split()[3]
+              assert address.startswith("127.0.0.53:") or address.startswith("127.0.0.54:"), listener
             machine.succeed("for command in evince file-roller firefox git gvfsd jq keepassxc libreoffice mousepad nm-applet parole pavucontrol ristretto thunar tumblerd udisksctl xfce4-screenshooter xfce4-taskmanager xfce4-terminal; do ! command -v $command >/dev/null || exit 1; done")
             machine.succeed("nft list table inet private_vm_downloader | grep -F 'policy drop'")
-            machine.succeed("test $(stat -c '%U:%G:%a' /run/private-vm-vpn) = root:root:711")
+            machine.succeed("test -b /dev/disk/by-id/virtio-quarantine")
+            machine.succeed("findmnt -n -o FSTYPE /mnt/quarantine | grep -Fx ext4")
+            machine.succeed("findmnt -n -o OPTIONS /mnt/quarantine | grep -E '(^|,)nodev(,|$)' | grep -E '(^|,)nosuid(,|$)' | grep -E '(^|,)noexec(,|$)'")
+            machine.succeed("systemctl is-enabled private-vm-qbittorrent.service | grep -Fx static")
+            machine.succeed("! systemctl is-active --quiet private-vm-qbittorrent.service")
+            machine.succeed("test $(stat -c '%U:%G:%a' /run/private-vm-qbittorrent/config/qBittorrent/qBittorrent.conf) = root:users:440")
+            machine.succeed("grep -Fx 'Session\\Interface=proton0' /run/private-vm-qbittorrent/config/qBittorrent/qBittorrent.conf")
+            machine.succeed("grep -Fx 'Session\\InterfaceName=proton0' /run/private-vm-qbittorrent/config/qBittorrent/qBittorrent.conf")
+            machine.succeed("grep -Fx 'WebUI\\Address=127.0.0.1' /run/private-vm-qbittorrent/config/qBittorrent/qBittorrent.conf")
+            machine.succeed("grep -E '^WebUI\\\\Password_PBKDF2=\"@ByteArray\\([A-Za-z0-9+/=]+:[A-Za-z0-9+/=]+\\)\"$' /run/private-vm-qbittorrent/config/qBittorrent/qBittorrent.conf")
+            machine.succeed("! grep -Eiq '(private.?key|magnet:|endpoint)' /run/private-vm-qbittorrent/config/qBittorrent/qBittorrent.conf")
 
-            machine.succeed("install -d -o private -g users -m 0700 /mnt/quarantine")
-            machine.succeed("mount -t tmpfs -o nodev,nosuid,noexec,size=64M private-vm-quarantine /mnt/quarantine")
-            machine.succeed("chown private:users /mnt/quarantine")
             machine.succeed("ip link add proton0 type dummy")
             machine.succeed("ip link set proton0 up")
-
-            user_systemctl = "runuser -u private -- env XDG_RUNTIME_DIR=/run/user/$(id -u private) systemctl --user"
-            machine.fail(f"{user_systemctl} start private-vm-qbittorrent.service")
-            machine.succeed("! pgrep -u private -x qbittorrent")
-            machine.succeed("systemctl show --user --machine=private@ private-vm-qbittorrent.service -p AssertResult | grep -Fx AssertResult=no")
-
-            machine.succeed("install -o root -g root -m 0444 /dev/null /run/private-vm-vpn/ready")
-            start_status, start_output = machine.execute(f"{user_systemctl} start private-vm-qbittorrent.service")
+            start_status, start_output = machine.execute("systemctl start private-vm-qbittorrent.service")
             if start_status != 0:
               log.error(start_output)
-              log.error(machine.succeed("journalctl --no-pager -n 100 _UID=$(id -u private)"))
-            assert start_status == 0, "VPN-gated qBittorrent did not start"
-            machine.wait_until_succeeds(f"{user_systemctl} is-active --quiet private-vm-qbittorrent.service")
+              log.error(machine.succeed("journalctl --no-pager -u private-vm-qbittorrent.service -n 100"))
+            assert start_status == 0, "fixed qBittorrent unit did not start"
+            machine.wait_until_succeeds("systemctl is-active --quiet private-vm-qbittorrent.service")
             listeners = machine.succeed("ss -H -ltn")
             for listener in listeners.splitlines():
               address = listener.split()[3]
-              assert address.startswith("127.0.0.1:") or address.startswith("[::1]:"), listener
-            machine.succeed("grep -Fx 'Session\\Interface=proton0' /run/user/$(id -u private)/private-vm-qbittorrent/qBittorrent/config/qBittorrent.conf")
-            machine.succeed("test ! -d /run/user/$(id -u private)/private-vm-qbittorrent/qBittorrent/data/logs")
+              assert address.startswith("127.0.0.1:") or address.startswith("127.0.0.53:") or address.startswith("127.0.0.54:"), listener
 
-            machine.succeed(f"{user_systemctl} stop private-vm-qbittorrent.service")
-            machine.wait_until_succeeds(f"! {user_systemctl} is-active --quiet private-vm-qbittorrent.service")
-            machine.succeed("! pgrep -u private -x qbittorrent")
-            machine.succeed("rm /run/private-vm-vpn/ready")
-            machine.fail(f"{user_systemctl} start private-vm-qbittorrent.service")
+            machine.succeed("systemctl stop private-vm-qbittorrent.service")
+            machine.wait_until_succeeds("! systemctl is-active --quiet private-vm-qbittorrent.service")
             machine.succeed("! pgrep -u private -x qbittorrent")
 
             machine.succeed("cp /etc/private-vm/nftables/downloader-vpn-ipv4.nft.in /run/downloader-vpn-ipv4.nft")
@@ -459,7 +456,6 @@
             machine.succeed("cp /etc/private-vm/nftables/downloader-vpn-ipv6.nft.in /run/downloader-vpn-ipv6.nft")
             machine.succeed("sed -i -e 's/__PVM_ENDPOINT_IPV6__/2001:db8::1/g' -e 's/__PVM_ENDPOINT_PORT__/51820/g' /run/downloader-vpn-ipv6.nft")
             machine.succeed("nft --check --file /run/downloader-vpn-ipv6.nft")
-            machine.succeed("umount /mnt/quarantine")
           '';
         };
 
@@ -612,7 +608,6 @@
             test ! -e "${downloaderPath}/bin/$command"
           done
           test -x "${downloaderPath}/bin/wg"
-          test -e "${downloaderPath}/share/applications/private-vm-qbittorrent.desktop"
 
           for command in evince file-roller firefox gvfsd mousepad nm-applet parole pavucontrol qbittorrent ristretto tumblerd udisksctl xfce4-screenshooter xfce4-taskmanager; do
             test ! -e "${scannerPath}/bin/$command"

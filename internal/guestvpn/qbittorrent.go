@@ -20,6 +20,13 @@ type httpDoer interface {
 	Do(*http.Request) (*http.Response, error)
 }
 
+// LoopbackHTTPClient is the narrow authenticated client supplied by the
+// downloader process owner. Implementations still pass the fixed-origin check
+// in QBittorrentBindingProbe.
+type LoopbackHTTPClient interface {
+	Do(*http.Request) (*http.Response, error)
+}
+
 // QBittorrentBindingProbe uses the loopback-only Web API to verify the exact
 // interface binding and disabled UPnP/NAT-PMP setting. Unknown preference
 // fields are never materialized and the bounded response buffer is cleared.
@@ -44,6 +51,10 @@ func NewQBittorrentBindingProbe() *QBittorrentBindingProbe {
 			return errors.New("qBittorrent redirect rejected")
 		},
 	}
+	return &QBittorrentBindingProbe{client: client, timeout: qBittorrentTimeout}
+}
+
+func NewQBittorrentBindingProbeWithClient(client LoopbackHTTPClient) *QBittorrentBindingProbe {
 	return &QBittorrentBindingProbe{client: client, timeout: qBittorrentTimeout}
 }
 

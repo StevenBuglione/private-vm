@@ -16,6 +16,8 @@ service GuestCommonService {
 }
 
 service WorkstationGuestService {
+  rpc ConfigureWireGuard(ConfigureWireGuardRequest) returns (VPNStatus);
+  rpc VerifyVPN(VerifyVPNRequest) returns (VPNStatus);
   rpc GetWorkspaceState(WorkspaceStateRequest) returns (WorkspaceState);
   rpc ImportFile(stream TransferFrame) returns (TransferReceipt);
   rpc ListExportFiles(WorkspaceStateRequest) returns (WorkspaceState);

@@ -551,6 +551,18 @@ crossing, requires one-link regular files of exact size and hashes with bounded
 memory. Live image qBittorrent API compatibility, block-device mounting, VPN
 packets and QEMU absence remain explicit acceptance tests.
 
+The production-composition tests additionally prove that the per-boot
+qBittorrent plaintext is absent from its volatile configuration, authenticated
+requests carry only the bounded loopback SID, cancellation stops a partially
+started fixed unit, and the binding probe observes `proton0`. The quarantine
+owner tests cover blank/ext4/unknown signatures, mount preparation,
+cancellation cleanup, sync/unmount, absence audit, retry after failed unmount
+and idempotent close without invoking a real block device or mount syscall.
+The role-adapter tests configure the same typed underlay through both exact
+workstation and downloader services, reject a mismatched role before controller
+composition, clear request-only bytes on every return and prove that adding the
+workstation methods does not register the downloader service.
+
 ## Cleanup fault matrix
 
 Inject failure after each:

@@ -72,6 +72,7 @@ in
   imports = [ ./desktop-common.nix ];
 
   networking.hostName = "workstation";
+  services.resolved.enable = true;
 
   assertions = [
     {
@@ -108,7 +109,24 @@ in
     }
   ];
 
-  environment.systemPackages = map (name: packagesByName.${name}) selectedPackageNames;
+  environment.systemPackages = (map (name: packagesByName.${name}) selectedPackageNames) ++ [
+    pkgs.wireguard-tools
+  ];
+
+  # guestd, not desktop applications, owns the fixed proton0 lifecycle. The
+  # broader socket families and NET_ADMIN capability are required only for
+  # typed WireGuard/nftables/netlink operations after authenticated VSOCK RPC.
+  systemd.services.private-vm-guestd.serviceConfig.RestrictAddressFamilies = lib.mkForce [
+    "AF_UNIX"
+    "AF_VSOCK"
+    "AF_INET"
+    "AF_INET6"
+    "AF_NETLINK"
+  ];
+  systemd.services.private-vm-guestd.serviceConfig.CapabilityBoundingSet = lib.mkForce [
+    "CAP_IPC_LOCK"
+    "CAP_NET_ADMIN"
+  ];
 
   # NixOS installs programs.ssh.package as a core package. Point that module at
   # the same client-only derivation so the stock server-capable output cannot

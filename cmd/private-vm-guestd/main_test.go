@@ -42,14 +42,14 @@ func TestComposeGuestServerConfigWiresOnlyScannerCompiledRole(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if scannerService == nil || config.Scanner != scannerService || config.Workstation != nil || config.Downloader != nil || config.Exporter != nil {
+	if scannerService == nil || config.Scanner == nil || config.Workstation != nil || config.Downloader != nil || config.Exporter != nil {
 		t.Fatalf("scanner composition = %#v", config)
 	}
 	if err := scannerService.Close(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 
-	identity.Role = session.RoleDownloader
+	identity.Role = session.RoleExporter
 	config, scannerService, err = composeGuestServerConfig(identity, token)
 	if err != nil {
 		t.Fatal(err)

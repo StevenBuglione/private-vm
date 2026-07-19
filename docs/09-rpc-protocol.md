@@ -263,6 +263,8 @@ Shared:
 
 Workstation:
 
+- `ConfigureWireGuard`
+- `VerifyVPN`
 - `GetWorkspaceState`
 - `ImportFile`
 - `ListExportFiles`
@@ -298,8 +300,8 @@ selected paths/sizes and hashes, shuts down qBittorrent, syncs and unmounts in
 the guest; the host coordinator must additionally destroy and audit the
 downloader before it can issue a scanner-ready receipt.
 
-The implemented downloader VPN adapter accepts at most the frozen 64-KiB
-profile size, clears and detaches the protobuf byte slice on every handler
+The implemented workstation and downloader VPN adapters accept at most the
+frozen 64-KiB profile size, clear and detach the protobuf byte slice on every handler
 return (including rejected role/context), and parses only a host-resolved
 literal endpoint. `ConfigureWireGuard` returns success only for controller
 state `verified`; `VerifyVPN` re-runs the complete injected proof. VPN status
@@ -310,10 +312,11 @@ profile values, probe targets, public IPs or raw command output.
 The same authenticated request carries the daemon-selected private IPv4/IPv6
 point-to-point underlay and operator-controlled probe fixtures as closed typed
 messages. Addresses are canonical byte fields with bounded prefix lengths and
-ports, never display strings. The downloader validates them before creating
+ports, never display strings. Each online role validates them before creating
 its one VPN controller and rejects a second configuration attempt. These
 request-only values never appear in status, diagnostics, events or durable
-state. See ADR 0012.
+state. The shared internal lifecycle does not change exact role registration:
+the workstation exposes no torrent RPC. See ADRs 0012 and 0013.
 
 Scanner:
 
@@ -369,7 +372,7 @@ The advertised v1 capability map is exact and sorted:
 | Scope | Capabilities |
 |---|---|
 | common | `guest-events`, `guest-shutdown`, `guest-status` |
-| workstation | `desktop`, `network-warning`, `workspace-export`, `workspace-import` |
+| workstation | `desktop`, `network-warning`, `vpn-verification`, `wireguard-config`, `workspace-export`, `workspace-import` |
 | downloader | `quarantine-seal`, `torrent-download`, `torrent-metadata`, `vpn-verification`, `wireguard-config` |
 | scanner | `approved-export`, `definitions-update`, `inventory`, `offline-verification`, `reconstruct`, `scan`, `scan-report` |
 | exporter | `usb-finalize`, `usb-inspect`, `usb-prepare`, `usb-verify`, `usb-write` |

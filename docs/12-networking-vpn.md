@@ -185,8 +185,10 @@ adapters fail construction. The role matrix admits workstation, downloader,
 and scanner-update policies; scanner-scan and exporter networking fail closed.
 
 The host-selected point-to-point addresses and controlled leak-test fixtures
-cross authenticated VSOCK in typed protobuf fields defined by ADR 0012. The
-guest accepts only exact `/30` IPv4 and `/126` IPv6 underlays and validated
+cross authenticated VSOCK in typed protobuf fields defined by ADRs 0012 and
+0013. Both online role services expose the same named configure/verify methods,
+but exact role registration keeps workstation and downloader capabilities
+separate. The guest accepts only exact `/30` IPv4 and `/126` IPv6 underlays and validated
 public probe endpoints. It never derives, defaults, logs or persists these
 values, and no machine status contains them.
 
@@ -250,8 +252,16 @@ the required same-origin headers, bounds every response to 2 MiB or less and
 uses only the reviewed v2 torrent/app endpoints. The save path is the compiled
 guest quarantine path. It has no caller-set URL, path, raw API method, hook or
 preference surface. Authentication and the image's exact qBittorrent
-configuration are composed by the downloader image/runtime owner; live API
-compatibility and interface-binding inspection remain image acceptance gates.
+configuration are composed by the downloader image/runtime owner. Guestd
+generates a random per-boot password in protected memory and writes only its
+qBittorrent-compatible PBKDF2-HMAC-SHA-512 verifier to a root-owned volatile
+configuration. It authenticates over the fixed loopback origin, retains the
+bounded SID as protected volatile data, and supplies that authenticated client
+to both the torrent backend and interface-binding probe. Its pinned
+`LocalHostAuth=true` value means local authentication is enabled in qBittorrent
+(the bypass setting is its inverse), and subnet-whitelist bypass is disabled.
+Live API compatibility
+remains an image acceptance gate.
 
 Port forwarding is not part of v1. Download functionality does not require it,
 and it adds state and inbound exposure.
@@ -259,19 +269,23 @@ and it adds state and inbound exposure.
 The downloader image boots with a default-drop `inet` table. It contains
 separate IPv4 and IPv6 runtime templates whose only underlay egress is UDP to a
 typed, validated Proton endpoint; NET-003 renders and applies one complete
-transaction after profile validation. qBittorrent runs as a hardened user
-service only when both the root-owned `/run/private-vm-vpn/ready` marker and the
-quarantine mount exist. Its profile and logs are volatile, its Web API binds to
-`127.0.0.1`, and the immutable image contains no reusable API credential.
-TOR-002 must provision and verify local authentication with a per-boot
-credential before guestd uses the API.
+transaction after profile validation. qBittorrent runs as a hardened system
+service with no install target. Only guestd's serialized VPN controller starts
+the fixed system unit, after the kill switch and `proton0` are configured and
+the guest-owned quarantine is mounted. Failed startup or initial verification
+stops the unit in an independent bounded cleanup context. The profile and logs
+are volatile, the Web API binds to `127.0.0.1`, and the immutable image contains
+no reusable API credential. The generated password is absent from argv,
+environment, the immutable image and journald. The fixed unit is also
+`PartOf=private-vm-guestd.service`, so a guestd stop or restart propagates a
+process stop instead of leaving qBittorrent outside its lifecycle owner.
 
-NIX-004 establishes only the fail-closed image defaults and service sandbox. It
-does not claim that the current immutable `ExecStartPre` profile copy provisions
-an authenticated Web API session. TOR-002 must replace that bootstrap path with
-a bounded per-boot credential flow, keep the credential in volatile memory,
-prove an authenticated API request succeeds, and prove the credential is absent
-from argv, the environment, the immutable profile and the journal.
+Workstation guestd composes the same fixed Linux WireGuard, systemd-resolved
+and controlled-probe adapters with workstation policy and no torrent binding
+or qBittorrent owner. Its image grants only guestd the required `NET_ADMIN`
+capability and network address families. Host endpoint-only enforcement remains
+active before the authenticated request, and guestd installs its default-drop
+kill switch before configuring `proton0`.
 
 ## Leak tests
 

@@ -137,6 +137,47 @@ func TestDownloaderVPNRPCRejectsMalformedTypedUnderlayBeforeComposition(t *testi
 	}
 }
 
+func TestWorkstationVPNRPCUsesWorkstationRoleWithoutDownloaderService(t *testing.T) {
+	factory := func(underlay guestvpn.Underlay, _ guestvpn.ProbeTargets) (*guestvpn.Controller, error) {
+		return guestvpn.NewController(
+			&rpcVPNBackend{}, rpcVPNVerifier{}, guestvpn.RolePolicy{Role: session.RoleWorkstation}, underlay,
+		)
+	}
+	handler, err := NewWorkstationVPNServer(workstationServer{}, factory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw := downloaderProfile()
+	underlay, targets := downloaderNetworkFields(t)
+	request := &privatevmv1.ConfigureWireGuardRequest{
+		Context: helloRequest(session.RoleWorkstation, APIMajor, APIMinor).GetContext(),
+		Profile: raw, Underlay: underlay, ProbeTargets: targets,
+	}
+	configured, err := handler.ConfigureWireGuard(t.Context(), request)
+	if err != nil || !configured.GetHandshake() || !configured.GetConfigured() {
+		t.Fatalf("workstation ConfigureWireGuard = %#v, %v", configured, err)
+	}
+	verified, err := handler.VerifyVPN(t.Context(), &privatevmv1.VerifyVPNRequest{
+		Context: helloRequest(session.RoleWorkstation, APIMajor, APIMinor).GetContext(),
+	})
+	if err != nil || !verified.GetHandshake() {
+		t.Fatalf("workstation VerifyVPN = %#v, %v", verified, err)
+	}
+
+	wrong := downloaderProfile()
+	underlay, targets = downloaderNetworkFields(t)
+	_, err = handler.ConfigureWireGuard(t.Context(), &privatevmv1.ConfigureWireGuardRequest{
+		Context: helloRequest(session.RoleDownloader, APIMajor, APIMinor).GetContext(),
+		Profile: wrong, Underlay: underlay, ProbeTargets: targets,
+	})
+	if status.Code(err) != codes.FailedPrecondition || !allZeroGuestBytes(wrong) {
+		t.Fatalf("workstation accepted downloader role: %v", err)
+	}
+	if err := handler.Close(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func allZeroGuestBytes(value []byte) bool {
 	for _, current := range value {
 		if current != 0 {

@@ -60,7 +60,8 @@
           "capabilities": {
             "const": [
               "desktop", "guest-events", "guest-shutdown", "guest-status",
-              "network-warning", "workspace-export", "workspace-import"
+              "network-warning", "vpn-verification", "wireguard-config",
+              "workspace-export", "workspace-import"
             ]
           }
         }

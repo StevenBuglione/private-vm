@@ -102,6 +102,8 @@
               "guest-shutdown",
               "guest-status",
               "network-warning",
+              "vpn-verification",
+              "wireguard-config",
               "workspace-export",
               "workspace-import"
             ]

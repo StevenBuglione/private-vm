@@ -163,6 +163,17 @@ quarantine filesystem is interpreted by the host.
 Use a raw sparse disk or QCOW2 without a backing image. The guest creates a
 simple filesystem. The host treats it as opaque.
 
+The downloader guest resolves only `/dev/disk/by-id/virtio-quarantine`, opens
+the final block node without following another link and verifies the sysfs
+serial, writable bit and capacity. It accepts only an all-zero initial header
+or an ext4 superblock from an interrupted/restarted preparation; every other
+signature fails closed. Formatting uses the pinned `mkfs.ext4` with the device
+on inherited fd 3, then guestd mounts it at `/mnt/quarantine` with
+`nodev,nosuid,noexec`. The payload, incomplete and qBittorrent state
+directories have fixed identities and permissions. Seal/cleanup calls
+`syncfs`, unmounts, audits exact mount absence and only then closes the device.
+No one of these operations mounts the disk on the host.
+
 Attachment matrix:
 
 | Role | Access |

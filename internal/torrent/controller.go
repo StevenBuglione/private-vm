@@ -437,12 +437,14 @@ func (controller *Controller) Close(ctx context.Context) error {
 			cleanupErrors = append(cleanupErrors, err)
 		}
 	}
-	if !controller.clientDown {
+	if controller.handle.valid() && !controller.clientDown {
 		if err := controller.backend.Shutdown(cleanupCtx); err != nil {
 			cleanupErrors = append(cleanupErrors, err)
 		} else {
 			controller.clientDown = true
 		}
+	} else if !controller.handle.valid() {
+		controller.clientDown = true
 	}
 	if len(cleanupErrors) > 0 {
 		return cleanupIncomplete()

@@ -138,6 +138,20 @@ same controller. Completion uses no-follow/beneath/no-cross-device opens to
 hash exact selected regular files, then qBittorrent shutdown and guest
 sync/unmount precede a separate host destruction/absence-audit gate.
 
+The downloader guest composition creates the fixed virtio quarantine owner,
+an authenticated local qBittorrent owner and the torrent controller before it
+registers the downloader service. The qBittorrent owner generates one per-boot
+credential, writes only its derived verifier beneath `/run`, starts one fixed
+systemd unit after guest VPN configuration, authenticates on loopback and
+shares the protected SID with the binding probe and torrent adapter. Cleanup is
+ordered qBittorrent API/controller, local unit, tunnel, kill switch, quarantine
+sync/unmount and device close; a failed dependent step is retained for retry.
+
+The workstation service is decorated by the same typed guest network owner,
+using workstation policy and no torrent application. The protobuf methods are
+additive on `WorkstationGuestService`; only that role service is registered, so
+sharing the internal network lifecycle does not expose downloader RPCs.
+
 The CLI torrent adapter uses the existing hidden terminal and bounded stream
 owners. Magnet parsing operates on bytes and protected memory; metainfo is
 streamed to the authenticated orchestrator and is not parsed on the host.

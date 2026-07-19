@@ -245,6 +245,8 @@ var GuestCommonService_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
+	WorkstationGuestService_ConfigureWireGuard_FullMethodName = "/privatevm.v1.WorkstationGuestService/ConfigureWireGuard"
+	WorkstationGuestService_VerifyVPN_FullMethodName          = "/privatevm.v1.WorkstationGuestService/VerifyVPN"
 	WorkstationGuestService_GetWorkspaceState_FullMethodName  = "/privatevm.v1.WorkstationGuestService/GetWorkspaceState"
 	WorkstationGuestService_ImportFile_FullMethodName         = "/privatevm.v1.WorkstationGuestService/ImportFile"
 	WorkstationGuestService_ListExportFiles_FullMethodName    = "/privatevm.v1.WorkstationGuestService/ListExportFiles"
@@ -257,6 +259,8 @@ const (
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type WorkstationGuestServiceClient interface {
+	ConfigureWireGuard(ctx context.Context, in *ConfigureWireGuardRequest, opts ...grpc.CallOption) (*VPNStatus, error)
+	VerifyVPN(ctx context.Context, in *VerifyVPNRequest, opts ...grpc.CallOption) (*VPNStatus, error)
 	GetWorkspaceState(ctx context.Context, in *WorkspaceStateRequest, opts ...grpc.CallOption) (*WorkspaceState, error)
 	ImportFile(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[TransferFrame, TransferReceipt], error)
 	ListExportFiles(ctx context.Context, in *WorkspaceStateRequest, opts ...grpc.CallOption) (*WorkspaceState, error)
@@ -271,6 +275,26 @@ type workstationGuestServiceClient struct {
 
 func NewWorkstationGuestServiceClient(cc grpc.ClientConnInterface) WorkstationGuestServiceClient {
 	return &workstationGuestServiceClient{cc}
+}
+
+func (c *workstationGuestServiceClient) ConfigureWireGuard(ctx context.Context, in *ConfigureWireGuardRequest, opts ...grpc.CallOption) (*VPNStatus, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(VPNStatus)
+	err := c.cc.Invoke(ctx, WorkstationGuestService_ConfigureWireGuard_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *workstationGuestServiceClient) VerifyVPN(ctx context.Context, in *VerifyVPNRequest, opts ...grpc.CallOption) (*VPNStatus, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(VPNStatus)
+	err := c.cc.Invoke(ctx, WorkstationGuestService_VerifyVPN_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func (c *workstationGuestServiceClient) GetWorkspaceState(ctx context.Context, in *WorkspaceStateRequest, opts ...grpc.CallOption) (*WorkspaceState, error) {
@@ -349,6 +373,8 @@ func (c *workstationGuestServiceClient) ShowNetworkWarning(ctx context.Context, 
 // All implementations must embed UnimplementedWorkstationGuestServiceServer
 // for forward compatibility.
 type WorkstationGuestServiceServer interface {
+	ConfigureWireGuard(context.Context, *ConfigureWireGuardRequest) (*VPNStatus, error)
+	VerifyVPN(context.Context, *VerifyVPNRequest) (*VPNStatus, error)
 	GetWorkspaceState(context.Context, *WorkspaceStateRequest) (*WorkspaceState, error)
 	ImportFile(grpc.ClientStreamingServer[TransferFrame, TransferReceipt]) error
 	ListExportFiles(context.Context, *WorkspaceStateRequest) (*WorkspaceState, error)
@@ -365,6 +391,12 @@ type WorkstationGuestServiceServer interface {
 // pointer dereference when methods are called.
 type UnimplementedWorkstationGuestServiceServer struct{}
 
+func (UnimplementedWorkstationGuestServiceServer) ConfigureWireGuard(context.Context, *ConfigureWireGuardRequest) (*VPNStatus, error) {
+	return nil, status.Error(codes.Unimplemented, "method ConfigureWireGuard not implemented")
+}
+func (UnimplementedWorkstationGuestServiceServer) VerifyVPN(context.Context, *VerifyVPNRequest) (*VPNStatus, error) {
+	return nil, status.Error(codes.Unimplemented, "method VerifyVPN not implemented")
+}
 func (UnimplementedWorkstationGuestServiceServer) GetWorkspaceState(context.Context, *WorkspaceStateRequest) (*WorkspaceState, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetWorkspaceState not implemented")
 }
@@ -403,6 +435,42 @@ func RegisterWorkstationGuestServiceServer(s grpc.ServiceRegistrar, srv Workstat
 		t.testEmbeddedByValue()
 	}
 	s.RegisterService(&WorkstationGuestService_ServiceDesc, srv)
+}
+
+func _WorkstationGuestService_ConfigureWireGuard_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ConfigureWireGuardRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(WorkstationGuestServiceServer).ConfigureWireGuard(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: WorkstationGuestService_ConfigureWireGuard_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(WorkstationGuestServiceServer).ConfigureWireGuard(ctx, req.(*ConfigureWireGuardRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _WorkstationGuestService_VerifyVPN_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(VerifyVPNRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(WorkstationGuestServiceServer).VerifyVPN(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: WorkstationGuestService_VerifyVPN_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(WorkstationGuestServiceServer).VerifyVPN(ctx, req.(*VerifyVPNRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
 func _WorkstationGuestService_GetWorkspaceState_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -502,6 +570,14 @@ var WorkstationGuestService_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: "privatevm.v1.WorkstationGuestService",
 	HandlerType: (*WorkstationGuestServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "ConfigureWireGuard",
+			Handler:    _WorkstationGuestService_ConfigureWireGuard_Handler,
+		},
+		{
+			MethodName: "VerifyVPN",
+			Handler:    _WorkstationGuestService_VerifyVPN_Handler,
+		},
 		{
 			MethodName: "GetWorkspaceState",
 			Handler:    _WorkstationGuestService_GetWorkspaceState_Handler,

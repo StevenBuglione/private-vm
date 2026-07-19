@@ -264,6 +264,9 @@ ordinary, detailed and structural `fmt` verbs cannot reveal that cause.
 - `NETWORK_TOPOLOGY_NOT_READY`
 - `NETWORK_CLEANUP_INCOMPLETE`
 - `GUEST_VPN_REQUEST_INVALID`
+- `GUEST_VPN_ALREADY_CONFIGURED`
+- `GUEST_VPN_COMPOSITION_FAILED`
+- `GUEST_VPN_UNCONFIGURED`
 - `GUEST_KILL_SWITCH_FAILED`
 - `GUEST_VPN_CONFIGURATION_FAILED`
 - `GUEST_VPN_VERIFICATION_FAILED`
@@ -306,6 +309,9 @@ Host-network operations additionally use these stable safe codes:
 | `NETWORK_TOPOLOGY_NOT_READY` | 13 | A stale or incomplete network handle was used for a guest handoff. | Complete topology and policy creation or create a new session after cleanup. |
 | `NETWORK_CLEANUP_INCOMPLETE` | 24 | At least one owned network resource could not be removed or audited absent. | Keep the session in cleanup state and retry verified cleanup. |
 | `GUEST_VPN_REQUEST_INVALID` | 13 | The requested guest role, underlay or lifecycle transition is invalid. | Use the typed online-role workflow and start from a fresh verified guest. |
+| `GUEST_VPN_ALREADY_CONFIGURED` | 13 | A second network plan was submitted to one online guest boot. | Destroy the guest and create a fresh role guest for another network plan. |
+| `GUEST_VPN_COMPOSITION_FAILED` | 13 | A required fixed guest VPN, probe or role adapter is unavailable. | Destroy the guest and install the verified role image. |
+| `GUEST_VPN_UNCONFIGURED` | 13 | Verification was requested before authenticated VPN configuration. | Configure the guest through the daemon before retrying verification. |
 | `GUEST_KILL_SWITCH_FAILED` | 13 | The guest default-drop policy was not installed atomically. | Do not start guest applications; stop and clean the session. |
 | `GUEST_VPN_CONFIGURATION_FAILED` | 13 | WireGuard, routing or tunnel DNS configuration failed. | Keep the kill switch armed, stop the guest and retry with a current profile. |
 | `GUEST_VPN_VERIFICATION_FAILED` | 13 | At least one required handshake, tunnel, bypass or binding proof is absent. | Keep applications stopped and run the controlled verification again. |

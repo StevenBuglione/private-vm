@@ -10,13 +10,17 @@ import (
 	"io"
 	"os"
 	"os/signal"
+	"os/user"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
 
 	"github.com/StevenBuglione/private-vm/internal/buildinfo"
 	"github.com/StevenBuglione/private-vm/internal/guest"
+	"github.com/StevenBuglione/private-vm/internal/guestvpn"
 	"github.com/StevenBuglione/private-vm/internal/session"
+	"github.com/StevenBuglione/private-vm/internal/torrent"
 	"github.com/StevenBuglione/private-vm/internal/workstation"
 	"google.golang.org/grpc"
 )
@@ -53,15 +57,15 @@ func main() {
 	if err != nil {
 		fatal("GUESTD_IDENTITY_INVALID", err.Error(), "Install a verified role image with complete build identity metadata.")
 	}
-	serverConfig, scannerService, err := composeGuestServerConfig(identity, token)
+	serverConfig, roleCleanup, err := composeGuestServerConfig(identity, token)
 	if err != nil {
 		fatal("GUESTD_SERVER_INVALID", "the role-specific guest service could not be composed", "Destroy the guest and install a compatible verified image.")
 	}
-	if scannerService != nil {
+	if roleCleanup != nil {
 		defer func() {
-			cleanupContext, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			cleanupContext, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
-			_ = scannerService.Close(cleanupContext)
+			_ = roleCleanup.Close(cleanupContext)
 		}()
 	}
 	server, err := guest.NewServer(serverConfig)
@@ -102,7 +106,11 @@ func main() {
 	}
 }
 
-func composeGuestServerConfig(identity guest.Identity, token *guest.Token) (guest.ServerConfig, *guest.ScannerService, error) {
+type roleCleanup interface {
+	Close(context.Context) error
+}
+
+func composeGuestServerConfig(identity guest.Identity, token *guest.Token) (guest.ServerConfig, roleCleanup, error) {
 	config := guest.ServerConfig{Identity: identity, Token: token}
 	switch identity.Role {
 	case session.RoleWorkstation:
@@ -110,10 +118,21 @@ func composeGuestServerConfig(identity guest.Identity, token *guest.Token) (gues
 		if err != nil {
 			return guest.ServerConfig{}, nil, err
 		}
-		config.Workstation = workspace
-		return config, nil, nil
+		network, err := guest.NewWorkstationVPNServer(workspace, productionVPNFactory(session.RoleWorkstation, nil))
+		if err != nil {
+			return guest.ServerConfig{}, nil, err
+		}
+		config.Workstation = network
+		return config, network, nil
 	case session.RoleScanner:
 		// Continue below and install only the scanner service compiled for this role.
+	case session.RoleDownloader:
+		downloader, cleanup, err := composeDownloaderService()
+		if err != nil {
+			return guest.ServerConfig{}, nil, err
+		}
+		config.Downloader = downloader
+		return config, cleanup, nil
 	default:
 		return config, nil, nil
 	}
@@ -123,6 +142,165 @@ func composeGuestServerConfig(identity guest.Identity, token *guest.Token) (gues
 	}
 	config.Scanner = scannerService
 	return config, scannerService, nil
+}
+
+type downloaderCleanup struct {
+	server     *guest.DownloaderVPNServer
+	controller *torrent.Controller
+	client     *torrent.LocalQBittorrentService
+	quarantine *torrent.QuarantineOwner
+}
+
+func (cleanup *downloaderCleanup) Close(ctx context.Context) error {
+	if cleanup == nil {
+		return nil
+	}
+	var cleanupErrors []error
+	if cleanup.controller != nil {
+		if err := cleanup.controller.Close(ctx); err != nil {
+			cleanupErrors = append(cleanupErrors, err)
+		}
+	}
+	var vpnErr error
+	if cleanup.server != nil {
+		vpnErr = cleanup.server.StopVPN(ctx)
+		if vpnErr != nil && cleanup.client != nil {
+			// A failed first unit stop retains ownership. Retry the fixed unit,
+			// then let the VPN owner finish tunnel -> kill-switch teardown.
+			if retryErr := cleanup.client.Stop(ctx); retryErr == nil {
+				vpnErr = cleanup.server.StopVPN(ctx)
+			} else {
+				vpnErr = errors.Join(vpnErr, retryErr)
+			}
+		}
+	}
+	if cleanup.client != nil {
+		if err := cleanup.client.Close(ctx); err != nil {
+			vpnErr = errors.Join(vpnErr, err)
+		}
+	}
+	if vpnErr != nil {
+		cleanupErrors = append(cleanupErrors, vpnErr)
+		// qBittorrent may still own quarantine paths. Preserve the mount for
+		// process/VM teardown instead of unmounting beneath an active process.
+		return errors.Join(cleanupErrors...)
+	}
+	if cleanup.quarantine != nil {
+		if err := cleanup.quarantine.Close(ctx); err != nil {
+			cleanupErrors = append(cleanupErrors, err)
+		}
+	}
+	return errors.Join(cleanupErrors...)
+}
+
+func composeDownloaderService() (*guest.DownloaderVPNServer, *downloaderCleanup, error) {
+	prepareCtx, cancelPrepare := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancelPrepare()
+	uid, gid, err := privateUserIdentity()
+	if err != nil {
+		return nil, nil, err
+	}
+	quarantine, err := torrent.PrepareLinuxQuarantine(prepareCtx, "/run/current-system/sw/bin/mkfs.ext4", uid, gid)
+	if err != nil {
+		return nil, nil, err
+	}
+	fail := func(err error) (*guest.DownloaderVPNServer, *downloaderCleanup, error) {
+		cleanupCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = quarantine.Close(cleanupCtx)
+		return nil, nil, err
+	}
+	available, err := quarantine.CapacityBytes()
+	if err != nil || available <= 6<<30 {
+		return fail(errors.New("quarantine capacity is insufficient"))
+	}
+	client, err := torrent.NewLocalQBittorrentService("/run/current-system/sw/bin/systemctl", uid, gid)
+	if err != nil {
+		return fail(err)
+	}
+	backend, err := torrent.NewQBitBackend(client, torrent.NewFilesystemVerifier())
+	if err != nil {
+		_ = client.Close(context.Background())
+		return fail(err)
+	}
+	maximumSelected := (available - (5 << 30)) / 2
+	controller, err := torrent.NewController(backend, quarantine, torrent.Config{
+		SafePolicy: true,
+		Budget: torrent.CapacityBudget{
+			QuarantineAvailableBytes: available, ScanAvailableBytes: available, ReconstructionAvailable: available,
+			DestinationAvailable: available, RootOverlayBudgetBytes: 1 << 30, ArchiveExpansionBytes: 4 << 30,
+			ReconstructionBytes: 1 << 30, MaximumSelectedBytes: maximumSelected,
+		},
+	})
+	if err != nil {
+		_ = client.Close(context.Background())
+		return fail(err)
+	}
+	factory := productionVPNFactory(session.RoleDownloader, client)
+	server, err := guest.NewDownloaderServer(factory, controller)
+	if err != nil {
+		_ = controller.Close(context.Background())
+		_ = client.Close(context.Background())
+		return fail(err)
+	}
+	cleanup := &downloaderCleanup{server: server, controller: controller, client: client, quarantine: quarantine}
+	return server, cleanup, nil
+}
+
+type prohibitedTorrentBindingProbe struct{}
+
+func (prohibitedTorrentBindingProbe) Bound(context.Context) (bool, error) {
+	return false, errors.New("torrent binding is unavailable outside the downloader role")
+}
+
+func productionVPNFactory(role session.Role, client *torrent.LocalQBittorrentService) guest.DownloaderControllerFactory {
+	return func(underlay guestvpn.Underlay, targets guestvpn.ProbeTargets) (*guestvpn.Controller, error) {
+		networkBackend, err := guestvpn.NewLinuxBackend(guestvpn.ToolPaths{
+			IP: "/run/current-system/sw/bin/ip", NFT: "/run/current-system/sw/bin/nft", WG: "/run/current-system/sw/bin/wg",
+		}, guestvpn.NewSystemdResolvedDNS())
+		if err != nil {
+			return nil, err
+		}
+		handshake, err := guestvpn.NewWireGuardHandshakeProbe("/run/current-system/sw/bin/wg")
+		if err != nil {
+			return nil, err
+		}
+		bindingProbe := guestvpn.TorrentBindingProbe(prohibitedTorrentBindingProbe{})
+		policy := guestvpn.RolePolicy{Role: role}
+		if role == session.RoleDownloader {
+			if client == nil {
+				return nil, errors.New("downloader qBittorrent owner is unavailable")
+			}
+			bindingProbe = guestvpn.NewQBittorrentBindingProbeWithClient(client)
+			policy.RequireTorrentBinding = true
+		}
+		verifier, err := guestvpn.NewControlledVerifier(
+			handshake, guestvpn.NewResolvedDNSLeakProbe(), guestvpn.NewBoundTCPProbe(),
+			bindingProbe, targets,
+		)
+		if err != nil {
+			return nil, err
+		}
+		if role == session.RoleWorkstation {
+			return guestvpn.NewController(networkBackend, verifier, policy, underlay)
+		}
+		return guestvpn.NewControllerWithOnlineService(
+			networkBackend, verifier, client, policy, underlay,
+		)
+	}
+}
+
+func privateUserIdentity() (int, int, error) {
+	account, err := user.Lookup("private")
+	if err != nil {
+		return 0, 0, errors.New("private downloader user is unavailable")
+	}
+	uid, uidErr := strconv.Atoi(account.Uid)
+	gid, gidErr := strconv.Atoi(account.Gid)
+	if uidErr != nil || gidErr != nil || uid <= 0 || gid <= 0 {
+		return 0, 0, errors.New("private downloader user identity is invalid")
+	}
+	return uid, gid, nil
 }
 
 type versionRecord struct {
