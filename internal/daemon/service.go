@@ -35,6 +35,8 @@ type Service struct {
 	Polkit                Polkit
 	Profiles              *vpn.MemoryStore
 	VPNResolver           *vpn.EndpointResolver
+	Roles                 RoleOrchestrator
+	roleOperations        *roleOperationSet
 	afterCreate           func()
 	cleanupCanceledCreate func(context.Context, string, uint32) error
 }
@@ -323,18 +325,62 @@ func vpnStatusToProto(status vpn.Status) *privatevmv1.VPNProfileStatus {
 	return result
 }
 
-func (s *Service) StartRole(_ context.Context, request *privatevmv1.StartRoleRequest) (*privatevmv1.Session, error) {
+func (s *Service) StartRole(ctx context.Context, request *privatevmv1.StartRoleRequest) (*privatevmv1.Session, error) {
 	if err := validateRequestContext(request.GetContext(), true); err != nil {
 		return nil, err
 	}
-	return nil, unimplemented("Role launch")
+	if s.Roles == nil {
+		return nil, unimplemented("Role launch")
+	}
+	identity, err := identityFromContext(ctx)
+	if err != nil {
+		return nil, sessionError(err)
+	}
+	lock := s.roleOperation(request.GetContext().GetSessionId())
+	lock.Lock()
+	defer lock.Unlock()
+	snapshot, err := s.startRole(ctx, request.GetContext().GetSessionId(), identity.UID)
+	if err != nil {
+		return nil, roleStartRPCError(err)
+	}
+	return sessionToProto(*snapshot), nil
 }
 
 func (s *Service) StopRole(ctx context.Context, request *privatevmv1.StopRoleRequest) (*privatevmv1.Session, error) {
 	if err := validateRequestContext(request.GetContext(), true); err != nil {
 		return nil, err
 	}
-	return nil, unimplemented("Protected role stop")
+	if s.Roles == nil {
+		return nil, unimplemented("Protected role stop")
+	}
+	identity, err := identityFromContext(ctx)
+	if err != nil {
+		return nil, sessionError(err)
+	}
+	id := request.GetContext().GetSessionId()
+	lock := s.roleOperation(id)
+	lock.Lock()
+	defer lock.Unlock()
+	snapshot, err := s.Sessions.Get(id, identity.UID)
+	if err != nil {
+		return nil, sessionError(err)
+	}
+	if snapshot.Phase != session.PhaseActive {
+		return nil, sessionError(session.ErrInvalidTransition)
+	}
+	if snapshot.Role == session.RoleWorkstation {
+		state, stateErr := s.Roles.WorkspaceState(ctx, snapshot)
+		if stateErr != nil && !request.GetDiscardUnexported() {
+			return nil, rpcError(codes.FailedPrecondition, "WORKSPACE_UNREACHABLE", "The workstation output state could not be verified.", "Restore the authenticated guest connection, or explicitly confirm destructive discard.", false)
+		}
+		if err := validateWorkspaceStop(state, request.GetRequireClean(), request.GetDiscardUnexported()); err != nil {
+			return nil, err
+		}
+	}
+	if _, err := s.Sessions.Transition(ctx, id, identity.UID, session.PhaseStopping); err != nil {
+		return nil, sessionError(err)
+	}
+	return s.cleanup(ctx, id)
 }
 
 func (s *Service) AbortSession(ctx context.Context, request *privatevmv1.AbortSessionRequest) (*privatevmv1.Session, error) {

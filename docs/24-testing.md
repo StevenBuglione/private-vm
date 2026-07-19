@@ -512,6 +512,15 @@ changed-after-export detection. The host/daemon/VSOCK relay and dirty-stop
 acceptance remain separate integration gates; guest-only evidence cannot mark
 those gates complete.
 
+Daemon role-lifecycle tests run every workstation startup gate through the
+session actor, prove storage and runtime cleanup execute in reverse allocation
+order, and inject failure at preflight, image verification, storage allocation,
+and runtime allocation. Each failed start must converge to `DESTROYED` with no
+active fake resource. Protected-stop tests prove dirty, changed, unreachable,
+and `--require-clean`/`READY` states remain `ACTIVE` until explicit discard.
+These tests establish the daemon ownership contract; real image, network,
+VSOCK, display, and workspace-relay composition remain system gates.
+
 ## Test safety
 
 Tests never:

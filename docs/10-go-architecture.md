@@ -174,6 +174,16 @@ No API reveals namespace/interface names, static addresses, endpoint tuples or
 raw rule text. Only the aggregate `network-status.schema.json` inspection is
 serializable.
 
+The daemon role boundary is semantic and serialized per opaque session ID.
+`StartRole` publishes `PREFLIGHTED`, `IMAGES_VERIFIED`, `STORAGE_READY`, and
+`ACTIVE` only after the corresponding typed gate succeeds. Storage and runtime
+allocations are registered with the session actor before a later state is
+visible. Any failed or canceled start submits the same independent cleanup
+owner and returns only after it either proves absence or leaves a retryable
+`CLEANUP_INCOMPLETE` record. `StopRole` verifies workstation output state before
+publishing `STOPPING`; `UNEXPORTED`, `CHANGED`, and unreachable state require an
+explicit destructive discard request.
+
 ## Volatile secret contract
 
 `internal/secret.Bytes` is a bounded handle to shared private state. Copying the
