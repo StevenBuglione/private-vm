@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "ok": true,
+  "code": "SESSION_STATUS",
+  "data": {
+    "sessions": [
+      {
+        "id": "pvm-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "role": "workstation",
+        "phase": "ACTIVE",
+        "workflow_state": "WORKING"
+      }
+    ]
+  }
+}

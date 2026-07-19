@@ -46,6 +46,8 @@ func NewProductionInvoker(socketPath string, stdin io.Reader, prompt io.Writer) 
 
 func (invoker *ProductionInvoker) Invoke(ctx context.Context, id CommandID, intent Intent) (Result, error) {
 	switch id {
+	case CommandWorkstationStart, "desktop.status", "desktop.stop", "session.list", "session.status", "session.stop", "session.abort", "session.cleanup":
+		return invoker.invokeSession(ctx, id, intent)
 	case CommandVPNImport, CommandVPNRotate:
 		request, ok := intent.(VPNImportIntent)
 		if !ok {
@@ -284,13 +286,19 @@ func daemonRPCError(err error) error {
 			}
 		}
 	}
-	return apperror.New("DAEMON_UNAVAILABLE", exitcode.Network, "The private-vm daemon could not complete the VPN request.", "Verify private-vmd is running and the Unix control socket is accessible, then retry.")
+	return apperror.New("DAEMON_UNAVAILABLE", exitcode.Network, "The private-vm daemon could not complete the request.", "Verify private-vmd is running and the Unix control socket is accessible, then retry.")
 }
 
 func daemonDetailExitCode(code string) int {
 	switch code {
 	case "AUTHORIZATION_DENIED", "SESSION_OWNER_MISMATCH":
 		return exitcode.Authorization
+	case "WORKSPACE_DIRTY", "WORKSPACE_UNREACHABLE":
+		return exitcode.DirtyWorkspace
+	case "CLEANUP_INCOMPLETE":
+		return exitcode.Cleanup
+	case "ROLE_START_FAILED", "SESSION_TRANSITION_INVALID", "SESSION_NOT_FOUND", "SESSION_SELECTION_REQUIRED":
+		return exitcode.Runtime
 	case "INTERNAL_ERROR", "RPC_CONTEXT_CONTRACT_INVALID":
 		return exitcode.Internal
 	case "PROTOCOL_VERSION_MISMATCH":

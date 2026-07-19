@@ -122,6 +122,14 @@ private-vm desktop bundles list
 private-vm desktop bundles inspect NAME
 ```
 
+`desktop start` performs strict planning before it creates a volatile session,
+then invokes the daemon's serialized role start. If the start RPC does not
+complete, the CLI submits a bounded abort so a created record cannot be
+abandoned. Omitting `--session` is accepted only when exactly one owned
+workstation matches. `desktop stop` permits `CLEAN` and, unless
+`--require-clean` is set, fully verified `READY`; other states require the
+explicit destructive `--discard` choice.
+
 ### Workspace
 
 ```text
@@ -249,6 +257,11 @@ private-vm session stop --session ID
 private-vm session abort --session ID
 private-vm session cleanup [--session ID|--all]
 ```
+
+Session and desktop lifecycle commands use only semantic RPCs on the private
+Unix control socket. Their `--json` success record uses `SESSION_STATUS` and the
+closed `cli-success` schema. It contains only the opaque session ID, role,
+lifecycle phase, and workflow state.
 
 ### Policy
 

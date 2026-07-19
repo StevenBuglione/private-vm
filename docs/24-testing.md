@@ -521,6 +521,12 @@ and `--require-clean`/`READY` states remain `ACTIVE` until explicit discard.
 These tests establish the daemon ownership contract; real image, network,
 VSOCK, display, and workspace-relay composition remain system gates.
 
+Production-invoker tests run workstation plan/create/start, implicit
+single-session selection, listing, protected stop, start-failure abort, request
+ID failure, stable error-to-exit mapping, and the closed `SESSION_STATUS`
+renderer over a private Unix gRPC fixture. No runtime path, guest endpoint, or
+workspace content is representable in that payload.
+
 ## Test safety
 
 Tests never:

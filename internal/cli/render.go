@@ -31,6 +31,7 @@ const (
 	CodeDoctorReport  Code = "DOCTOR_REPORT"
 	CodeAcknowledged  Code = "ACKNOWLEDGED"
 	CodeVPNProfile    Code = "VPN_PROFILE_STATUS"
+	CodeSessionStatus Code = "SESSION_STATUS"
 	CodeInternalError Code = "INTERNAL_ERROR"
 	CodeRenderFailed  Code = "OUTPUT_RENDER_FAILED"
 )
@@ -99,6 +100,22 @@ type VPNInspectionPayload struct {
 }
 
 func (VPNStatusPayload) machinePayload() {}
+
+// SessionPayload is the redacted semantic daemon view. It intentionally omits
+// image paths, socket names, network identity, filenames, hashes and raw
+// diagnostics.
+type SessionPayload struct {
+	Sessions []SessionView `json:"sessions"`
+}
+
+type SessionView struct {
+	ID            string `json:"id"`
+	Role          string `json:"role"`
+	Phase         string `json:"phase"`
+	WorkflowState string `json:"workflow_state,omitempty"`
+}
+
+func (SessionPayload) machinePayload() {}
 
 // EventPayload is deliberately sealed independently from success payloads.
 // Adding an event shape requires an explicit, reviewed concrete type.
@@ -281,6 +298,19 @@ func validSuccess(success SuccessEnvelope) bool {
 			data.Profile.InterfaceAddressCount > 0 && data.Profile.InterfaceAddressCount <= 8 &&
 			data.Profile.DNSServerCount > 0 && data.Profile.DNSServerCount <= 8 &&
 			expectedCode != "" && data.Code == expectedCode
+	case SessionPayload:
+		if success.Code != CodeSessionStatus || data.Sessions == nil || len(data.Sessions) > 64 {
+			return false
+		}
+		for _, value := range data.Sessions {
+			if value.ID == "" || !validOptionalSessionID(value.ID) ||
+				!oneOf(value.Role, "workstation", "downloader", "scanner", "exporter") ||
+				!oneOf(value.Phase, "CREATED", "PREFLIGHTED", "IMAGES_VERIFIED", "STORAGE_READY", "ACTIVE", "STOPPING", "ABORTING", "DESTROYING", "DESTROYED") ||
+				(len(value.WorkflowState) > 64 || !utf8.ValidString(value.WorkflowState)) {
+				return false
+			}
+		}
+		return true
 	default:
 		return false
 	}
@@ -380,6 +410,19 @@ func humanSuccess(code Code, data MachinePayload) string {
 			ipv4, ipv6, addresses, dns,
 			safeLine(value.Remediation),
 		)
+	case SessionPayload:
+		var buffer strings.Builder
+		if len(value.Sessions) == 0 {
+			return "no active sessions\n"
+		}
+		for _, current := range value.Sessions {
+			workflow := ""
+			if current.WorkflowState != "" {
+				workflow = " workflow=" + safeLine(current.WorkflowState)
+			}
+			fmt.Fprintf(&buffer, "%s role=%s phase=%s%s\n", safeLine(current.ID), safeLine(current.Role), safeLine(current.Phase), workflow)
+		}
+		return buffer.String()
 	default:
 		// MachinePayload is sealed; this protects against new payload types being
 		// added without a corresponding reviewed human representation.
