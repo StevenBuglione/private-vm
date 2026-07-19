@@ -263,6 +263,22 @@ requires the role-specific guest VPN RPC implementation to consume the typed
 underlay and fixed probe targets; a host build paired with an older guestd must
 fail the authenticated readiness gate and is not release evidence.
 
+The D-005 source recovery harness supplies all resource classes in reverse
+order and proves the reconciler nevertheless executes the fixed dependency
+order: QEMU/process, cgroup, private sockets, VSOCK CID, TAP/veth/netns/nftables,
+USB claim, outer mount, mapper, loop, ciphertext and volatile runtime path. It
+also injects identity replacement before the first mutation and immediately
+before cleanup, a live-registry owner, available/unknown volatile-key evidence,
+cleanup failure, per-object audit failure, whole-session audit failure,
+cancellation, timeout and immutable-base-image drift. Reports are schema
+validated and inspected for absence of session IDs, locators, fingerprints and
+wrapped backend errors.
+
+These source tests use typed fakes and make no host mutation. The release gate
+still requires daemon-startup composition with the concrete QEMU, cgroup,
+network, storage, VSOCK and USB inventories, a daemon `SIGKILL` acceptance, and
+one controlled maintenance-window reboot.
+
 The bounded fuzz smoke is reproducible with:
 
 ```bash

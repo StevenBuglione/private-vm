@@ -158,6 +158,31 @@ the Go error text directly.
 | `ErrCallback` | A bounded secret-reader callback was not supplied. |
 | `ErrSerialization` | A supported serialization path was rejected. |
 
+## Startup recovery classifications
+
+Startup recovery returns the existing blocking `ORPHAN_CLEANUP_FAILED`
+diagnostic and maps a daemon RPC retry to `CLEANUP_INCOMPLETE`. Its version-1
+redacted evidence may contain only the following internal classifications. The
+report never contains a session ID, object locator, identity fingerprint or
+wrapped backend error.
+
+| Code | Safe meaning |
+|---|---|
+| `RECOVERY_INVENTORY_FAILED` | The bounded private-vm orphan inventory did not complete. |
+| `RECOVERY_INVENTORY_LIMIT` | Candidate or session count exceeded the fixed startup bound. |
+| `RECOVERY_INVENTORY_DUPLICATE` | The trusted inventories reported the same typed object twice. |
+| `RECOVERY_REGISTRY_CONFLICT` | A candidate could not be exclusively claimed against the live registry. |
+| `RECOVERY_KEY_STATE_UNKNOWN` | Loss of the volatile private-vm key source could not be proven. |
+| `RECOVERY_IDENTITY_REJECTED` | Initial identity or private-vm ownership validation failed. |
+| `RECOVERY_IDENTITY_CHANGED` | Exact identity changed between inventory and mutation. |
+| `RECOVERY_CLEANUP_FAILED` | A typed idempotent cleanup operation failed. |
+| `RECOVERY_ABSENCE_UNPROVEN` | An individual artifact could not be proven absent. |
+| `RECOVERY_SESSION_ABSENCE_UNPROVEN` | The complete cross-subsystem session audit was incomplete. |
+| `RECOVERY_BASE_IMAGE_AUDIT_FAILED` | The pre-cleanup immutable-base identity seal was unavailable. |
+| `RECOVERY_BASE_IMAGE_CHANGED` | The immutable-base identity seal changed during recovery. |
+| `RECOVERY_CANCELED` | Startup recovery was canceled before all absence audits completed. |
+| `RECOVERY_TIMEOUT` | A bounded inventory, identity, cleanup or audit step timed out. |
+
 ## Image pull/cache errors
 
 These stable internal classifications map to CLI exit 12 at the image command

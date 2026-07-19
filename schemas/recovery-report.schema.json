@@ -1,0 +1,158 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://private-vm.dev/schema/recovery-report-v1.json",
+  "title": "private-vm redacted startup recovery report",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": { "const": 1 },
+    "code": { "enum": ["RECOVERY_COMPLETED", "ORPHAN_CLEANUP_FAILED"] },
+    "status": { "enum": ["complete", "incomplete"] },
+    "sessions_discovered": { "$ref": "#/$defs/sessionCount" },
+    "sessions_recovered": { "$ref": "#/$defs/sessionCount" },
+    "key_loss_verified_sessions": { "$ref": "#/$defs/sessionCount" },
+    "base_images_verified": { "type": "boolean" },
+    "artifacts_discovered": { "$ref": "#/$defs/artifactCounts" },
+    "artifacts_recovered": { "$ref": "#/$defs/artifactCounts" },
+    "failures": {
+      "type": "array",
+      "maxItems": 256,
+      "items": { "$ref": "#/$defs/failure" }
+    }
+  },
+  "required": [
+    "schema_version",
+    "code",
+    "status",
+    "sessions_discovered",
+    "sessions_recovered",
+    "key_loss_verified_sessions",
+    "base_images_verified",
+    "artifacts_discovered",
+    "artifacts_recovered",
+    "failures"
+  ],
+  "oneOf": [
+    {
+      "properties": {
+        "code": { "const": "RECOVERY_COMPLETED" },
+        "status": { "const": "complete" },
+        "base_images_verified": { "const": true },
+        "failures": { "maxItems": 0 }
+      }
+    },
+    {
+      "properties": {
+        "code": { "const": "ORPHAN_CLEANUP_FAILED" },
+        "status": { "const": "incomplete" },
+        "failures": { "minItems": 1 }
+      }
+    }
+  ],
+  "$defs": {
+    "sessionCount": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 255
+    },
+    "artifactCount": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 4096
+    },
+    "artifactCounts": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "qemu_process": { "$ref": "#/$defs/artifactCount" },
+        "cgroup": { "$ref": "#/$defs/artifactCount" },
+        "qmp_socket": { "$ref": "#/$defs/artifactCount" },
+        "spice_socket": { "$ref": "#/$defs/artifactCount" },
+        "vsock_cid": { "$ref": "#/$defs/artifactCount" },
+        "tap": { "$ref": "#/$defs/artifactCount" },
+        "veth": { "$ref": "#/$defs/artifactCount" },
+        "network_namespace": { "$ref": "#/$defs/artifactCount" },
+        "nftables": { "$ref": "#/$defs/artifactCount" },
+        "usb_claim": { "$ref": "#/$defs/artifactCount" },
+        "outer_mount": { "$ref": "#/$defs/artifactCount" },
+        "device_mapper": { "$ref": "#/$defs/artifactCount" },
+        "loop_device": { "$ref": "#/$defs/artifactCount" },
+        "ciphertext": { "$ref": "#/$defs/artifactCount" },
+        "runtime_path": { "$ref": "#/$defs/artifactCount" }
+      },
+      "required": [
+        "qemu_process",
+        "cgroup",
+        "qmp_socket",
+        "spice_socket",
+        "vsock_cid",
+        "tap",
+        "veth",
+        "network_namespace",
+        "nftables",
+        "usb_claim",
+        "outer_mount",
+        "device_mapper",
+        "loop_device",
+        "ciphertext",
+        "runtime_path"
+      ]
+    },
+    "kind": {
+      "enum": [
+        "qemu_process",
+        "cgroup",
+        "qmp_socket",
+        "spice_socket",
+        "vsock_cid",
+        "tap",
+        "veth",
+        "network_namespace",
+        "nftables",
+        "usb_claim",
+        "outer_mount",
+        "device_mapper",
+        "loop_device",
+        "ciphertext",
+        "runtime_path"
+      ]
+    },
+    "failure": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "enum": [
+            "RECOVERY_ABSENCE_UNPROVEN",
+            "RECOVERY_BASE_IMAGE_AUDIT_FAILED",
+            "RECOVERY_BASE_IMAGE_CHANGED",
+            "RECOVERY_CANCELED",
+            "RECOVERY_CLEANUP_FAILED",
+            "RECOVERY_IDENTITY_CHANGED",
+            "RECOVERY_IDENTITY_REJECTED",
+            "RECOVERY_INVENTORY_DUPLICATE",
+            "RECOVERY_INVENTORY_FAILED",
+            "RECOVERY_INVENTORY_LIMIT",
+            "RECOVERY_KEY_STATE_UNKNOWN",
+            "RECOVERY_REGISTRY_CONFLICT",
+            "RECOVERY_SESSION_ABSENCE_UNPROVEN",
+            "RECOVERY_TIMEOUT"
+          ]
+        },
+        "kind": { "$ref": "#/$defs/kind" },
+        "safe_message": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "remediation": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "retryable": { "type": "boolean" }
+      },
+      "required": ["code", "safe_message", "remediation", "retryable"]
+    }
+  }
+}
