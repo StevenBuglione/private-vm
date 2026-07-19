@@ -665,6 +665,13 @@
             DatabaseDirectory /var/lib/clamav-test
             DatabaseOwner clamav
             DatabaseCustomURL file:///run/private-vm-freshclam-fixture/private-vm-test.hdb
+            # FreshClam 1.4 requires a syntactically valid mirror even when all
+            # official databases are excluded. It never contacts this address;
+            # the gate updates only the deterministic local custom database.
+            DatabaseMirror 127.0.0.1
+            ExcludeDatabase main
+            ExcludeDatabase daily
+            ExcludeDatabase bytecode
             ConnectTimeout 10
             ReceiveTimeout 10
             MaxAttempts 1

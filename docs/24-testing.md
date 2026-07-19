@@ -186,8 +186,9 @@ and 16 GiB maintainer-host budget:
   package/version coverage in the embedded and exported SPDX documents.
 - `scanner-update` boots only the update role, proves quarantine is absent, and
   runs FreshClam against a deterministic local `.hdb` fixture. This exercises an
-  actual database installation without relying on Internet availability or a
-  real credential.
+  actual database installation while explicitly excluding the official main,
+  daily and bytecode databases, so it cannot rely on Internet availability or
+  a real credential.
 - `scanner-offline` uses explicit QEMU `-nic none`, verifies zero non-loopback
   interfaces, attaches one read-only ext4 fixture, verifies the block read-only
   bit and `ro,nodev,nosuid,noexec` mount flags, then proves writing fails.
