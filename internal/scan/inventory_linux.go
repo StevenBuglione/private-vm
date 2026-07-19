@@ -46,6 +46,40 @@ func BuildInventory(ctx context.Context, rootPath string, limits InventoryLimits
 	return inventory, nil
 }
 
+// OpenInventoryEntry reopens an inventoried file without following links and
+// proves that its device, inode, mode and size still match the inventory.
+func OpenInventoryEntry(ctx context.Context, rootPath string, entry InventoryEntry) (io.ReadCloser, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, contextScanError(err)
+	}
+	if !filepath.IsAbs(rootPath) || filepath.Clean(rootPath) != rootPath || entry.RelativePath == "" ||
+		strings.ContainsRune(entry.RelativePath, '\x00') || filepath.IsAbs(entry.RelativePath) {
+		return nil, scanError("SCAN_PATH_UNSAFE", "An inventory entry path is invalid.", "Repeat inventory before scanning this quarantine.", nil)
+	}
+	rootFD, err := unix.Open(rootPath, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0)
+	if err != nil {
+		return nil, scanError("QUARANTINE_OPEN_FAILED", "The quarantine root could not be reopened safely.", "Verify the read-only quarantine mount and recreate the scanner.", err)
+	}
+	defer unix.Close(rootFD)
+	fd, err := openRelative(rootFD, filepath.ToSlash(entry.RelativePath), uint64(unix.O_RDONLY|unix.O_CLOEXEC))
+	if err != nil {
+		return nil, unsafeOpenError(err)
+	}
+	var stat unix.Stat_t
+	if err := unix.Fstat(fd, &stat); err != nil || stat.Nlink != 1 || stat.Mode&unix.S_IFMT != unix.S_IFREG ||
+		uint64(stat.Dev) != entry.Device || stat.Ino != entry.Inode || uint32(stat.Mode) != entry.Mode ||
+		stat.Size < 0 || uint64(stat.Size) != entry.SizeBytes {
+		unix.Close(fd)
+		return nil, scanError("SCAN_ENTRY_CHANGED", "An inventoried file changed before it could be reopened.", "Reject this quarantine and repeat the download in a fresh session.", err)
+	}
+	file := os.NewFile(uintptr(fd), "quarantine-entry")
+	if file == nil {
+		unix.Close(fd)
+		return nil, scanError("SCAN_TRAVERSAL_FAILED", "A quarantine file descriptor could not be owned safely.", "Destroy the scanner and retry in a fresh session.", nil)
+	}
+	return file, nil
+}
+
 type fileIdentity struct {
 	device uint64
 	inode  uint64
