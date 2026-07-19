@@ -278,9 +278,24 @@ func completeNetworkedStatus() guestvpn.Status {
 
 func networkedSpec(t *testing.T) qemu.Spec {
 	t.Helper()
-	directory := t.TempDir()
+	directory, err := os.MkdirTemp("/tmp", "pvm-orchestrator-test-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(directory) })
+	if err := os.Chmod(directory, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	binary, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	binary, err = filepath.EvalSymlinks(binary)
+	if err != nil {
+		t.Fatal(err)
+	}
 	return qemu.Spec{
-		Binary: "/usr/bin/qemu-system-x86_64", SessionID: networkedSessionID, Name: "private-vm-test",
+		Binary: binary, SessionID: networkedSessionID, Name: "private-vm-test",
 		Role: session.RoleWorkstation, CPUs: 1, MemoryBytes: 512 << 20,
 		Root:      qemu.Disk{Path: filepath.Join(directory, "root.qcow2"), Format: "qcow2", Serial: "root"},
 		QMPSocket: filepath.Join(directory, "qmp.sock"), SPICESocket: filepath.Join(directory, "spice.sock"),
@@ -302,6 +317,9 @@ func networkedFixture(t *testing.T) (StartNetworkedRequest, *fakeNetworkLease, *
 		Guests:        &fakeGuestConnector{log: log, guest: guest},
 		Egress:        &fakeEgressAuditor{log: log, proof: EgressProof{NamespacePolicyPresent: true, HostPolicyPresent: true, ForbiddenEgressZero: true}},
 		LossResponder: inertLossResponder{}, MonitorInterval: time.Millisecond,
+	}
+	if err := request.Spec.Validate(); err != nil {
+		t.Fatalf("networked test spec: %v", err)
 	}
 	return request, network, capability, launcher, guest
 }

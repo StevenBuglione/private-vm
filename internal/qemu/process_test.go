@@ -158,12 +158,7 @@ func TestSpontaneousQEMUDeathTriggersOwnedCleanup(t *testing.T) {
 	}
 	launcher.commandBuilder = fakeQEMUCommand("spontaneous-exit")
 	launcher.qmpWait = 2 * time.Second
-	capability, err := os.CreateTemp(t.TempDir(), "capability")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer capability.Close()
-	process, err := launcher.Launch(context.Background(), spec, capability)
+	process, err := launcher.Launch(context.Background(), spec, testInheritedFiles(t, true))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -193,12 +188,7 @@ func TestQMPDisconnectTerminatesQEMUAndCleansOwnedResources(t *testing.T) {
 	launcher.qmpWait = 2 * time.Second
 	launcher.graceWait = 20 * time.Millisecond
 	launcher.termWait = 100 * time.Millisecond
-	capability, err := os.CreateTemp(t.TempDir(), "capability")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer capability.Close()
-	process, err := launcher.Launch(context.Background(), spec, capability)
+	process, err := launcher.Launch(context.Background(), spec, testInheritedFiles(t, true))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -226,12 +216,7 @@ func TestCanceledStopStillEscalatesAndCleans(t *testing.T) {
 	launcher.qmpWait = 2 * time.Second
 	launcher.graceWait = time.Second
 	launcher.termWait = 100 * time.Millisecond
-	capability, err := os.CreateTemp(t.TempDir(), "capability")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer capability.Close()
-	process, err := launcher.Launch(context.Background(), spec, capability)
+	process, err := launcher.Launch(context.Background(), spec, testInheritedFiles(t, true))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -256,12 +241,7 @@ func TestLauncherEscalatesThroughSIGKILL(t *testing.T) {
 	launcher.qmpWait = 2 * time.Second
 	launcher.graceWait = 20 * time.Millisecond
 	launcher.termWait = 75 * time.Millisecond
-	capability, err := os.CreateTemp(t.TempDir(), "capability")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer capability.Close()
-	process, err := launcher.Launch(context.Background(), spec, capability)
+	process, err := launcher.Launch(context.Background(), spec, testInheritedFiles(t, true))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -287,15 +267,10 @@ func TestQMPStartupTimeoutKillsAndCleans(t *testing.T) {
 		t.Fatal(err)
 	}
 	launcher.qmpWait = 50 * time.Millisecond
-	launcher.commandBuilder = func(Spec, *os.File) (*exec.Cmd, error) {
+	launcher.commandBuilder = func(Spec, InheritedFiles) (*exec.Cmd, error) {
 		return exec.Command(os.Args[0], "-test.run=TestNoQMPHelper", "--", "no-qmp"), nil
 	}
-	capability, err := os.CreateTemp(t.TempDir(), "capability")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer capability.Close()
-	if _, err := launcher.Launch(context.Background(), spec, capability); err == nil {
+	if _, err := launcher.Launch(context.Background(), spec, testInheritedFiles(t, true)); err == nil {
 		t.Fatal("missing QMP socket unexpectedly passed")
 	}
 	if !cgroups.cleaned.Load() {

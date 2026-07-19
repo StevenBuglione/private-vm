@@ -3,7 +3,6 @@ package qemu
 import (
 	"context"
 	"errors"
-	"os"
 	"time"
 
 	"github.com/StevenBuglione/private-vm/internal/session"
@@ -27,11 +26,11 @@ func RuntimeAllocation(
 	launcher *Launcher,
 	ownerUID uint32,
 	spec Spec,
-	capability *os.File,
+	files InheritedFiles,
 	activateImages func() (RuntimeImageLease, error),
 ) session.AllocateFunc {
 	return func(ctx context.Context) (session.CleanupFunc, session.AuditFunc, error) {
-		if manager == nil || launcher == nil || capability == nil || activateImages == nil {
+		if manager == nil || launcher == nil || files.Capability == nil || activateImages == nil {
 			return nil, nil, errors.New("QEMU runtime allocation contract is incomplete")
 		}
 		snapshot, err := manager.Get(spec.SessionID, ownerUID)
@@ -48,7 +47,7 @@ func RuntimeAllocation(
 		if images == nil {
 			return nil, nil, errors.New("verified QEMU image lease could not be acquired")
 		}
-		process, err := launcher.Launch(ctx, spec, capability)
+		process, err := launcher.Launch(ctx, spec, files)
 		if err != nil {
 			cleanupErr := images.Destroy()
 			auditErr := images.Audit()

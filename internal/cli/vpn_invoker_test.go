@@ -240,7 +240,7 @@ func TestProductionVPNInvokerSelectsSecureInputAndDestroysOnRPCFailure(t *testin
 
 func startVPNInvokerDaemon(t *testing.T) (string, func()) {
 	t.Helper()
-	socket := filepath.Join(t.TempDir(), "control.sock")
+	socket := shortVPNTestSocket(t)
 	listener, err := net.Listen("unix", socket)
 	if err != nil {
 		t.Fatal(err)
@@ -282,7 +282,7 @@ func (rawVPNService) InspectVPNProfile(context.Context, *privatevmv1.VPNProfileR
 
 func startRawVPNInvokerDaemon(t *testing.T) (string, func()) {
 	t.Helper()
-	socket := filepath.Join(t.TempDir(), "control.sock")
+	socket := shortVPNTestSocket(t)
 	listener, err := net.Listen("unix", socket)
 	if err != nil {
 		t.Fatal(err)
@@ -299,6 +299,16 @@ func startRawVPNInvokerDaemon(t *testing.T) (string, func()) {
 		_ = listener.Close()
 		<-done
 	}
+}
+
+func shortVPNTestSocket(t *testing.T) string {
+	t.Helper()
+	directory, err := os.MkdirTemp("/tmp", "pvm-vpn-test-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(directory) })
+	return filepath.Join(directory, "control.sock")
 }
 
 func cliVPNFixture() string {
