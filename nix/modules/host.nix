@@ -100,6 +100,7 @@ in
       "d /var/lib/private-vm 0700 root root -"
       "d /var/lib/private-vm/images 0755 root root -"
       "d /var/lib/private-vm/scratch 0700 root root -"
+      "d /var/lib/private-vm/enrollments 0700 root root -"
       "d /run/private-vm 0750 root ${cfg.group} -"
     ]
     ++ lib.optional cfg.scratchBackupExcluded "f /var/lib/private-vm/scratch/.private-vm-no-backup 0600 root root - private-vm-ephemeral-scratch-v1";

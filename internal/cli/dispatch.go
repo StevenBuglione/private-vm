@@ -40,6 +40,11 @@ const (
 	CommandVPNTest          CommandID = "vpn.test"
 	CommandVPNRotate        CommandID = "vpn.rotate"
 	CommandVPNRemove        CommandID = "vpn.remove"
+	CommandUSBList          CommandID = "usb.list"
+	CommandUSBInspect       CommandID = "usb.inspect"
+	CommandUSBEnroll        CommandID = "usb.enroll"
+	CommandUSBVerify        CommandID = "usb.verify"
+	CommandUSBForget        CommandID = "usb.forget"
 )
 
 type Intent interface {
@@ -171,7 +176,9 @@ type VPNProfileIntent struct {
 func (VPNProfileIntent) privateVMIntent() {}
 
 type USBDeviceIntent struct {
-	DeviceID string
+	DeviceID          string
+	Label             string
+	AcceptPortBinding bool
 }
 
 func (USBDeviceIntent) privateVMIntent() {}

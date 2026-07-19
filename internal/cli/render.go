@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"regexp"
 	"strings"
 	"time"
 	"unicode"
@@ -23,6 +24,17 @@ const (
 	DefaultMaxOutputBytes = 1 << 20
 )
 
+var (
+	usbDeviceIDOutputPattern    = regexp.MustCompile(`^usbdev-[0-9a-f]{16}$`)
+	usbEnrollmentOutputPattern  = regexp.MustCompile(`^usb-[0-9a-f]{16}$`)
+	usbHexIDOutputPattern       = regexp.MustCompile(`^[0-9a-f]{4}$`)
+	usbPortOutputPattern        = regexp.MustCompile(`^[0-9]+-[0-9]+(?:\.[0-9]+)*$`)
+	usbInterfaceOutputPattern   = regexp.MustCompile(`^08:[0-9a-f]{2}:[0-9a-f]{2}$`)
+	usbHashOutputPattern        = regexp.MustCompile(`^[A-Za-z0-9+/=_-]{16,256}$`)
+	usbFingerprintOutputPattern = regexp.MustCompile(`^[0-9a-f]{64}$`)
+	usbBlockPathOutputPattern   = regexp.MustCompile(`^/dev/[A-Za-z0-9._-]+$`)
+)
+
 // Code is a stable, machine-readable result or event code.
 type Code string
 
@@ -35,6 +47,8 @@ const (
 	CodeWorkspaceStatus Code = "WORKSPACE_STATUS"
 	CodeTorrentStatus   Code = "TORRENT_STATUS"
 	CodeScannerStatus   Code = "SCANNER_STATUS"
+	CodeUSBDevices      Code = "USB_DEVICE_STATUS"
+	CodeUSBEnrollment   Code = "USB_ENROLLMENT_STATUS"
 	CodeInternalError   Code = "INTERNAL_ERROR"
 	CodeRenderFailed    Code = "OUTPUT_RENDER_FAILED"
 )
@@ -170,6 +184,56 @@ type ScannerStatusPayload struct {
 }
 
 func (ScannerStatusPayload) machinePayload() {}
+
+type USBDevicePayload struct {
+	SchemaVersion       uint32   `json:"schema_version"`
+	DeviceID            string   `json:"device_id"`
+	VendorID            string   `json:"vendor_id"`
+	ProductID           string   `json:"product_id"`
+	Model               string   `json:"model,omitempty"`
+	Serial              string   `json:"serial,omitempty"`
+	USBGuardHash        string   `json:"usbguard_hash"`
+	PortPath            string   `json:"port_path"`
+	BlockPath           string   `json:"block_path"`
+	Interfaces          []string `json:"interfaces"`
+	CapacityBytes       uint64   `json:"capacity_bytes"`
+	Mounted             bool     `json:"mounted"`
+	ReadOnly            bool     `json:"read_only"`
+	HostFilesystem      bool     `json:"host_filesystem"`
+	Selectable          bool     `json:"selectable"`
+	IdentityFingerprint string   `json:"identity_fingerprint"`
+	Code                string   `json:"code"`
+	Remediation         string   `json:"remediation"`
+}
+
+type USBDevicesPayload struct {
+	Devices []USBDevicePayload `json:"devices"`
+}
+
+func (USBDevicesPayload) machinePayload() {}
+
+type USBEnrollmentPayload struct {
+	SchemaVersion       uint32   `json:"schema_version"`
+	EnrollmentID        string   `json:"enrollment_id"`
+	Label               string   `json:"label"`
+	Filesystem          string   `json:"filesystem"`
+	VendorID            string   `json:"vendor_id"`
+	ProductID           string   `json:"product_id"`
+	Model               string   `json:"model,omitempty"`
+	Serial              string   `json:"serial,omitempty"`
+	USBGuardHash        string   `json:"usbguard_hash"`
+	BlockPath           string   `json:"block_path,omitempty"`
+	PortPath            string   `json:"port_path"`
+	PortBound           bool     `json:"port_bound"`
+	Interfaces          []string `json:"interfaces"`
+	CapacityBytes       uint64   `json:"capacity_bytes"`
+	IdentityFingerprint string   `json:"identity_fingerprint"`
+	Verified            bool     `json:"verified"`
+	Code                string   `json:"code"`
+	Remediation         string   `json:"remediation"`
+}
+
+func (USBEnrollmentPayload) machinePayload() {}
 
 // EventPayload is deliberately sealed independently from success payloads.
 // Adding an event shape requires an explicit, reviewed concrete type.
@@ -382,9 +446,54 @@ func validSuccess(success SuccessEnvelope) bool {
 			validCode(Code(data.WorkflowState)) && oneOf(data.Decision, "pending", "approved", "rejected") &&
 			data.BlockingFindingCount <= data.FindingCount && validCode(Code(data.Code)) &&
 			validRequiredString(data.Remediation, 512)
+	case USBDevicesPayload:
+		if success.Code != CodeUSBDevices || data.Devices == nil || len(data.Devices) > 256 {
+			return false
+		}
+		for _, device := range data.Devices {
+			if !validUSBDevice(device) {
+				return false
+			}
+		}
+		return true
+	case USBEnrollmentPayload:
+		return success.Code == CodeUSBEnrollment && data.SchemaVersion == 1 && usbEnrollmentOutputPattern.MatchString(data.EnrollmentID) &&
+			validRequiredString(data.Label, 32) && data.Filesystem == "luks2-ext4" && usbHexIDOutputPattern.MatchString(data.VendorID) && usbHexIDOutputPattern.MatchString(data.ProductID) &&
+			data.CapacityBytes > 0 && usbFingerprintOutputPattern.MatchString(data.IdentityFingerprint) && validUSBInterfaces(data.Interfaces) && usbHashOutputPattern.MatchString(data.USBGuardHash) &&
+			(data.BlockPath == "" || usbBlockPathOutputPattern.MatchString(data.BlockPath)) && usbPortOutputPattern.MatchString(data.PortPath) && validUSBText(data.Serial, 256, true) && validUSBText(data.Model, 256, true) &&
+			validCode(Code(data.Code)) && validRequiredString(data.Remediation, 512)
 	default:
 		return false
 	}
+}
+
+func validUSBDevice(device USBDevicePayload) bool {
+	return device.SchemaVersion == 1 && usbDeviceIDOutputPattern.MatchString(device.DeviceID) &&
+		usbHexIDOutputPattern.MatchString(device.VendorID) && usbHexIDOutputPattern.MatchString(device.ProductID) &&
+		device.CapacityBytes > 0 && usbFingerprintOutputPattern.MatchString(device.IdentityFingerprint) &&
+		validUSBInterfaces(device.Interfaces) && usbHashOutputPattern.MatchString(device.USBGuardHash) &&
+		usbBlockPathOutputPattern.MatchString(device.BlockPath) && usbPortOutputPattern.MatchString(device.PortPath) &&
+		validUSBText(device.Serial, 256, true) && validUSBText(device.Model, 256, true) &&
+		validCode(Code(device.Code)) && validRequiredString(device.Remediation, 512)
+}
+
+func validUSBInterfaces(values []string) bool {
+	if len(values) == 0 || len(values) > 32 {
+		return false
+	}
+	for index, value := range values {
+		if !usbInterfaceOutputPattern.MatchString(value) || index > 0 && values[index-1] >= value {
+			return false
+		}
+	}
+	return true
+}
+
+func validUSBText(value string, maximum int, optional bool) bool {
+	if value == "" {
+		return optional
+	}
+	return len(value) <= maximum && utf8.ValidString(value) && !strings.ContainsAny(value, "\x00\r\n")
 }
 
 func validRequiredString(value string, maximum int) bool {
@@ -511,6 +620,23 @@ func humanSuccess(code Code, data MachinePayload) string {
 			value.ReportComplete, value.InputCount, value.FindingCount, value.BlockingFindingCount,
 			value.SanitizedOutputCount, value.SanitizedOutputBytes, safeLine(value.Remediation),
 		)
+	case USBDevicesPayload:
+		if len(value.Devices) == 0 {
+			return "no USB mass-storage candidates\n"
+		}
+		var buffer strings.Builder
+		for _, device := range value.Devices {
+			fmt.Fprintf(&buffer, "%s path=%s %s:%s model=%s serial=%s usbguard_hash=%s capacity=%d port=%s selectable=%t fingerprint=%s code=%s\n",
+				safeLine(device.DeviceID), safeLine(device.BlockPath), safeLine(device.VendorID), safeLine(device.ProductID), safeLine(device.Model),
+				safeLine(device.Serial), safeLine(device.USBGuardHash), device.CapacityBytes, safeLine(device.PortPath), device.Selectable,
+				safeLine(device.IdentityFingerprint), safeLine(device.Code))
+		}
+		return buffer.String()
+	case USBEnrollmentPayload:
+		return fmt.Sprintf("%s label=%s path=%s %s:%s serial=%s usbguard_hash=%s capacity=%d port=%s port_bound=%t verified=%t fingerprint=%s code=%s\nremediation: %s\n",
+			safeLine(value.EnrollmentID), safeLine(value.Label), safeLine(value.BlockPath), safeLine(value.VendorID), safeLine(value.ProductID),
+			safeLine(value.Serial), safeLine(value.USBGuardHash), value.CapacityBytes, safeLine(value.PortPath), value.PortBound, value.Verified,
+			safeLine(value.IdentityFingerprint), safeLine(value.Code), safeLine(value.Remediation))
 	default:
 		// MachinePayload is sealed; this protects against new payload types being
 		// added without a corresponding reviewed human representation.

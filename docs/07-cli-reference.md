@@ -291,7 +291,8 @@ uses the same atomic import path. It never generates or persists a key itself.
 ```text
 private-vm usb list
 private-vm usb inspect --device ID
-private-vm usb enroll --device ID
+private-vm usb enroll --device ID [--label PRIVATE_VM_TRANSFER]
+                              [--accept-port-binding]
 private-vm usb prepare --format luks2-ext4
 private-vm usb verify
 private-vm usb forget
@@ -299,6 +300,19 @@ private-vm usb forget
 
 `prepare` is destructive and requires an exact displayed device identity plus
 interactive confirmation unless a signed automation policy explicitly permits it.
+
+`list`, `inspect`, `enroll`, `verify`, and `forget` traverse the authenticated
+Unix daemon and are owner-bound by kernel peer credentials. Their typed output
+contains an opaque observation ID, transient kernel block path, VID/PID, model,
+serial, USBGuard hash, physical port, complete interface classes, capacity,
+eligibility and a complete identity fingerprint. Raw USBGuard command output is
+never returned, and the kernel path is never persisted or accepted as later
+authorization. `--accept-port-binding` is required only
+when the inspected device has no stable serial and explicitly pins the record
+to the displayed port. Enrollment is saved under the installed daemon-owned
+enrollment root in one mode-`0700`, numeric-UID-owned directory with a mode
+`0600` regular file. `forget` is idempotent and does not inspect or mutate the
+physical device.
 
 ### Images
 

@@ -14,15 +14,31 @@ import (
 )
 
 var (
-	sessionIDPattern = regexp.MustCompile(`^pvm-[0-9a-f]{32}$`)
-	opaqueIDPattern  = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:@+-]{0,127}$`)
-	sizePattern      = regexp.MustCompile(`^([0-9]+)(B|KiB|MiB|GiB|TiB)$`)
+	sessionIDPattern   = regexp.MustCompile(`^pvm-[0-9a-f]{32}$`)
+	opaqueIDPattern    = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:@+-]{0,127}$`)
+	sizePattern        = regexp.MustCompile(`^([0-9]+)(B|KiB|MiB|GiB|TiB)$`)
+	usbDeviceIDPattern = regexp.MustCompile(`^usbdev-[0-9a-f]{16}$`)
+	usbLabelPattern    = regexp.MustCompile(`^[A-Z0-9][A-Z0-9_-]{0,31}$`)
 )
 
 const maximumFileSelectionBytes = 4096*10 + 4095
 
 func usageError(message, remediation string) *apperror.Error {
 	return apperror.New("CLI_USAGE", exitcode.Usage, message, remediation)
+}
+
+func validateUSBDeviceID(value string) error {
+	if !usbDeviceIDPattern.MatchString(value) {
+		return usageError("The USB discovery identifier is invalid.", "Run private-vm usb list again and use its exact usbdev identifier.")
+	}
+	return nil
+}
+
+func validateUSBLabel(value string) error {
+	if !usbLabelPattern.MatchString(value) {
+		return usageError("The USB enrollment label is invalid.", "Use 1-32 uppercase letters, digits, underscores, or hyphens.")
+	}
+	return nil
 }
 
 func validateGlobalOptions(options Options) error {

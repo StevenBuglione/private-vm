@@ -16,10 +16,12 @@ import (
 	"time"
 
 	"github.com/StevenBuglione/private-vm/internal/buildinfo"
+	"github.com/StevenBuglione/private-vm/internal/commandexec"
 	"github.com/StevenBuglione/private-vm/internal/config"
 	"github.com/StevenBuglione/private-vm/internal/daemon"
 	"github.com/StevenBuglione/private-vm/internal/recovery"
 	"github.com/StevenBuglione/private-vm/internal/session"
+	"github.com/StevenBuglione/private-vm/internal/usb"
 )
 
 const daemonStartupFailureMessage = "private-vmd: DAEMON_START_FAILED: the daemon could not start; inspect redacted system service diagnostics and verify the installed configuration"
@@ -117,8 +119,27 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("resolve pkcheck: %w", err)
 	}
+	usbguard, err := trustedToolPath("usbguard")
+	if err != nil {
+		return err
+	}
+	guard := usb.CommandUSBGuard{Executor: commandexec.OSExecutor{CaptureLimit: commandexec.DefaultCaptureLimit}, Binary: usbguard}
+	enumerator := usb.Enumerator{Source: usb.DefaultSysfsSource(guard)}
+	ownerStores, err := usb.NewOwnerStores(usb.DefaultEnrollmentRoot, uint32(os.Geteuid()))
+	if err != nil {
+		return err
+	}
+	usbRegistry, err := usb.NewRegistry(enumerator, ownerStores)
+	if err != nil {
+		return err
+	}
+	usbClaims, err := usb.NewClaimManager(enumerator, guard)
+	if err != nil {
+		return err
+	}
 	service := &daemon.Service{
 		Sessions: manager, Config: cfg, Polkit: daemon.PKCheck{Binary: pkcheck},
+		USBRegistry: usbRegistry, USBClaims: usbClaims,
 		Profiles: hostServices.profiles, VPNResolver: hostServices.resolver,
 		Roles: hostServices.roles, Torrents: hostServices.roles, Scanners: hostServices.scanners,
 	}

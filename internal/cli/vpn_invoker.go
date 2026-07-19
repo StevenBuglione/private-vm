@@ -85,6 +85,8 @@ func (invoker *ProductionInvoker) Invoke(ctx context.Context, id CommandID, inte
 		}
 		response, err := invoker.profileOperation(ctx, id, request.ProfileName)
 		return vpnResult(response, err)
+	case CommandUSBList, CommandUSBInspect, CommandUSBEnroll, CommandUSBVerify, CommandUSBForget:
+		return invoker.invokeUSB(ctx, id, intent)
 	default:
 		return failClosedInvoker{}.Invoke(ctx, id, intent)
 	}
@@ -338,6 +340,9 @@ func daemonDetailExitCode(code string) int {
 		}
 		if len(code) >= len("SCAN_") && code[:len("SCAN_")] == "SCAN_" || len(code) >= len("SCANNER_") && code[:len("SCANNER_")] == "SCANNER_" || len(code) >= len("REPORT_") && code[:len("REPORT_")] == "REPORT_" || len(code) >= len("SANITIZED_") && code[:len("SANITIZED_")] == "SANITIZED_" || len(code) >= len("MALWARE_") && code[:len("MALWARE_")] == "MALWARE_" || len(code) >= len("ARCHIVE_") && code[:len("ARCHIVE_")] == "ARCHIVE_" || len(code) >= len("CLAMAV_") && code[:len("CLAMAV_")] == "CLAMAV_" || len(code) >= len("SANITIZER_") && code[:len("SANITIZER_")] == "SANITIZER_" {
 			return exitcode.ScanRejected
+		}
+		if len(code) >= len("USB_") && code[:len("USB_")] == "USB_" {
+			return exitcode.USBExport
 		}
 		return exitcode.Network
 	}

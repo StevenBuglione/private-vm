@@ -62,6 +62,18 @@
         "code": { "const": "SCANNER_STATUS" },
         "data": { "$ref": "#/$defs/scanner_status" }
       }
+    },
+    {
+      "properties": {
+        "code": { "const": "USB_DEVICE_STATUS" },
+        "data": { "$ref": "#/$defs/usb_devices" }
+      }
+    },
+    {
+      "properties": {
+        "code": { "const": "USB_ENROLLMENT_STATUS" },
+        "data": { "$ref": "#/$defs/usb_enrollment" }
+      }
     }
   ],
   "$defs": {
@@ -221,6 +233,62 @@
         "remediation": { "type": "string", "minLength": 1, "maxLength": 512 }
       },
       "required": ["schema_version", "session_id", "workflow_state", "report_complete", "decision", "input_count", "finding_count", "blocking_finding_count", "sanitized_output_count", "sanitized_output_bytes", "code", "remediation"]
+    },
+    "usb_device": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": { "const": 1 },
+        "device_id": { "type": "string", "pattern": "^usbdev-[0-9a-f]{16}$" },
+        "vendor_id": { "type": "string", "pattern": "^[0-9a-f]{4}$" },
+        "product_id": { "type": "string", "pattern": "^[0-9a-f]{4}$" },
+        "model": { "type": "string", "maxLength": 256 },
+        "serial": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "usbguard_hash": { "type": "string", "pattern": "^[A-Za-z0-9+/=_-]{16,256}$" },
+        "block_path": { "type": "string", "pattern": "^/dev/[A-Za-z0-9._-]+$" },
+        "port_path": { "type": "string", "pattern": "^[0-9]+-[0-9]+(?:\\.[0-9]+)*$" },
+        "interfaces": { "type": "array", "minItems": 1, "maxItems": 32, "uniqueItems": true, "items": { "type": "string", "pattern": "^08:[0-9a-f]{2}:[0-9a-f]{2}$" } },
+        "capacity_bytes": { "type": "integer", "minimum": 1 },
+        "mounted": { "type": "boolean" },
+        "read_only": { "type": "boolean" },
+        "host_filesystem": { "type": "boolean" },
+        "selectable": { "type": "boolean" },
+        "identity_fingerprint": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "code": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]{2,63}$" },
+        "remediation": { "type": "string", "minLength": 1, "maxLength": 512 }
+      },
+      "required": ["schema_version", "device_id", "vendor_id", "product_id", "usbguard_hash", "block_path", "port_path", "interfaces", "capacity_bytes", "mounted", "read_only", "host_filesystem", "selectable", "identity_fingerprint", "code", "remediation"]
+    },
+    "usb_devices": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": { "devices": { "type": "array", "maxItems": 256, "items": { "$ref": "#/$defs/usb_device" } } },
+      "required": ["devices"]
+    },
+    "usb_enrollment": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": { "const": 1 },
+        "enrollment_id": { "type": "string", "pattern": "^usb-[0-9a-f]{16}$" },
+        "label": { "type": "string", "pattern": "^[A-Z0-9][A-Z0-9_-]{0,31}$" },
+        "filesystem": { "const": "luks2-ext4" },
+        "vendor_id": { "type": "string", "pattern": "^[0-9a-f]{4}$" },
+        "product_id": { "type": "string", "pattern": "^[0-9a-f]{4}$" },
+        "model": { "type": "string", "maxLength": 256 },
+        "serial": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "usbguard_hash": { "type": "string", "pattern": "^[A-Za-z0-9+/=_-]{16,256}$" },
+        "block_path": { "type": "string", "pattern": "^/dev/[A-Za-z0-9._-]+$" },
+        "port_path": { "type": "string", "pattern": "^[0-9]+-[0-9]+(?:\\.[0-9]+)*$" },
+        "port_bound": { "type": "boolean" },
+        "interfaces": { "type": "array", "minItems": 1, "maxItems": 32, "uniqueItems": true, "items": { "type": "string", "pattern": "^08:[0-9a-f]{2}:[0-9a-f]{2}$" } },
+        "capacity_bytes": { "type": "integer", "minimum": 1 },
+        "identity_fingerprint": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "verified": { "type": "boolean" },
+        "code": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]{2,63}$" },
+        "remediation": { "type": "string", "minLength": 1, "maxLength": 512 }
+      },
+      "required": ["schema_version", "enrollment_id", "label", "filesystem", "vendor_id", "product_id", "usbguard_hash", "port_path", "port_bound", "interfaces", "capacity_bytes", "identity_fingerprint", "verified", "code", "remediation"]
     }
   }
 }
