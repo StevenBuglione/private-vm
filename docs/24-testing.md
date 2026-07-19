@@ -399,6 +399,22 @@ maintainers; do not expose secrets to public PR jobs.
 
 ## Network tests
 
+VPN-001 unit and fuzz evidence uses synthetic WireGuard keys and mock resolvers
+only. Parser tables cover the accepted IPv4/IPv6 profile, every hook and unknown
+field, multiple peers, duplicate fields, invalid key shapes, unsafe DNS and
+addresses, missing/partial/additional default routes, missing endpoint ports,
+line/input bounds, read failure and destroyed input. Formatting and
+serialization tests prove that the private key, endpoint, address and DNS values
+cannot enter status JSON or diagnostic formatting.
+
+Resolver tests prove literal-IP behavior, trusted-host hostname resolution,
+deduplication/order, unsafe/empty/oversized result rejection, cancellation and a
+bounded timeout. Memory-store tests prove atomic generation replacement, stale
+generation rejection, actionable rotation status, idempotent remove/close and
+no restore after daemon shutdown. Guest-config tests consume the ephemeral
+reader and cover success, callback failure and cancellation; fixtures never use
+a real Proton credential.
+
 Mock Proton endpoint:
 
 - underlay permitted only to mock endpoint

@@ -17,6 +17,12 @@
 
 ## Network review
 
+- [ ] profile grammar admits exactly one peer, fixed fields and complete default routes;
+- [ ] private key remains byte-backed and profile/endpoint serialization is rejected;
+- [ ] profile names, bytes, lines, addresses, DNS entries and resolution results are bounded;
+- [ ] endpoint resolution is host-side, context-bounded and rejects any unsafe answer;
+- [ ] profile replacement/remove/shutdown destroys every daemon-owned key;
+- [ ] inspection and errors exclude keys, endpoints, addresses, DNS answers and source paths;
 - [ ] namespace and interface names derive from internal session IDs;
 - [ ] nftables rules are installed atomically before VM start;
 - [ ] default forward/output policy is drop;

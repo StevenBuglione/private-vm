@@ -325,6 +325,20 @@
           "given": "downloader ready",
           "when": "inspect qBittorrent configuration and remove proton0",
           "then": "torrent traffic cannot continue"
+        },
+        {
+          "id": "VPN-004",
+          "name": "Profile grammar and volatile lifecycle",
+          "given": "synthetic valid and adversarial Proton WireGuard profiles",
+          "when": "import, inspect, rotate, remove and daemon-store close run",
+          "then": "only the frozen one-peer/default-route grammar succeeds, status is redacted, replacements destroy prior generations and no profile can be restored"
+        },
+        {
+          "id": "VPN-005",
+          "name": "Stale endpoint requires rotation",
+          "given": "a synthetic profile whose bounded trusted-host endpoint lookup fails or returns an unsafe result",
+          "when": "the pre-launch endpoint check runs",
+          "then": "VPN_ENDPOINT_UNRESOLVED blocks launch and redacted status requires a newly generated Proton profile"
         }
       ]
     },

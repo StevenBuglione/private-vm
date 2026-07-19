@@ -21,6 +21,61 @@ The parser accepts only the required WireGuard fields and rejects:
 The endpoint hostname is resolved on the trusted host before creating the guest.
 The ephemeral guest copy uses an IP address to avoid pre-tunnel DNS.
 
+### Frozen v1 profile grammar
+
+The bounded parser accepts UTF-8 input of at most 64 KiB and 256 lines. Blank
+lines and full-line `#` comments are allowed. The only sections, in order, are
+one `[Interface]` and one `[Peer]`; duplicate sections and fields fail closed.
+The exact fields are:
+
+| Section | Required fields |
+|---|---|
+| `Interface` | `PrivateKey`, `Address`, `DNS` |
+| `Peer` | `PublicKey`, `AllowedIPs`, `Endpoint` |
+
+Keys are strict padded base64 encodings of exactly 32 nonzero bytes. Interface
+addresses must be unicast IPv4 `/32` or IPv6 `/128`, with at least one IPv4
+address. DNS entries are literal global-unicast addresses—private tunnel
+addresses are valid, while hostnames, loopback, link-local, multicast and
+unspecified addresses are rejected. At most eight interface and eight DNS
+addresses are accepted.
+
+`AllowedIPs` is exactly `0.0.0.0/0`, optionally followed by `::/0`; partial,
+additional and duplicate routes are rejected. Any IPv6 interface or DNS address
+requires `::/0`. Endpoint ports are numeric and nonzero. Literal endpoints must
+be public unicast addresses. Hostnames use bounded ASCII DNS-label syntax and
+reject single-label, localhost, `.local` and `.internal` names. Inline hooks,
+`MTU`, `PersistentKeepalive` and every other unlisted field are rejected rather
+than interpreted.
+
+### Volatile profile lifecycle and rotation
+
+The normal import path first uses the CLI's bounded sensitive-input adapter,
+then parses the resulting `secret.Bytes` inside the daemon. The private key is
+decoded into a protected `secret.Bytes` mapping without a string conversion.
+The daemon-lifetime memory store has no persistence or restore adapter and
+admits at most eight names. Atomic
+replacement destroys the old generation; remove and daemon shutdown are
+idempotent and destroy all owned keys.
+
+Inspection is intentionally aggregate-only. It exposes the schema version,
+presence, opaque generation, IPv4/IPv6 enablement, address/DNS counts and one of
+`not_imported`, `resolution_required`, `current` or `rotation_required`. It
+never exposes keys, endpoints, addresses, DNS values, source paths or times.
+The state becomes `current` only after trusted-host endpoint resolution succeeds.
+A stale, unsafe, empty, oversized or failed result sets `rotation_required` and
+returns `VPN_ENDPOINT_UNRESOLVED` with remediation to generate a current Proton
+profile. Caller cancellation leaves the previous state unchanged.
+
+Trusted-host resolution has a hard ten-second ceiling, accepts no more than 16
+answers and requires every answer to be a public unicast address. Results are
+deduplicated and sorted. Wrapped resolver errors and returned addresses are not
+logged. The selected result is rendered into a bounded ephemeral guest config
+inside a context-aware callback; the endpoint hostname is replaced by the IP,
+the encoded private key is never represented as a Go string, and the callback
+buffer is cleared on return. This explicit destruction reduces exposure but is
+not a perfect-erasure claim.
+
 ## Host namespace topology
 
 ```mermaid

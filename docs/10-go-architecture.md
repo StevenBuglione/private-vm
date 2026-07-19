@@ -112,6 +112,24 @@ and request-context interceptors, exact role service registration, and verified
 Hello handshake. Linux dialing uses a cancellable socket connect directly;
 there is no detached dial goroutine.
 
+`internal/vpn` owns the closed Proton WireGuard grammar, protected private-key
+handle, trusted-host endpoint resolver and daemon-lifetime memory store. Parsing
+is capped at 64 KiB and 256 lines. The private key is decoded directly from a
+byte slice into `secret.Bytes`; no profile, key or endpoint type supports JSON,
+text or diagnostic formatting. Only a schema-versioned aggregate inspection is
+serializable. The resolver accepts a narrow context-aware `LookupNetIP`
+interface, has a hard ten-second ceiling, and returns at most 16 sorted unique
+public unicast addresses. Resolver errors discard hostname and external error
+text.
+
+The memory store has no path, marshal, restore or startup-loading operation and
+admits at most eight profile names.
+Import atomically replaces a named generation and destroys the old key. Remove,
+close and daemon restart converge on owned-key destruction. A resolved guest
+configuration is reconstructed into a bounded byte buffer only inside a
+context-bearing callback; the private key is never converted to a Go string and
+that transient buffer is cleared after success, failure or cancellation.
+
 ## Volatile secret contract
 
 `internal/secret.Bytes` is a bounded handle to shared private state. Copying the

@@ -7,7 +7,7 @@
 | R-003 | Nix image API changes | medium | medium | pin 26.05, wrapper module, CI evaluation |
 | R-004 | ClamAV miss/false positive | high | high | reconstruction, policy, clear wording |
 | R-005 | Parser exploit in scanner | medium | high | offline disposable role, read-only input |
-| R-006 | Proton profile stale | medium | medium | `vpn test`, clear rotate workflow |
+| R-006 | Proton profile stale | medium | medium | bounded trusted-host resolution, redacted `rotation_required` status, atomic import of a newly generated profile |
 | R-007 | VPN leak due routing | medium | high | independent host+guest enforcement, active tests |
 | R-008 | Host disk swap leaks memory | medium | high | strict preflight, zram only |
 | R-009 | Secret copies or unlocked pages outside the owned mapping | medium | medium | short lifetime; sealed/dump-excluded memfd; best-effort mlock; read-only inherited FDs; no mutable backing view; constant-time comparison; explicit overwrite; document unavoidable Go/gRPC/kernel/hardware copies and make no perfect-erasure claim |

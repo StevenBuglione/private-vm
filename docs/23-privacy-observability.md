@@ -38,6 +38,14 @@ which identity check failed. Request-context and selector failures likewise use
 the typed safe messages and remediation in `docs/33-error-catalog.md`, never the
 rejected raw value.
 
+VPN profile parse and endpoint-resolution errors deliberately discard the raw
+input, hostname, DNS answers and wrapped resolver cause. Profile and resolved
+endpoint types reject machine serialization and render fixed redaction tokens.
+`vpn inspect` uses only the reviewed aggregate status schema. Debug logging does
+not alter these contracts. A profile exists only in the daemon's protected
+memory store and the bounded guest-delivery callback; neither is included in a
+diagnostic bundle.
+
 ## Session events
 
 Detailed events live under `/run/private-vm/<id>` and disappear at teardown.

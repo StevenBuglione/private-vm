@@ -177,6 +177,22 @@ private-vm vpn remove
 
 `inspect` redacts private key and sensitive fields.
 
+`import` accepts at most 64 KiB after the selected sensitive-input adapter has
+applied its ownership, mode, filesystem and deadline checks. The daemon parses
+the bytes directly into protected volatile storage. A successful import
+atomically replaces and destroys the prior generation; it creates no profile
+file. `remove` is idempotent, and daemon shutdown or restart destroys every
+imported generation.
+
+`inspect` returns only the versioned status in
+`schemas/vpn-profile-status.schema.json`: presence, an opaque generation,
+IPv4/IPv6 booleans, address/DNS counts and rotation state. It never returns the
+profile source path, key, endpoint, address, DNS value or resolver output.
+`test` performs the bounded trusted-host endpoint check before guest launch.
+The state is `current` only after that succeeds. Resolution failure sets
+`rotation_required`; `rotate` prompts for a newly generated Proton profile and
+uses the same atomic import path. It never generates or persists a key itself.
+
 ### USB
 
 ```text

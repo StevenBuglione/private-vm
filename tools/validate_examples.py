@@ -43,6 +43,7 @@ pairs = [
     ("schemas/image-release-receipt.schema.json", "examples/image-release-receipt.example.json", "json"),
     ("schemas/image-sbom.schema.json", "examples/image-sbom.spdx.example.json", "json"),
     ("schemas/scan-report.schema.json", "examples/scan-report.example.json", "json"),
+    ("schemas/vpn-profile-status.schema.json", "examples/vpn-profile-status.example.json", "json"),
     ("schemas/workstation-bundles.schema.json", "project/workstation-bundles.json", "json"),
 ]
 
@@ -134,6 +135,14 @@ negative_cases.append(("overlapping runtime paths", config_schema, overlapping_p
 secret = deepcopy(config)
 secret["private_key"] = "redacted-test-value"
 negative_cases.append(("secret field config", config_schema, secret))
+vpn_status_schema = json.loads((ROOT / "schemas/vpn-profile-status.schema.json").read_text(encoding="utf-8"))
+vpn_status = json.loads((ROOT / "examples/vpn-profile-status.example.json").read_text(encoding="utf-8"))
+vpn_endpoint = deepcopy(vpn_status)
+vpn_endpoint["endpoint"] = "198.51.100.20:51820"
+negative_cases.append(("VPN endpoint in status", vpn_status_schema, vpn_endpoint))
+vpn_key = deepcopy(vpn_status)
+vpn_key["profile"]["private_key"] = "redacted-test-value"
+negative_cases.append(("VPN private key in status", vpn_status_schema, vpn_key))
 weakened = deepcopy(safe_policy)
 weakened["rules"]["sanitize_documents"] = False
 negative_cases.append(("weakened safe policy", policy_schema, weakened))

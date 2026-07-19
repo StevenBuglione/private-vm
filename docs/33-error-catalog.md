@@ -263,6 +263,25 @@ ordinary, detailed and structural `fmt` verbs cannot reveal that cause.
 - `IPV6_BYPASS_DETECTED`
 - `TORRENT_INTERFACE_UNBOUND`
 
+VPN profile operations additionally use these stable safe codes:
+
+| Code | Exit | Safe meaning | Remediation |
+|---|---:|---|---|
+| `VPN_PROFILE_INVALID` | 13 | The bounded input does not match the frozen Proton WireGuard grammar. | Generate a profile with one peer, complete default routes, literal DNS addresses and no hooks. |
+| `VPN_ENDPOINT_UNRESOLVED` | 13 | The endpoint lookup failed, timed out, was empty/oversized or returned an unsafe address. | Generate and import a current Proton profile, then retry the bounded check. |
+| `VPN_PROFILE_NOT_IMPORTED` | 13 | The selected name has no daemon-memory profile generation. | Import a current profile before starting a networked role. |
+| `VPN_PROFILE_STORE_CLOSED` | 13 | Daemon-lifetime volatile storage has closed and cannot restore keys. | Restart the daemon and import the profile again. |
+| `VPN_ENDPOINT_CHECK_REQUIRED` | 13 | The imported generation has not completed endpoint verification. | Run the trusted-host endpoint check before delivery. |
+| `VPN_PROFILE_ROTATED` | 13 | The generation changed between endpoint planning and delivery. | Resolve the current generation and rebuild its endpoint policy. |
+| `VPN_PROFILE_LIMIT` | 13 | The daemon's bounded volatile profile-name limit was reached. | Remove an unused profile before importing another name. |
+
+The redacted VPN status schema uses corresponding state codes
+`VPN_ENDPOINT_CHECK_REQUIRED`, `VPN_PROFILE_CURRENT` and
+`VPN_PROFILE_ROTATION_REQUIRED`. They contain remediation but never profile,
+endpoint, address, DNS, source-path or resolver details. Caller cancellation and
+operation timeouts continue to use the canonical CLI/RPC context mappings at
+their eventual boundary.
+
 ### Scanner
 
 - `SCANNER_DEFINITIONS_STALE`
