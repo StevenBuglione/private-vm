@@ -281,10 +281,6 @@ func workspaceDestinationError() error {
 	return apperror.New("WORKSPACE_DESTINATION_UNAVAILABLE", exitcode.Transfer, "The selected protected export destination is not available.", "Prepare and claim the exact supported destination, then retry the complete export.")
 }
 
-func workspaceTransferError(err error) error {
-	return apperror.Wrap("WORKSPACE_TRANSFER_FAILED", exitcode.Transfer, "The workspace transfer did not complete every bounded integrity check.", "Keep the workstation active and retry the complete export.", err)
-}
-
 func workspaceVerificationError() error {
 	return apperror.New("EXPORT_VERIFICATION_FAILED", exitcode.Transfer, "The selected export is absent, stale, changed, or ambiguous.", "Keep the workstation active and repeat a complete protected export before discarding it.")
 }
