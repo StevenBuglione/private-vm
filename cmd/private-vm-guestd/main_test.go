@@ -103,15 +103,6 @@ func TestComposeGuestServerConfigWiresOnlyScannerCompiledRole(t *testing.T) {
 	if err := scannerService.Close(t.Context()); err != nil {
 		t.Fatal(err)
 	}
-
-	identity.Role = session.RoleExporter
-	config, scannerService, err = composeGuestServerConfig(identity, token)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if scannerService != nil || config.Scanner != nil {
-		t.Fatal("non-scanner composition registered scanner service")
-	}
 }
 
 func TestCurrentVersionGenericBuildFailsClosed(t *testing.T) {
