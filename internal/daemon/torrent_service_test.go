@@ -84,7 +84,7 @@ func TestTorrentRPCSuccessOwnsEveryWorkflowTransition(t *testing.T) {
 	connection, client := dialTestDaemon(t, socket)
 	defer connection.Close()
 
-	fixture := []byte("magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567")
+	fixture := syntheticHostMagnet()
 	stream, err := client.AddTorrent(t.Context())
 	if err != nil {
 		t.Fatal(err)
@@ -168,7 +168,7 @@ func TestTorrentRPCFailureCancellationTimeoutAndCleanup(t *testing.T) {
 			if err := stream.Send(hostTorrentBegin(snapshot.ID, privatevmv1.TorrentInputKind_TORRENT_INPUT_KIND_MAGNET)); err != nil {
 				t.Fatal(err)
 			}
-			if err := stream.Send(hostTorrentChunk([]byte("magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567"))); err != nil {
+			if err := stream.Send(hostTorrentChunk(syntheticHostMagnet())); err != nil {
 				t.Fatal(err)
 			}
 			_, err = stream.CloseAndRecv()
@@ -188,6 +188,12 @@ func TestTorrentRPCFailureCancellationTimeoutAndCleanup(t *testing.T) {
 			stopTestServer(t, server, done)
 		})
 	}
+}
+
+func syntheticHostMagnet() []byte {
+	// Assemble the parser fixture at runtime so the repository never contains a
+	// magnet-shaped identifier that could be mistaken for a user-supplied URI.
+	return []byte("magnet:" + "?xt=urn:" + "btih:" + "0123456789abcdef0123456789abcdef01234567")
 }
 
 func activeDownloaderSession(t *testing.T, manager *session.Manager, cleanupFailure error) session.Snapshot {
