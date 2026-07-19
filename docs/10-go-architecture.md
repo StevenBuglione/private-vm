@@ -249,6 +249,13 @@ Scanner and exporter requests remain typed fail-closed at this boundary until
 their separate orchestrators are composed; they are never routed through a
 workstation or downloader device model.
 
+The workstation runtime exposes one sealed `WorkstationRelay`, not its VSOCK
+client. Host import/export callbacks carry only bounded transfer frames and an
+opaque output ID. The daemon retains its export digest until a separate receiver
+digest matches and the guest re-verifies the current output. The scanner
+promotion hook is sealed to the orchestrator package so only a scanner owner
+that authenticated a complete approved report can implement it.
+
 ## Volatile secret contract
 
 `internal/secret.Bytes` is a bounded handle to shared private state. Copying the

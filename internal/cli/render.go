@@ -27,15 +27,16 @@ const (
 type Code string
 
 const (
-	CodeVersion       Code = "VERSION_REPORTED"
-	CodeDoctorReport  Code = "DOCTOR_REPORT"
-	CodeAcknowledged  Code = "ACKNOWLEDGED"
-	CodeVPNProfile    Code = "VPN_PROFILE_STATUS"
-	CodeSessionStatus Code = "SESSION_STATUS"
-	CodeTorrentStatus Code = "TORRENT_STATUS"
-	CodeScannerStatus Code = "SCANNER_STATUS"
-	CodeInternalError Code = "INTERNAL_ERROR"
-	CodeRenderFailed  Code = "OUTPUT_RENDER_FAILED"
+	CodeVersion         Code = "VERSION_REPORTED"
+	CodeDoctorReport    Code = "DOCTOR_REPORT"
+	CodeAcknowledged    Code = "ACKNOWLEDGED"
+	CodeVPNProfile      Code = "VPN_PROFILE_STATUS"
+	CodeSessionStatus   Code = "SESSION_STATUS"
+	CodeWorkspaceStatus Code = "WORKSPACE_STATUS"
+	CodeTorrentStatus   Code = "TORRENT_STATUS"
+	CodeScannerStatus   Code = "SCANNER_STATUS"
+	CodeInternalError   Code = "INTERNAL_ERROR"
+	CodeRenderFailed    Code = "OUTPUT_RENDER_FAILED"
 )
 
 // MachinePayload is deliberately sealed. Machine output must use an audited,
@@ -118,6 +119,19 @@ type SessionView struct {
 }
 
 func (SessionPayload) machinePayload() {}
+
+// WorkspaceStatusPayload is aggregate-only. It cannot represent filenames,
+// paths, content hashes, socket paths or guest-internal output identities.
+type WorkspaceStatusPayload struct {
+	SchemaVersion   uint32 `json:"schema_version"`
+	State           string `json:"state"`
+	FileCount       uint32 `json:"file_count"`
+	ExportedCount   uint32 `json:"exported_count"`
+	UnexportedCount uint32 `json:"unexported_count"`
+	ChangedCount    uint32 `json:"changed_count"`
+}
+
+func (WorkspaceStatusPayload) machinePayload() {}
 
 // TorrentStatusPayload deliberately carries only aggregate counters and
 // stable state. Torrent names, file paths, hashes and peer identifiers never
@@ -350,6 +364,10 @@ func validSuccess(success SuccessEnvelope) bool {
 			}
 		}
 		return true
+	case WorkspaceStatusPayload:
+		return success.Code == CodeWorkspaceStatus && data.SchemaVersion == 1 &&
+			oneOf(data.State, "CLEAN", "READY", "UNEXPORTED", "CHANGED") &&
+			data.ExportedCount <= data.FileCount && data.UnexportedCount <= data.FileCount && data.ChangedCount <= data.FileCount
 	case TorrentStatusPayload:
 		return success.Code == CodeTorrentStatus && data.SchemaVersion == 1 &&
 			validCode(Code(data.State)) && data.CompletedBytes <= data.TotalBytes &&

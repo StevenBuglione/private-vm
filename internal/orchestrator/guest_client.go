@@ -38,24 +38,26 @@ func (connector VSOCKGuestConnector) Connect(ctx context.Context, cid uint32, ro
 	}
 	return &vsockGuestConnection{
 		connection: connection, role: role, expected: connector.Expected,
-		probeTargets: connector.ProbeTargets,
-		common:       privatevmv1.NewGuestCommonServiceClient(connection),
-		workstation:  privatevmv1.NewWorkstationGuestServiceClient(connection),
-		downloader:   privatevmv1.NewDownloaderGuestServiceClient(connection),
+		common:           privatevmv1.NewGuestCommonServiceClient(connection),
+		workstation:      privatevmv1.NewWorkstationGuestServiceClient(connection),
+		downloader:       privatevmv1.NewDownloaderGuestServiceClient(connection),
+		probeTargets:     connector.ProbeTargets,
+		workspaceExports: make(map[string][32]byte),
 	}, nil
 }
 
 type vsockGuestConnection struct {
 	mu sync.Mutex
 
-	connection   *grpc.ClientConn
-	role         session.Role
-	expected     guest.HandshakeExpectation
-	common       privatevmv1.GuestCommonServiceClient
-	workstation  privatevmv1.WorkstationGuestServiceClient
-	downloader   privatevmv1.DownloaderGuestServiceClient
-	probeTargets guestvpn.ProbeTargets
-	closed       bool
+	connection       *grpc.ClientConn
+	role             session.Role
+	expected         guest.HandshakeExpectation
+	common           privatevmv1.GuestCommonServiceClient
+	workstation      privatevmv1.WorkstationGuestServiceClient
+	downloader       privatevmv1.DownloaderGuestServiceClient
+	probeTargets     guestvpn.ProbeTargets
+	workspaceExports map[string][32]byte
+	closed           bool
 }
 
 func (connection *vsockGuestConnection) Handshake(ctx context.Context) error {
@@ -216,6 +218,8 @@ func (connection *vsockGuestConnection) Close() error {
 		return nil
 	}
 	connection.closed = true
+	clear(connection.workspaceExports)
+	connection.workspaceExports = nil
 	return connection.connection.Close()
 }
 

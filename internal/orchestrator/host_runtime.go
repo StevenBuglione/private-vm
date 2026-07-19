@@ -175,6 +175,16 @@ func (stack *RuntimeStack) Start(ctx context.Context, request HostRuntimeRequest
 	if networked == nil {
 		return fail(ErrHostRuntimeUnavailable)
 	}
+	if request.Snapshot.Role == session.RoleWorkstation {
+		display, err := startDisplayProxy(stack.RuntimeRoot, request.Snapshot.ID, request.Snapshot.OwnerUID, directories.SPICESocket())
+		if err != nil {
+			return fail(err)
+		}
+		resource.display = display
+		if err := networked.attachDisplay(display); err != nil {
+			return fail(err)
+		}
+	}
 	stack.Forget(request.Snapshot.ID)
 	return resource, nil
 }
@@ -189,6 +199,7 @@ type hostRuntimeResource struct {
 	capability  *guest.Token
 	network     *network.Handle
 	networked   *NetworkedRuntime
+	display     *displayProxy
 	images      qemu.RuntimeImageLease
 	directories *runtimeSocketDirectories
 }
@@ -199,6 +210,11 @@ func (resource *hostRuntimeResource) Stop(ctx context.Context, discard bool) err
 	}
 	resource.mu.Lock()
 	defer resource.mu.Unlock()
+	if resource.display != nil {
+		if err := resource.display.Stop(); err != nil {
+			return err
+		}
+	}
 	if resource.networked != nil {
 		if err := resource.networked.Stop(ctx, discard); err != nil {
 			return err
@@ -241,6 +257,9 @@ func (resource *hostRuntimeResource) Audit(ctx context.Context) error {
 	resource.mu.Lock()
 	defer resource.mu.Unlock()
 	var audits []error
+	if resource.display != nil {
+		audits = append(audits, resource.display.Audit())
+	}
 	if resource.networked != nil {
 		audits = append(audits, resource.networked.Audit(ctx))
 	} else if resource.capability != nil || resource.network != nil {

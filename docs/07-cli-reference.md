@@ -130,6 +130,17 @@ workstation matches. `desktop stop` permits `CLEAN` and, unless
 `--require-clean` is set, fully verified `READY`; other states require the
 explicit destructive `--discard` choice.
 
+`desktop connect` and `desktop restart-viewer` resolve one active owned
+workstation through the daemon, then run the root-owned `remote-viewer`
+executable as the invoking user against the fixed UID-only Unix display proxy.
+There is no viewer-command, socket-path or TCP option. `desktop start` never
+launches a viewer and returns when the daemon reports the workstation active.
+The two viewer commands intentionally run `remote-viewer` in the foreground;
+they return when it exits and cancel it when the CLI context or global
+`--timeout` expires (five minutes by default, at most 24 hours). Viewer exit or
+timeout does not stop the VM. The display proxy permits one active client and
+immediately closes every concurrent connection instead of queueing it.
+
 ### Workspace
 
 ```text
@@ -137,12 +148,42 @@ private-vm workspace import FILE [--session ID]
 private-vm workspace inbox [--session ID]
 private-vm workspace list [--session ID]
 private-vm workspace inspect PATH [--session ID]
-private-vm workspace export --to usb|encrypted-bundle [--session ID]
-private-vm workspace verify [--last|--export ID]
+private-vm workspace export OUTPUT --to usb|encrypted-bundle [--session ID]
+private-vm workspace verify (--last|--export ID) [--session ID]
 private-vm workspace discard --all [--session ID]
 ```
 
 No v1 command imports a directory.
+
+`workspace import` opens and hashes one no-follow regular host file, streams it
+without exposing its path to the daemon or guest, and requires the daemon and
+guest SHA-256 receipt to match. `workspace list` and `workspace inbox` return an
+aggregate `WORKSPACE_STATUS` record; machine output contains only state and
+counts. `workspace discard --all` is the explicit destructive choice and stops
+the disposable workstation through the protected daemon stop path.
+
+The authenticated daemon/guest export relay, CLI receiver and three-way
+verification RPC are implemented. Export starts only when the exact selected
+current result requires export and the selected typed destination adapter is
+already available. The CLI checks bounded framing and hashes while writing; the adapter
+must fsync and re-read the destination, then return its independent SHA-256.
+Only equality between the guest/daemon digest and that receiver digest invokes
+`VerifyWorkspaceExport`; failure leaves the workstation dirty. The CLI's
+`--to usb` adapter is composed by the exporter workflow, and the
+encrypted-bundle destination still requires its separately specified
+encryption/container adapter. A missing adapter fails before the guest stream
+begins. `workspace verify` revalidates that exactly one selected guest receipt
+is current and unchanged; destination re-read verification happens during the
+export command and is not reconstructed from persistent CLI state. `--last`
+is accepted only when exactly one current verified receipt exists; otherwise
+the caller must use one explicit output ID.
+
+Scanner-to-workstation promotion has a sealed typed host hook that accepts only
+an orchestrator-owned approved reconstructed stream. The scanner host workflow
+does not yet implement that marker on this integration slice, so `scan approve
+--open-in workstation` remains fail closed until the authenticated report and a
+fresh workstation are composed; an ordinary trusted-file import cannot bypass
+that boundary.
 
 ### Torrent
 

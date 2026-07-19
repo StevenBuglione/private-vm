@@ -492,38 +492,6 @@ func (s *Service) StreamEvents(request *privatevmv1.GetSessionRequest, stream pr
 	}
 }
 
-func (s *Service) ImportWorkspaceFile(stream privatevmv1.PrivateVMDaemonService_ImportWorkspaceFileServer) error {
-	frame, err := stream.Recv()
-	if err != nil {
-		if errors.Is(err, io.EOF) {
-			return rpcError(codes.InvalidArgument, "TRANSFER_BEGIN_REQUIRED", "The first transfer frame must be TransferBegin.", "Start the stream with a bounded TransferBegin record.", false)
-		}
-		return sessionError(err)
-	}
-	if frame.GetBegin() == nil {
-		return rpcError(codes.InvalidArgument, "TRANSFER_BEGIN_REQUIRED", "The first transfer frame must be TransferBegin.", "Start the stream with a bounded TransferBegin record.", false)
-	}
-	ctx, err := requestContextWithMetadata(stream.Context(), frame.GetBegin().GetContext(), true)
-	if err != nil {
-		return err
-	}
-	if err := ctx.Err(); err != nil {
-		return sessionError(err)
-	}
-	return unimplemented("Workspace import")
-}
-
-func (s *Service) ExportWorkspaceFile(request *privatevmv1.ExportWorkspaceRequest, stream privatevmv1.PrivateVMDaemonService_ExportWorkspaceFileServer) error {
-	ctx, err := requestContextWithMetadata(stream.Context(), request.GetContext(), true)
-	if err != nil {
-		return err
-	}
-	if err := ctx.Err(); err != nil {
-		return sessionError(err)
-	}
-	return unimplemented("Workspace export")
-}
-
 func (s *Service) ClaimUSB(ctx context.Context, request *privatevmv1.ClaimUSBRequest) (*privatevmv1.USBClaim, error) {
 	if err := validateRequestContext(request.GetContext(), true); err != nil {
 		return nil, err
@@ -650,6 +618,8 @@ var unarySessionRequirement = map[string]bool{
 	privatevmv1.PrivateVMDaemonService_StopRole_FullMethodName:              true,
 	privatevmv1.PrivateVMDaemonService_AbortSession_FullMethodName:          true,
 	privatevmv1.PrivateVMDaemonService_CleanupSession_FullMethodName:        true,
+	privatevmv1.PrivateVMDaemonService_GetWorkspaceState_FullMethodName:     true,
+	privatevmv1.PrivateVMDaemonService_VerifyWorkspaceExport_FullMethodName: true,
 	privatevmv1.PrivateVMDaemonService_ClaimUSB_FullMethodName:              true,
 	privatevmv1.PrivateVMDaemonService_ReleaseUSB_FullMethodName:            true,
 }

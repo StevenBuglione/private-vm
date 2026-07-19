@@ -219,8 +219,10 @@ Core methods:
 - `AbortSession`
 - `CleanupSession`
 - `StreamEvents`
+- `GetWorkspaceState`
 - `ImportWorkspaceFile`
 - `ExportWorkspaceFile`
+- `VerifyWorkspaceExport`
 - `ClaimUSB`
 - `ReleaseUSB`
 
@@ -243,6 +245,15 @@ host response messages. Approval selects only `workstation` or `usb`; it cannot
 name a host path or device.
 
 No arbitrary command execution method is permitted.
+
+The host workstation surface is active-workstation-only and serialized with
+role stop. `GetWorkspaceState` returns opaque output IDs, byte counts and
+export/change booleans but no filename or digest. Import replaces the caller's
+request context with a fresh authenticated guest context and verifies the
+descriptor, stream and guest receipt. Export is hashed independently by the
+guest, daemon relay and final receiver. `VerifyWorkspaceExport` succeeds only
+when the daemon-retained volatile digest and receiver digest match, after which
+the guest rehashes the current output before recording its receipt.
 
 The host torrent surface is session-scoped and downloader-only. `AddTorrent`
 starts with one contextual begin frame selecting magnet or metainfo, followed

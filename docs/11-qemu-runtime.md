@@ -118,6 +118,11 @@ Required invariants:
 - no TCP fallback
 - `remote-viewer` process runs as invoking user, never root
 
+The root-owned QEMU socket is never chowned to the user. After launcher
+validation, a daemon-owned bounded Unix relay creates the fixed UID-only
+`/run/private-vm/display/<session-id>.sock` handoff. Runtime cleanup closes the
+relay, audits its pinned inode and removes it before QEMU socket cleanup.
+
 ## QMP
 
 The daemon:

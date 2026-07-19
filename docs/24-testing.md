@@ -596,6 +596,13 @@ changed-after-export detection. The host/daemon/VSOCK relay and dirty-stop
 acceptance remain separate integration gates; guest-only evidence cannot mark
 those gates complete.
 
+The host workstation source gate additionally uses authenticated daemon fakes
+to exercise import, aggregate inventory, export and verification, and a real
+pair of local Unix sockets to prove the display relay, exact peer UID check,
+fail-fast concurrent-client rejection without a queued hang, bounded
+caller-death cleanup and identity-pinned replacement refusal. It does not start
+QEMU or a graphical viewer.
+
 Daemon role-lifecycle tests run every workstation startup gate through the
 session actor, prove storage and runtime cleanup execute in reverse allocation
 order, and inject failure at preflight, image verification, storage allocation,
@@ -610,6 +617,13 @@ single-session selection, listing, protected stop, start-failure abort, request
 ID failure, stable error-to-exit mapping, and the closed `SESSION_STATUS`
 renderer over a private Unix gRPC fixture. No runtime path, guest endpoint, or
 workspace content is representable in that payload.
+
+Workspace production-invoker tests prove no-follow trusted import, receipt
+mismatch rejection, aggregate-only inventory, fail-before-stream behavior when
+a protected destination is absent, bounded export framing, independent
+destination commit hashing, the daemon verification call, and changed-receipt
+rejection. The destination fixture is memory-only; real USB and encrypted
+container writes remain their destructive system gates.
 
 ## Test safety
 

@@ -92,9 +92,9 @@ func (factory commandFactory) plan() *cobra.Command {
 
 func (factory commandFactory) desktop() *cobra.Command {
 	start, _ := factory.workstationStart("start")
-	connect := factory.optionalSession("connect", "desktop.connect")
+	connect := factory.optionalSession("connect", CommandDesktopConnect)
 	status := factory.optionalSession("status", "desktop.status")
-	restart := factory.optionalSession("restart-viewer", "desktop.restart-viewer")
+	restart := factory.optionalSession("restart-viewer", CommandDesktopRestart)
 
 	var stopSession string
 	var requireClean, discard bool
@@ -158,7 +158,7 @@ func (factory commandFactory) optionalSession(use string, id CommandID) *cobra.C
 
 func (factory commandFactory) workspace() *cobra.Command {
 	var importSession string
-	importCommand := factory.operation("import FILE", "Import one trusted host file", "workspace.import", exactArgs(1), func(command *cobra.Command) error {
+	importCommand := factory.operation("import FILE", "Import one trusted host file", CommandWorkspaceImport, exactArgs(1), func(command *cobra.Command) error {
 		if err := validatePath(command.Flags().Arg(0)); err != nil {
 			return err
 		}
@@ -166,8 +166,8 @@ func (factory commandFactory) workspace() *cobra.Command {
 	}, func(args []string) Intent { return WorkspacePathIntent{SessionID: importSession, Path: args[0]} })
 	importCommand.Flags().StringVar(&importSession, "session", "", "session identifier")
 
-	inbox := factory.optionalSessionOperation("inbox", "workspace.inbox")
-	list := factory.optionalSessionOperation("list", "workspace.list")
+	inbox := factory.optionalSessionOperation("inbox", CommandWorkspaceInbox)
+	list := factory.optionalSessionOperation("list", CommandWorkspaceList)
 
 	var inspectSession string
 	inspect := factory.operation("inspect PATH", "Inspect a workspace path", "workspace.inspect", exactArgs(1), func(command *cobra.Command) error {
@@ -179,31 +179,42 @@ func (factory commandFactory) workspace() *cobra.Command {
 	inspect.Flags().StringVar(&inspectSession, "session", "", "session identifier")
 
 	var exportTo, exportSession string
-	export := factory.operation("export", "Export an explicit workspace result", "workspace.export", noArgs, func(*cobra.Command) error {
+	export := factory.operation("export OUTPUT", "Export an explicit workspace result", CommandWorkspaceExport, exactArgs(1), func(command *cobra.Command) error {
 		if err := enum(exportTo, "export destination", "usb", "encrypted-bundle"); err != nil {
 			return err
 		}
+		if err := validateOpaqueID(command.Flags().Arg(0), "workspace output", true); err != nil {
+			return err
+		}
 		return validateSessionID(exportSession, false)
-	}, func([]string) Intent { return WorkspaceExportIntent{SessionID: exportSession, Destination: exportTo} })
+	}, func(args []string) Intent {
+		return WorkspaceExportIntent{SessionID: exportSession, Destination: exportTo, OutputID: args[0]}
+	})
 	export.Flags().StringVar(&exportTo, "to", "", "usb or encrypted-bundle")
 	export.Flags().StringVar(&exportSession, "session", "", "session identifier")
 
 	var verifyLast bool
-	var verifyExport string
-	verify := factory.operation("verify", "Verify a workspace export", "workspace.verify", noArgs, func(*cobra.Command) error {
-		if err := validateExclusive(boolCount(verifyLast, verifyExport != ""), false,
+	var verifyExport, verifySession string
+	verify := factory.operation("verify", "Verify a workspace export", CommandWorkspaceVerify, noArgs, func(*cobra.Command) error {
+		if err := validateExclusive(boolCount(verifyLast, verifyExport != ""), true,
 			"The workspace verification selectors are mutually exclusive.",
-			"Choose at most one of --last and --export."); err != nil {
+			"Choose exactly one of --last and --export."); err != nil {
 			return err
 		}
-		return validateOpaqueID(verifyExport, "export", false)
-	}, func([]string) Intent { return WorkspaceVerifyIntent{Last: verifyLast, ExportID: verifyExport} })
+		if err := validateOpaqueID(verifyExport, "export", false); err != nil {
+			return err
+		}
+		return validateSessionID(verifySession, false)
+	}, func([]string) Intent {
+		return WorkspaceVerifyIntent{SessionID: verifySession, Last: verifyLast, ExportID: verifyExport}
+	})
 	verify.Flags().BoolVar(&verifyLast, "last", false, "verify the last export")
 	verify.Flags().StringVar(&verifyExport, "export", "", "export identifier")
+	verify.Flags().StringVar(&verifySession, "session", "", "session identifier")
 
 	var discardAll bool
 	var discardSession string
-	discard := factory.operation("discard", "Discard all workspace data", "workspace.discard", noArgs, func(*cobra.Command) error {
+	discard := factory.operation("discard", "Discard all workspace data", CommandWorkspaceDiscard, noArgs, func(*cobra.Command) error {
 		if !discardAll {
 			return usageError("Workspace discard requires --all.", "Pass --all to explicitly confirm the complete volatile workspace selection.")
 		}

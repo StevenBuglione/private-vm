@@ -46,8 +46,10 @@ const (
 	PrivateVMDaemonService_AbortSession_FullMethodName          = "/privatevm.v1.PrivateVMDaemonService/AbortSession"
 	PrivateVMDaemonService_CleanupSession_FullMethodName        = "/privatevm.v1.PrivateVMDaemonService/CleanupSession"
 	PrivateVMDaemonService_StreamEvents_FullMethodName          = "/privatevm.v1.PrivateVMDaemonService/StreamEvents"
+	PrivateVMDaemonService_GetWorkspaceState_FullMethodName     = "/privatevm.v1.PrivateVMDaemonService/GetWorkspaceState"
 	PrivateVMDaemonService_ImportWorkspaceFile_FullMethodName   = "/privatevm.v1.PrivateVMDaemonService/ImportWorkspaceFile"
 	PrivateVMDaemonService_ExportWorkspaceFile_FullMethodName   = "/privatevm.v1.PrivateVMDaemonService/ExportWorkspaceFile"
+	PrivateVMDaemonService_VerifyWorkspaceExport_FullMethodName = "/privatevm.v1.PrivateVMDaemonService/VerifyWorkspaceExport"
 	PrivateVMDaemonService_ClaimUSB_FullMethodName              = "/privatevm.v1.PrivateVMDaemonService/ClaimUSB"
 	PrivateVMDaemonService_ReleaseUSB_FullMethodName            = "/privatevm.v1.PrivateVMDaemonService/ReleaseUSB"
 )
@@ -83,8 +85,10 @@ type PrivateVMDaemonServiceClient interface {
 	AbortSession(ctx context.Context, in *AbortSessionRequest, opts ...grpc.CallOption) (*Session, error)
 	CleanupSession(ctx context.Context, in *CleanupSessionRequest, opts ...grpc.CallOption) (*Session, error)
 	StreamEvents(ctx context.Context, in *GetSessionRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[SessionEvent], error)
+	GetWorkspaceState(ctx context.Context, in *HostWorkspaceStateRequest, opts ...grpc.CallOption) (*WorkspaceState, error)
 	ImportWorkspaceFile(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[TransferFrame, TransferReceipt], error)
 	ExportWorkspaceFile(ctx context.Context, in *ExportWorkspaceRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[TransferFrame], error)
+	VerifyWorkspaceExport(ctx context.Context, in *VerifyWorkspaceExportRequest, opts ...grpc.CallOption) (*WorkspaceState, error)
 	ClaimUSB(ctx context.Context, in *ClaimUSBRequest, opts ...grpc.CallOption) (*USBClaim, error)
 	ReleaseUSB(ctx context.Context, in *ReleaseUSBRequest, opts ...grpc.CallOption) (*Empty, error)
 }
@@ -400,6 +404,16 @@ func (c *privateVMDaemonServiceClient) StreamEvents(ctx context.Context, in *Get
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type PrivateVMDaemonService_StreamEventsClient = grpc.ServerStreamingClient[SessionEvent]
 
+func (c *privateVMDaemonServiceClient) GetWorkspaceState(ctx context.Context, in *HostWorkspaceStateRequest, opts ...grpc.CallOption) (*WorkspaceState, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(WorkspaceState)
+	err := c.cc.Invoke(ctx, PrivateVMDaemonService_GetWorkspaceState_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *privateVMDaemonServiceClient) ImportWorkspaceFile(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[TransferFrame, TransferReceipt], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	stream, err := c.cc.NewStream(ctx, &PrivateVMDaemonService_ServiceDesc.Streams[5], PrivateVMDaemonService_ImportWorkspaceFile_FullMethodName, cOpts...)
@@ -431,6 +445,16 @@ func (c *privateVMDaemonServiceClient) ExportWorkspaceFile(ctx context.Context, 
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type PrivateVMDaemonService_ExportWorkspaceFileClient = grpc.ServerStreamingClient[TransferFrame]
+
+func (c *privateVMDaemonServiceClient) VerifyWorkspaceExport(ctx context.Context, in *VerifyWorkspaceExportRequest, opts ...grpc.CallOption) (*WorkspaceState, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(WorkspaceState)
+	err := c.cc.Invoke(ctx, PrivateVMDaemonService_VerifyWorkspaceExport_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
 
 func (c *privateVMDaemonServiceClient) ClaimUSB(ctx context.Context, in *ClaimUSBRequest, opts ...grpc.CallOption) (*USBClaim, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
@@ -483,8 +507,10 @@ type PrivateVMDaemonServiceServer interface {
 	AbortSession(context.Context, *AbortSessionRequest) (*Session, error)
 	CleanupSession(context.Context, *CleanupSessionRequest) (*Session, error)
 	StreamEvents(*GetSessionRequest, grpc.ServerStreamingServer[SessionEvent]) error
+	GetWorkspaceState(context.Context, *HostWorkspaceStateRequest) (*WorkspaceState, error)
 	ImportWorkspaceFile(grpc.ClientStreamingServer[TransferFrame, TransferReceipt]) error
 	ExportWorkspaceFile(*ExportWorkspaceRequest, grpc.ServerStreamingServer[TransferFrame]) error
+	VerifyWorkspaceExport(context.Context, *VerifyWorkspaceExportRequest) (*WorkspaceState, error)
 	ClaimUSB(context.Context, *ClaimUSBRequest) (*USBClaim, error)
 	ReleaseUSB(context.Context, *ReleaseUSBRequest) (*Empty, error)
 	mustEmbedUnimplementedPrivateVMDaemonServiceServer()
@@ -578,11 +604,17 @@ func (UnimplementedPrivateVMDaemonServiceServer) CleanupSession(context.Context,
 func (UnimplementedPrivateVMDaemonServiceServer) StreamEvents(*GetSessionRequest, grpc.ServerStreamingServer[SessionEvent]) error {
 	return status.Error(codes.Unimplemented, "method StreamEvents not implemented")
 }
+func (UnimplementedPrivateVMDaemonServiceServer) GetWorkspaceState(context.Context, *HostWorkspaceStateRequest) (*WorkspaceState, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetWorkspaceState not implemented")
+}
 func (UnimplementedPrivateVMDaemonServiceServer) ImportWorkspaceFile(grpc.ClientStreamingServer[TransferFrame, TransferReceipt]) error {
 	return status.Error(codes.Unimplemented, "method ImportWorkspaceFile not implemented")
 }
 func (UnimplementedPrivateVMDaemonServiceServer) ExportWorkspaceFile(*ExportWorkspaceRequest, grpc.ServerStreamingServer[TransferFrame]) error {
 	return status.Error(codes.Unimplemented, "method ExportWorkspaceFile not implemented")
+}
+func (UnimplementedPrivateVMDaemonServiceServer) VerifyWorkspaceExport(context.Context, *VerifyWorkspaceExportRequest) (*WorkspaceState, error) {
+	return nil, status.Error(codes.Unimplemented, "method VerifyWorkspaceExport not implemented")
 }
 func (UnimplementedPrivateVMDaemonServiceServer) ClaimUSB(context.Context, *ClaimUSBRequest) (*USBClaim, error) {
 	return nil, status.Error(codes.Unimplemented, "method ClaimUSB not implemented")
@@ -1055,6 +1087,24 @@ func _PrivateVMDaemonService_StreamEvents_Handler(srv interface{}, stream grpc.S
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type PrivateVMDaemonService_StreamEventsServer = grpc.ServerStreamingServer[SessionEvent]
 
+func _PrivateVMDaemonService_GetWorkspaceState_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(HostWorkspaceStateRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PrivateVMDaemonServiceServer).GetWorkspaceState(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PrivateVMDaemonService_GetWorkspaceState_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PrivateVMDaemonServiceServer).GetWorkspaceState(ctx, req.(*HostWorkspaceStateRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _PrivateVMDaemonService_ImportWorkspaceFile_Handler(srv interface{}, stream grpc.ServerStream) error {
 	return srv.(PrivateVMDaemonServiceServer).ImportWorkspaceFile(&grpc.GenericServerStream[TransferFrame, TransferReceipt]{ServerStream: stream})
 }
@@ -1072,6 +1122,24 @@ func _PrivateVMDaemonService_ExportWorkspaceFile_Handler(srv interface{}, stream
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type PrivateVMDaemonService_ExportWorkspaceFileServer = grpc.ServerStreamingServer[TransferFrame]
+
+func _PrivateVMDaemonService_VerifyWorkspaceExport_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(VerifyWorkspaceExportRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PrivateVMDaemonServiceServer).VerifyWorkspaceExport(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PrivateVMDaemonService_VerifyWorkspaceExport_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PrivateVMDaemonServiceServer).VerifyWorkspaceExport(ctx, req.(*VerifyWorkspaceExportRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
 
 func _PrivateVMDaemonService_ClaimUSB_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ClaimUSBRequest)
@@ -1203,6 +1271,14 @@ var PrivateVMDaemonService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "CleanupSession",
 			Handler:    _PrivateVMDaemonService_CleanupSession_Handler,
+		},
+		{
+			MethodName: "GetWorkspaceState",
+			Handler:    _PrivateVMDaemonService_GetWorkspaceState_Handler,
+		},
+		{
+			MethodName: "VerifyWorkspaceExport",
+			Handler:    _PrivateVMDaemonService_VerifyWorkspaceExport_Handler,
 		},
 		{
 			MethodName: "ClaimUSB",

@@ -27,6 +27,14 @@ const (
 	CommandScannerReport    CommandID = "scan.report"
 	CommandScannerApprove   CommandID = "scan.approve"
 	CommandScannerReject    CommandID = "scan.reject"
+	CommandDesktopConnect   CommandID = "desktop.connect"
+	CommandDesktopRestart   CommandID = "desktop.restart-viewer"
+	CommandWorkspaceImport  CommandID = "workspace.import"
+	CommandWorkspaceInbox   CommandID = "workspace.inbox"
+	CommandWorkspaceList    CommandID = "workspace.list"
+	CommandWorkspaceExport  CommandID = "workspace.export"
+	CommandWorkspaceVerify  CommandID = "workspace.verify"
+	CommandWorkspaceDiscard CommandID = "workspace.discard"
 	CommandVPNImport        CommandID = "vpn.import"
 	CommandVPNInspect       CommandID = "vpn.inspect"
 	CommandVPNTest          CommandID = "vpn.test"
@@ -94,13 +102,15 @@ func (WorkspacePathIntent) privateVMIntent() {}
 type WorkspaceExportIntent struct {
 	SessionID   string
 	Destination string
+	OutputID    string
 }
 
 func (WorkspaceExportIntent) privateVMIntent() {}
 
 type WorkspaceVerifyIntent struct {
-	Last     bool
-	ExportID string
+	SessionID string
+	Last      bool
+	ExportID  string
 }
 
 func (WorkspaceVerifyIntent) privateVMIntent() {}

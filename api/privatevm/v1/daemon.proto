@@ -35,8 +35,10 @@ service PrivateVMDaemonService {
   rpc AbortSession(AbortSessionRequest) returns (Session);
   rpc CleanupSession(CleanupSessionRequest) returns (Session);
   rpc StreamEvents(GetSessionRequest) returns (stream SessionEvent);
+  rpc GetWorkspaceState(HostWorkspaceStateRequest) returns (WorkspaceState);
   rpc ImportWorkspaceFile(stream TransferFrame) returns (TransferReceipt);
   rpc ExportWorkspaceFile(ExportWorkspaceRequest) returns (stream TransferFrame);
+  rpc VerifyWorkspaceExport(VerifyWorkspaceExportRequest) returns (WorkspaceState);
   rpc ClaimUSB(ClaimUSBRequest) returns (USBClaim);
   rpc ReleaseUSB(ReleaseUSBRequest) returns (Empty);
 }
@@ -256,6 +258,15 @@ message SessionEvent {
 message ExportWorkspaceRequest {
   RequestContext context = 1;
   string output_id = 2;
+}
+
+message HostWorkspaceStateRequest { RequestContext context = 1; }
+
+message VerifyWorkspaceExportRequest {
+  RequestContext context = 1;
+  string output_id = 2;
+  Hash daemon_digest = 3;
+  Hash receiver_digest = 4;
 }
 
 message ClaimUSBRequest {

@@ -323,7 +323,7 @@ func TestValidatedParametersReachSemanticInvoker(t *testing.T) {
 		{name: "desktop stop", args: []string{"desktop", "stop", "--session", session, "--discard"}, want: DesktopStopIntent{SessionID: session, Discard: true}},
 		{name: "bundle", args: []string{"desktop", "bundles", "inspect", "office"}, want: BundleIntent{Name: "office"}},
 		{name: "workspace path", args: []string{"workspace", "import", "/tmp/input", "--session", session}, want: WorkspacePathIntent{SessionID: session, Path: "/tmp/input"}},
-		{name: "workspace export", args: []string{"workspace", "export", "--to", "usb", "--session", session}, want: WorkspaceExportIntent{SessionID: session, Destination: "usb"}},
+		{name: "workspace export", args: []string{"workspace", "export", "output-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "--to", "usb", "--session", session}, want: WorkspaceExportIntent{SessionID: session, Destination: "usb", OutputID: "output-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}},
 		{name: "workspace verify", args: []string{"workspace", "verify", "--export", "export-1"}, want: WorkspaceVerifyIntent{ExportID: "export-1"}},
 		{name: "workspace discard", args: []string{"workspace", "discard", "--all", "--session", session}, want: WorkspaceDiscardIntent{SessionID: session, All: true}},
 		{name: "torrent start", args: []string{"torrent", "start", "--policy", "quarantine"}, want: TorrentIntent{Policy: "quarantine"}},

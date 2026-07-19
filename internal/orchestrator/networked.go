@@ -101,6 +101,7 @@ type NetworkedRuntime struct {
 	capability Capability
 	process    ManagedProcess
 	guest      GuestConnection
+	display    *displayProxy
 
 	monitorCancel  context.CancelFunc
 	monitorErr     error
@@ -314,15 +315,36 @@ func (runtime *NetworkedRuntime) watchProcess() {
 	runtime.mu.Lock()
 	defer runtime.mu.Unlock()
 	runtime.processStopped = true
+	displayFailed := false
+	if runtime.display != nil {
+		if displayErr := runtime.display.Stop(); displayErr != nil {
+			displayFailed = true
+		}
+	}
 	if runtime.monitorCancel != nil {
 		runtime.monitorCancel()
 		runtime.monitorCancel = nil
 	}
 	cleanupCtx, cancel := context.WithTimeout(context.Background(), networkedCleanupTimeout)
 	defer cancel()
-	if cleanupErr := runtime.cleanupAfterProcessLocked(cleanupCtx); cleanupErr != nil || err != nil {
+	if cleanupErr := runtime.cleanupAfterProcessLocked(cleanupCtx); cleanupErr != nil || err != nil || displayFailed {
 		runtime.cleanupErr = ErrNetworkedCleanup
 	}
+}
+
+func (runtime *NetworkedRuntime) attachDisplay(display *displayProxy) error {
+	if runtime == nil || display == nil || runtime.role != session.RoleWorkstation {
+		return ErrNetworkedStart
+	}
+	runtime.mu.Lock()
+	if runtime.display != nil || runtime.processStopped {
+		runtime.mu.Unlock()
+		_ = display.Stop()
+		return ErrNetworkedCleanup
+	}
+	runtime.display = display
+	runtime.mu.Unlock()
+	return nil
 }
 
 func (runtime *NetworkedRuntime) MonitorError() error {

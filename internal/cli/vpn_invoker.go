@@ -27,13 +27,15 @@ const maximumVPNImportChunkBytes = 16 << 10
 // Unix socket. Commands not yet backed by a completed orchestration path remain
 // fail closed.
 type ProductionInvoker struct {
-	socketPath string
-	stdin      io.Reader
-	prompt     io.Writer
-	readInput  func(context.Context, ValueRequest) (*secret.Bytes, error)
-	readStream func(context.Context, StreamRequest) (io.ReadCloser, error)
-	torrents   TorrentSubmitter
-	requestID  func() (string, error)
+	socketPath           string
+	stdin                io.Reader
+	prompt               io.Writer
+	readInput            func(context.Context, ValueRequest) (*secret.Bytes, error)
+	readStream           func(context.Context, StreamRequest) (io.ReadCloser, error)
+	torrents             TorrentSubmitter
+	viewer               func(context.Context, string) error
+	workspaceDestination WorkspaceExportDestination
+	requestID            func() (string, error)
 }
 
 func NewProductionInvoker(socketPath string, stdin io.Reader, prompt io.Writer) Invoker {
@@ -49,13 +51,15 @@ func NewProductionInvokerWithTorrent(socketPath string, stdin io.Reader, prompt 
 	if prompt == nil {
 		prompt = io.Discard
 	}
-	return &ProductionInvoker{socketPath: socketPath, stdin: stdin, prompt: prompt, readInput: SensitiveInput, readStream: SensitiveStream, torrents: torrents, requestID: newRequestID}
+	return &ProductionInvoker{socketPath: socketPath, stdin: stdin, prompt: prompt, readInput: SensitiveInput, readStream: SensitiveStream, torrents: torrents, viewer: launchRemoteViewer, requestID: newRequestID}
 }
 
 func (invoker *ProductionInvoker) Invoke(ctx context.Context, id CommandID, intent Intent) (Result, error) {
 	switch id {
-	case CommandWorkstationStart, "desktop.status", "desktop.stop", "session.list", "session.status", "session.stop", "session.abort", "session.cleanup":
+	case CommandWorkstationStart, CommandDesktopConnect, CommandDesktopRestart, "desktop.status", "desktop.stop", "session.list", "session.status", "session.stop", "session.abort", "session.cleanup":
 		return invoker.invokeSession(ctx, id, intent)
+	case CommandWorkspaceImport, CommandWorkspaceInbox, CommandWorkspaceList, CommandWorkspaceExport, CommandWorkspaceVerify, CommandWorkspaceDiscard:
+		return invoker.invokeWorkspace(ctx, id, intent)
 	case CommandTorrentAdd:
 		request, ok := intent.(TorrentInputIntent)
 		if !ok {
