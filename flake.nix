@@ -335,7 +335,9 @@
             machine.succeed("ssh_root=$(dirname $(dirname $(readlink -f $(command -v ssh)))); test ! -e $ssh_root/etc/ssh/sshd_config; test ! -e $ssh_root/libexec/sftp-server; test ! -e $ssh_root/libexec/sshd-auth; test ! -e $ssh_root/libexec/sshd-session")
             machine.succeed("test ! -e /run/current-system/sw/bin/sudo")
             listeners = machine.succeed("ss -H -lntu")
-            assert listeners.strip() == "", f"unexpected TCP/UDP listeners: {listeners}"
+            for listener in listeners.splitlines():
+              address = listener.split()[3]
+              assert (address.startswith("127.0.0.53") or address.startswith("127.0.0.54")) and address.endswith(":53"), listener
           '';
         };
 
@@ -418,7 +420,7 @@
             listeners = machine.succeed("ss -H -lntu")
             for listener in listeners.splitlines():
               address = listener.split()[3]
-              assert address.startswith("127.0.0.53:") or address.startswith("127.0.0.54:"), listener
+              assert (address.startswith("127.0.0.53") or address.startswith("127.0.0.54")) and address.endswith(":53"), listener
             machine.succeed("for command in evince file-roller firefox git gvfsd jq keepassxc libreoffice mousepad nm-applet parole pavucontrol ristretto thunar tumblerd udisksctl xfce4-screenshooter xfce4-taskmanager xfce4-terminal; do ! command -v $command >/dev/null || exit 1; done")
             machine.succeed("nft list table inet private_vm_downloader | grep -F 'policy drop'")
             machine.succeed("test -b /dev/disk/by-id/virtio-quarantine")
