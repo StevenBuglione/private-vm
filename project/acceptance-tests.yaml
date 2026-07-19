@@ -64,6 +64,20 @@
           "given": "cancellation, timeout, limit, digest, decode, stream-close or verifier failure during pull",
           "when": "the bounded pull terminates",
           "then": "no final digest directory exists and every hidden partial directory is removed"
+        },
+        {
+          "id": "SUPPLY-006",
+          "name": "Published manifest compatibility is exact",
+          "given": "an otherwise intact artifact with a wrong role, bundle, architecture, guest API, QEMU policy, capability, source/lock/NixOS field, or compressed/installed cache binding",
+          "when": "the strict image verifier evaluates the staged artifact",
+          "then": "a stable redacted image verification error blocks provenance and publication"
+        },
+        {
+          "id": "SUPPLY-007",
+          "name": "Full-closure SPDX evidence is mandatory",
+          "given": "a missing, malformed, ambiguous, duplicate, unsorted or incompletely bound SPDX 2.3 image-closure document",
+          "when": "the official strict verifier evaluates the staged artifact",
+          "then": "the artifact is rejected and cannot bypass the still-mandatory IMG-003 provenance verifier"
         }
       ]
     },

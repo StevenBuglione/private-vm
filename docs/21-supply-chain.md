@@ -88,6 +88,68 @@ read-only staging entry before publication. IMG-002 and IMG-003 provide the
 manifest/SBOM and repository/workflow provenance implementations. With no
 verifier, pulling fails closed with `IMAGE_VERIFICATION_UNAVAILABLE`.
 
+IMG-002 defines the complete frozen-v1 release-manifest contract in
+`schemas/image-manifest.schema.json`. The Go `Manifest` has exactly the same
+required field set; a contract test rejects schema/struct drift. Decoding is
+byte-bounded, depth-bounded and presence-aware. Unknown fields, duplicate keys
+at any object depth, missing fields, trailing documents and invalid `null`
+values fail closed. The verifier requires:
+
+- `schema_version = 1`, project `private-vm`, NixOS `26.05`, canonical build
+  time, flake-lock SHA-256, source commit, source ref, repository and workflow
+  shapes;
+- the requested role and exact bundle (`basic`, `office` or `development` only
+  for workstation; explicit JSON `null` for the other roles);
+- Go `amd64` → manifest `x86_64` or Go `arm64` → manifest `aarch64`;
+- compatible guest API major/minor under the copied immutable host policy;
+- the exact frozen `9.2` image minimum and a host QEMU version at least that
+  new;
+- the exact sorted common-plus-role capability list;
+- compressed QCOW2 digest/size and installed QCOW2 digest/size equal to the
+  immutable cache record;
+- the SBOM digest equal to the installed `application/spdx+json` layer; and
+- virtual size, manifest size, SBOM size and collection counts within hard
+  ceilings.
+
+The official verifier constructor always composes those checks with a distinct
+IMG-003 `ProvenanceVerifier`. IMG-002 exports no accepting provenance
+implementation and has no official non-SBOM mode. Until IMG-003 supplies the
+repository/workflow verifier, product composition remains fail closed and no
+staged pull can become runnable.
+
+## Published image SPDX 2.3 profile
+
+`schemas/image-sbom.schema.json` is the exact REL-003 producer contract. It is a
+deliberately narrow SPDX 2.3 JSON profile generated from the full runtime Nix
+closure; it is not a Syft-field compatibility profile and is not the scanner's
+embedded direct-tool evidence.
+
+The document requires `SPDX-2.3`, `CC0-1.0`, `SPDXRef-DOCUMENT`, one unique
+HTTPS namespace derived from the compressed image digest, one canonical
+creation record and `documentDescribes = ["SPDXRef-IMAGE"]`. The described root
+image package and the single `./image.qcow2` file both carry exactly one SHA-256
+checksum equal to the installed/uncompressed QCOW2 digest from the manifest.
+
+The image package is first. Every remaining package represents one runtime Nix
+store closure path, uses `filesAnalyzed = false` and an explicitly present empty
+`checksums` array, and has:
+
+```text
+downloadLocation = file:///nix/store/<32-character-store-hash>-<store-name>
+SPDXID            = SPDXRef-Package-<same-store-hash>
+name              = <same-store-name>
+versionInfo       = a value contained in the store name, or NOASSERTION
+```
+
+Closure paths are unique and strictly sorted. Relationships are ordered as
+document `DESCRIBES` image, image `CONTAINS` QCOW2, then one image `DEPENDS_ON`
+closure-package edge in the same store-path order. Unknown elements, duplicate
+IDs or paths, ambiguous aliases, reordered entries, missing/null nested fields,
+unreferenced packages and extra relationships are blocking failures. This
+profile makes generation deterministic and self-consistent; provenance and
+independent rebuild evidence remain responsible for proving that the published
+list came from the official full Nix closure.
+
 ## Trust policy
 
 Official default:

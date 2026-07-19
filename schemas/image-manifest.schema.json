@@ -1,118 +1,115 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://private-vm.dev/schema/image-manifest-v1.json",
-  "title": "private-vm guest image manifest",
+  "title": "private-vm published guest image manifest",
   "type": "object",
   "additionalProperties": false,
   "properties": {
-    "schema_version": {
-      "const": 1
-    },
-    "project": {
-      "const": "private-vm"
-    },
-    "role": {
-      "enum": [
-        "workstation",
-        "downloader",
-        "scanner",
-        "exporter"
-      ]
-    },
-    "bundle": {
-      "type": [
-        "string",
-        "null"
-      ]
-    },
-    "architecture": {
-      "enum": [
-        "x86_64",
-        "aarch64"
-      ]
-    },
+    "schema_version": { "const": 1 },
+    "project": { "const": "private-vm" },
+    "role": { "enum": ["workstation", "downloader", "scanner", "exporter"] },
+    "bundle": { "type": ["string", "null"] },
+    "architecture": { "enum": ["x86_64", "aarch64"] },
     "source_repository": {
-      "type": "string"
-    },
-    "source_commit": {
       "type": "string",
-      "pattern": "^[0-9a-f]{40}$"
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,38}/[A-Za-z0-9][A-Za-z0-9_.-]{0,99}$"
     },
+    "source_commit": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
     "source_ref": {
-      "type": "string"
+      "type": "string",
+      "minLength": 11,
+      "maxLength": 255,
+      "pattern": "^refs/(heads|tags)/[A-Za-z0-9][A-Za-z0-9._/-]*$"
     },
     "workflow": {
-      "type": "string"
-    },
-    "image_digest": {
       "type": "string",
-      "pattern": "^sha256:[0-9a-f]{64}$"
+      "pattern": "^\\.github/workflows/[A-Za-z0-9][A-Za-z0-9._-]{0,127}\\.ya?ml$"
     },
-    "uncompressed_sha256": {
-      "type": "string",
-      "pattern": "^[0-9a-f]{64}$"
-    },
-    "compressed_size_bytes": {
-      "type": "integer",
-      "minimum": 1
-    },
-    "virtual_size_bytes": {
-      "type": "integer",
-      "minimum": 1
-    },
-    "nixos_version": {
-      "type": "string"
-    },
-    "flake_lock_sha256": {
-      "type": "string",
-      "pattern": "^[0-9a-f]{64}$"
-    },
-    "guest_api_major": {
-      "type": "integer",
-      "minimum": 1
-    },
-    "guest_api_minor": {
-      "type": "integer",
-      "minimum": 0
-    },
-    "minimum_qemu_version": {
-      "type": "string"
-    },
+    "image_digest": { "$ref": "#/$defs/digest" },
+    "uncompressed_sha256": { "$ref": "#/$defs/sha256" },
+    "compressed_size_bytes": { "type": "integer", "minimum": 1, "maximum": 68719476736 },
+    "uncompressed_size_bytes": { "type": "integer", "minimum": 1, "maximum": 2199023255552 },
+    "virtual_size_bytes": { "type": "integer", "minimum": 1, "maximum": 2199023255552 },
+    "nixos_version": { "const": "26.05" },
+    "flake_lock_sha256": { "$ref": "#/$defs/sha256" },
+    "guest_api_major": { "const": 1 },
+    "guest_api_minor": { "type": "integer", "minimum": 0, "maximum": 65535 },
+    "minimum_qemu_version": { "const": "9.2" },
     "capabilities": {
       "type": "array",
-      "items": {
-        "type": "string"
-      },
+      "items": { "type": "string", "minLength": 1, "maxLength": 64 },
       "uniqueItems": true
     },
-    "sbom_digest": {
-      "type": "string",
-      "pattern": "^sha256:[0-9a-f]{64}$"
-    },
-    "built_at": {
-      "type": "string",
-      "format": "date-time"
-    }
+    "sbom_digest": { "$ref": "#/$defs/digest" },
+    "built_at": { "type": "string", "format": "date-time", "pattern": "Z$" }
   },
   "required": [
-    "schema_version",
-    "project",
-    "role",
-    "architecture",
-    "source_repository",
-    "source_commit",
-    "workflow",
-    "image_digest",
-    "uncompressed_sha256",
-    "compressed_size_bytes",
-    "virtual_size_bytes",
-    "nixos_version",
-    "flake_lock_sha256",
-    "guest_api_major",
-    "guest_api_minor",
-    "minimum_qemu_version",
-    "capabilities",
-    "sbom_digest",
-    "built_at"
-  ]
+    "schema_version", "project", "role", "bundle", "architecture",
+    "source_repository", "source_commit", "source_ref", "workflow",
+    "image_digest", "uncompressed_sha256", "compressed_size_bytes",
+    "uncompressed_size_bytes", "virtual_size_bytes", "nixos_version",
+    "flake_lock_sha256", "guest_api_major", "guest_api_minor",
+    "minimum_qemu_version", "capabilities", "sbom_digest", "built_at"
+  ],
+  "allOf": [
+    {
+      "if": { "properties": { "role": { "const": "workstation" } }, "required": ["role"] },
+      "then": {
+        "properties": {
+          "bundle": { "enum": ["basic", "office", "development"] },
+          "capabilities": {
+            "const": [
+              "desktop", "guest-events", "guest-shutdown", "guest-status",
+              "network-warning", "workspace-export", "workspace-import"
+            ]
+          }
+        }
+      },
+      "else": { "properties": { "bundle": { "type": "null" } } }
+    },
+    {
+      "if": { "properties": { "role": { "const": "downloader" } }, "required": ["role"] },
+      "then": {
+        "properties": {
+          "capabilities": {
+            "const": [
+              "guest-events", "guest-shutdown", "guest-status", "quarantine-seal",
+              "torrent-download", "torrent-metadata", "vpn-verification", "wireguard-config"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "role": { "const": "scanner" } }, "required": ["role"] },
+      "then": {
+        "properties": {
+          "capabilities": {
+            "const": [
+              "approved-export", "definitions-update", "guest-events", "guest-shutdown",
+              "guest-status", "inventory", "offline-verification", "reconstruct",
+              "scan", "scan-report"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "role": { "const": "exporter" } }, "required": ["role"] },
+      "then": {
+        "properties": {
+          "capabilities": {
+            "const": [
+              "guest-events", "guest-shutdown", "guest-status", "usb-finalize",
+              "usb-inspect", "usb-prepare", "usb-verify", "usb-write"
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+  }
 }

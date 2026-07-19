@@ -1,0 +1,65 @@
+{
+  "spdxVersion": "SPDX-2.3",
+  "dataLicense": "CC0-1.0",
+  "SPDXID": "SPDXRef-DOCUMENT",
+  "name": "private-vm-workstation-development-image",
+  "documentNamespace": "https://private-vm.dev/spdx/images/private-vm-workstation-development-image/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "creationInfo": {
+    "created": "2026-07-18T12:00:00Z",
+    "creators": ["Tool: private-vm release workflow"]
+  },
+  "documentDescribes": ["SPDXRef-IMAGE"],
+  "packages": [
+    {
+      "SPDXID": "SPDXRef-IMAGE",
+      "name": "private-vm-workstation-development-image",
+      "versionInfo": "26.05",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": true,
+      "checksums": [
+        {
+          "algorithm": "SHA256",
+          "checksumValue": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0123456789abcdfghijklmnpqrsvwxyz",
+      "name": "nixos-system-private-vm-workstation-26.05",
+      "versionInfo": "26.05",
+      "downloadLocation": "file:///nix/store/0123456789abcdfghijklmnpqrsvwxyz-nixos-system-private-vm-workstation-26.05",
+      "filesAnalyzed": false,
+      "checksums": []
+    }
+  ],
+  "files": [
+    {
+      "SPDXID": "SPDXRef-IMAGE-QCOW2",
+      "fileName": "./image.qcow2",
+      "fileTypes": ["BINARY"],
+      "checksums": [
+        {
+          "algorithm": "SHA256",
+          "checksumValue": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      ]
+    }
+  ],
+  "relationships": [
+    {
+      "spdxElementId": "SPDXRef-DOCUMENT",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-IMAGE"
+    },
+    {
+      "spdxElementId": "SPDXRef-IMAGE",
+      "relationshipType": "CONTAINS",
+      "relatedSpdxElement": "SPDXRef-IMAGE-QCOW2"
+    },
+    {
+      "spdxElementId": "SPDXRef-IMAGE",
+      "relationshipType": "DEPENDS_ON",
+      "relatedSpdxElement": "SPDXRef-Package-0123456789abcdfghijklmnpqrsvwxyz"
+    }
+  ]
+}

@@ -24,6 +24,7 @@ pairs = [
     ("schemas/guest-image-identity.schema.json", "examples/guest-image-identity.example.json", "json"),
     ("schemas/image-cache-entry.schema.json", "examples/image-cache-entry.example.json", "json"),
     ("schemas/image-manifest.schema.json", "examples/image-manifest.example.json", "json"),
+    ("schemas/image-sbom.schema.json", "examples/image-sbom.spdx.example.json", "json"),
     ("schemas/scan-report.schema.json", "examples/scan-report.example.json", "json"),
     ("schemas/workstation-bundles.schema.json", "project/workstation-bundles.json", "json"),
 ]
@@ -53,6 +54,18 @@ image_cache_schema = json.loads(
 )
 image_cache_entry = json.loads(
     (ROOT / "examples/image-cache-entry.example.json").read_text(encoding="utf-8")
+)
+image_manifest_schema = json.loads(
+    (ROOT / "schemas/image-manifest.schema.json").read_text(encoding="utf-8")
+)
+image_manifest = json.loads(
+    (ROOT / "examples/image-manifest.example.json").read_text(encoding="utf-8")
+)
+image_sbom_schema = json.loads(
+    (ROOT / "schemas/image-sbom.schema.json").read_text(encoding="utf-8")
+)
+image_sbom = json.loads(
+    (ROOT / "examples/image-sbom.spdx.example.json").read_text(encoding="utf-8")
 )
 
 negative_cases = []
@@ -102,6 +115,18 @@ negative_cases.append(("duplicate cache component", image_cache_schema, duplicat
 unknown_cache_field = deepcopy(image_cache_entry)
 unknown_cache_field["source_reference"] = "mutable-tag"
 negative_cases.append(("unknown cache field", image_cache_schema, unknown_cache_field))
+missing_manifest_bundle = deepcopy(image_manifest)
+del missing_manifest_bundle["bundle"]
+negative_cases.append(("missing image bundle field", image_manifest_schema, missing_manifest_bundle))
+wrong_manifest_capability = deepcopy(image_manifest)
+wrong_manifest_capability["capabilities"].append("unexpected")
+negative_cases.append(("wrong role capability set", image_manifest_schema, wrong_manifest_capability))
+missing_sbom_checksum = deepcopy(image_sbom)
+del missing_sbom_checksum["packages"][1]["checksums"]
+negative_cases.append(("missing closure checksum field", image_sbom_schema, missing_sbom_checksum))
+unknown_sbom_field = deepcopy(image_sbom)
+unknown_sbom_field["packages"][0]["source"] = "unsupported"
+negative_cases.append(("unknown SPDX package field", image_sbom_schema, unknown_sbom_field))
 
 for label, schema, value in negative_cases:
     if Draft202012Validator(schema).is_valid(value):

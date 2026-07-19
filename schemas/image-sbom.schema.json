@@ -1,0 +1,128 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://private-vm.dev/schema/image-sbom-spdx-2.3.json",
+  "title": "private-vm published image-closure SPDX 2.3 profile",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "spdxVersion": { "const": "SPDX-2.3" },
+    "dataLicense": { "const": "CC0-1.0" },
+    "SPDXID": { "const": "SPDXRef-DOCUMENT" },
+    "name": { "type": "string", "pattern": "^private-vm-(workstation-(basic|office|development)|downloader|scanner|exporter)-image$" },
+    "documentNamespace": {
+      "type": "string",
+      "pattern": "^https://private-vm\\.dev/spdx/images/private-vm-(workstation-(basic|office|development)|downloader|scanner|exporter)-image/[0-9a-f]{64}$"
+    },
+    "creationInfo": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "created": { "type": "string", "format": "date-time", "pattern": "Z$" },
+        "creators": { "const": ["Tool: private-vm release workflow"] }
+      },
+      "required": ["created", "creators"]
+    },
+    "documentDescribes": { "const": ["SPDXRef-IMAGE"] },
+    "packages": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 50000,
+      "items": { "$ref": "#/$defs/package" },
+      "contains": {
+        "properties": { "SPDXID": { "const": "SPDXRef-IMAGE" } },
+        "required": ["SPDXID"]
+      },
+      "minContains": 1,
+      "maxContains": 1
+    },
+    "files": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "SPDXID": { "const": "SPDXRef-IMAGE-QCOW2" },
+          "fileName": { "const": "./image.qcow2" },
+          "fileTypes": { "const": ["BINARY"] },
+          "checksums": {
+            "type": "array", "minItems": 1, "maxItems": 1,
+            "items": { "$ref": "#/$defs/checksum" }
+          }
+        },
+        "required": ["SPDXID", "fileName", "fileTypes", "checksums"]
+      }
+    },
+    "relationships": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 60000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "spdxElementId": { "$ref": "#/$defs/spdx-id" },
+          "relationshipType": { "enum": ["DESCRIBES", "CONTAINS", "DEPENDS_ON"] },
+          "relatedSpdxElement": { "$ref": "#/$defs/spdx-id" }
+        },
+        "required": ["spdxElementId", "relationshipType", "relatedSpdxElement"]
+      }
+    }
+  },
+  "required": [
+    "spdxVersion", "dataLicense", "SPDXID", "name", "documentNamespace",
+    "creationInfo", "documentDescribes", "packages", "files", "relationships"
+  ],
+  "$defs": {
+    "spdx-id": { "type": "string", "pattern": "^SPDXRef-[A-Za-z0-9][A-Za-z0-9.-]{0,127}$" },
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "checksum": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "algorithm": { "const": "SHA256" },
+        "checksumValue": { "$ref": "#/$defs/sha256" }
+      },
+      "required": ["algorithm", "checksumValue"]
+    },
+    "package": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "SPDXID": { "$ref": "#/$defs/spdx-id" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "versionInfo": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "downloadLocation": {
+          "anyOf": [
+            { "const": "NOASSERTION" },
+            { "type": "string", "pattern": "^file:///nix/store/[0-9abcdfghijklmnpqrsvwxyz]{32}-[A-Za-z0-9+._=-]{1,160}$" }
+          ]
+        },
+        "filesAnalyzed": { "type": "boolean" },
+        "checksums": { "type": "array", "minItems": 0, "maxItems": 1, "items": { "$ref": "#/$defs/checksum" } }
+      },
+      "required": ["SPDXID", "name", "versionInfo", "downloadLocation", "filesAnalyzed", "checksums"],
+      "allOf": [
+        {
+          "if": { "properties": { "SPDXID": { "const": "SPDXRef-IMAGE" } }, "required": ["SPDXID"] },
+          "then": {
+            "properties": {
+              "downloadLocation": { "const": "NOASSERTION" },
+              "filesAnalyzed": { "const": true },
+              "checksums": { "minItems": 1, "maxItems": 1 }
+            }
+          },
+          "else": {
+            "properties": {
+              "SPDXID": { "type": "string", "pattern": "^SPDXRef-Package-[0-9abcdfghijklmnpqrsvwxyz]{32}$" },
+              "downloadLocation": { "type": "string", "pattern": "^file:///nix/store/" },
+              "filesAnalyzed": { "const": false },
+              "checksums": { "maxItems": 0 }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

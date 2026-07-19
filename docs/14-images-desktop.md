@@ -236,6 +236,14 @@ forbidden devices
 package/SBOM references
 ```
 
+All published-manifest fields are required, including explicit `bundle` and
+`source_ref`. It records compressed size, installed/uncompressed QCOW2 size and
+virtual disk size as distinct values. The compressed and installed identities
+must equal the immutable cache record, while the strict SPDX layer follows
+`schemas/image-sbom.schema.json` and binds the installed QCOW2 plus the full
+runtime Nix closure. The scanner's embedded toolchain SPDX is narrower
+image-local evidence and cannot substitute for this release SBOM.
+
 Both identity records' capability sets must exactly equal the compiled role map
 in `docs/09-rpc-protocol.md`. Extra, missing, or duplicate capabilities are a
 fatal handshake mismatch; capabilities do not silently negotiate across roles.

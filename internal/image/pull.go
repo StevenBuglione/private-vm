@@ -309,6 +309,10 @@ func (puller *Puller) Pull(ctx context.Context, reference string) (Entry, error)
 
 func (puller *Puller) verify(ctx context.Context, entry Entry) error {
 	if err := puller.verifier.Verify(ctx, entry); err != nil {
+		var classified *Error
+		if errors.As(err, &classified) {
+			return contextError(ctx, err)
+		}
 		return contextError(ctx, imageError(
 			CodeVerificationFailed,
 			"The staged image did not pass the required trust verification.",

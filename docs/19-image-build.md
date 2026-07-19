@@ -72,6 +72,16 @@ distinct from the post-build release artifact manifest in
 `schemas/image-manifest.schema.json`, which adds output digests, sizes, SBOM,
 workflow identity, and build timestamp.
 
+REL-003 must generate the published `manifest.json` and
+`sbom.spdx.json` together after the QCOW2 and zstd layer exist. The manifest
+uses the exact frozen-v1 schema. The SPDX producer enumerates the complete
+runtime Nix closure, sorts unique store paths, derives each closure SPDX ID from
+its store hash, uses the exact store basename as package name, and emits the
+ordered relationship graph documented in `docs/21-supply-chain.md`. The root
+image package and QCOW2 file checksum bind the installed/uncompressed cache
+identity. The existing scanner-toolchain SPDX output is not an input or
+substitute for this full-closure release document.
+
 ## Reproducibility
 
 A build manifest records:

@@ -182,6 +182,15 @@ ordinary, detailed and structural `fmt` verbs cannot reveal that cause.
 | `IMAGE_CACHE_CONFLICT` | A digest entry could not be atomically published or reconciled with a valid concurrent entry. |
 | `IMAGE_VERIFICATION_FAILED` | The mandatory manifest/SBOM/provenance verifier rejected the complete staged entry. |
 | `IMAGE_VERIFICATION_UNAVAILABLE` | No IMG-002/IMG-003 verifier was installed, so no cache entry was published. |
+| `IMAGE_MANIFEST_INVALID` | The published manifest is missing, malformed, noncanonical or violates the frozen-v1 build contract. |
+| `IMAGE_ROLE_MISMATCH` | The published image role differs from the requested compartment. |
+| `IMAGE_BUNDLE_MISMATCH` | The workstation bundle differs, or a non-workstation image does not use an explicit null bundle. |
+| `IMAGE_ARCHITECTURE_MISMATCH` | The image architecture does not match the immutable amd64/x86_64 or arm64/aarch64 host mapping. |
+| `IMAGE_GUEST_API_MISMATCH` | The image guest API major/minor is outside the immutable host compatibility policy. |
+| `IMAGE_QEMU_VERSION_MISMATCH` | The image QEMU requirement is noncanonical or unsupported by the host policy. |
+| `IMAGE_CAPABILITY_MISMATCH` | The capability list is not the exact sorted common-plus-role contract. |
+| `IMAGE_SBOM_REQUIRED` | The official strict artifact has no readable SPDX layer. |
+| `IMAGE_SBOM_INVALID` | The SPDX 2.3 document or its image/Nix-closure binding is malformed, incomplete or noncanonical. |
 | `IMAGE_PULL_CANCELLED` | The caller cancelled before atomic publication; partial data was removed. |
 | `IMAGE_PULL_TIMEOUT` | The bounded pull deadline expired; partial data was removed. |
 

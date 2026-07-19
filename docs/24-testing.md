@@ -69,6 +69,17 @@ PRIVATE_VM_TEST_PUBLIC_OCI_REFERENCE='ghcr.io/stevenbuglione/private-vm/workstat
 The opt-in test resolves only. Complete installation remains blocked until the
 IMG-002/IMG-003 verifier accepts the staged manifest, SBOM and provenance.
 
+IMG-002 tests construct only local staged fixtures. They prove exact
+role/bundle/architecture mapping, guest API minor policy, QEMU policy, sorted
+capabilities, source/lock/NixOS fields, compressed and installed cache bindings,
+SBOM layer binding, cancellation, timeout and hard byte/count limits. Manifest
+and SPDX decoders reject unknown, duplicate, trailing, missing and null fields,
+including nested package/file/checksum/relationship fields. The SPDX cases also
+cover duplicate or unsorted store paths, store-hash-derived IDs, exact store
+names, image/file checksum mismatch, incomplete closure packages and noncanonical
+relationship graphs. A fake IMG-003 seam is used only by unit tests; production
+composition remains unavailable until provenance verification is implemented.
+
 ### Integration without KVM
 
 - fake QEMU executable with QMP server
