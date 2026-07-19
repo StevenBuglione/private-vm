@@ -80,6 +80,29 @@ No generic `--usb` raw argument exists.
 - no passphrase in daemon persistent config
 - exporter mounts, writes, syncs, rereads, hashes, unmounts, closes
 
+## Destructive preparation
+
+Preparation first emits a closed `usb-prepare-plan` containing the enrolled
+identity fingerprint, exact capacity, `luks2-ext4` policy, a 128-bit random
+challenge and two separate confirmation phrases. Both phrases must match
+exactly and the plan expires after five minutes. The second phrase binds the
+enrollment ID, identity fingerprint and one-use challenge, so a confirmation
+from an earlier inspection cannot authorize a changed device.
+
+After both phrases are accepted, the daemon re-enumerates the claim and rejects
+identity, kernel-path, bus/address, capacity, interface, USBGuard, mount or
+read-only drift. It then requests only `org.private-vm.usb.prepare` immediately
+before entering the destructive exporter operation. The LUKS2 passphrase stays
+in the volatile secret type and is exposed to a future guest transport adapter
+only through a bounded reader; it is never part of argv, the environment,
+enrollment JSON or progress events.
+
+Progress has explicit `CONFIRMED`, `COMMIT_STARTED`,
+`DESTINATION_PREPARED`, `CANCELED_PRECOMMIT` and `INCOMPLETE` states. A
+cancellation observed before `COMMIT_STARTED` guarantees the destructive
+backend was not invoked. Once commit starts, any error remains `INCOMPLETE`
+until exporter-side inspection and cleanup succeed.
+
 ### Future compatibility format
 
 exFAT may be added only under a separate weaker policy with a warning that it

@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "enrollment_id": "usb-4568eb4a9e23aaa5",
+  "filesystem": "luks2-ext4",
+  "capacity_bytes": 137438953472,
+  "identity_fingerprint": "4568eb4a9e23aaa550726d1ce430057937a24ae0f473a9a606d05c4a9d256b48",
+  "state": "DESTINATION_PREPARED"
+}
