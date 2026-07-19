@@ -32,7 +32,9 @@ role-specific evidence.
   exporter commit boundary.
 - Exporter guest RPCs accept an identity expectation rather than a device path.
   `USBTransferReceipt` carries the typed flush/rename/reread evidence required
-  for three-hash verification.
+  for three-hash verification. These are additive `PrepareExactUSB`,
+  `WriteVerifiedFile`, and `VerifyWrittenFile` methods; the earlier unary and
+  generic-receipt method signatures remain registered and fail closed.
 - The generic host daemon and generic guestd build remain unavailable for these
   methods. Composition succeeds only when fixed-policy typed adapters for the
   networkless exporter, exact QEMU USB attachment, guest-local LUKS2/ext4
@@ -45,6 +47,6 @@ secret chunk. The implementation bounds and clears owned copies but does not
 claim that every runtime or transport copy can be proven overwritten. No
 secret or digest is included in JSON output, events or error details.
 
-The RPC change is intentionally incompatible with the earlier unimplemented
-stub. Host and guest images must be upgraded together under protocol 1.0 before
-the first v1 release.
+The role implementation does not serve the earlier unsafe unary preparation
+stub, but its descriptor remains wire-compatible. Host and guest images still
+must be upgraded together before using the additive exact-device workflow.
