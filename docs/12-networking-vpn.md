@@ -167,9 +167,22 @@ exit status `1` is not treated as absence. Attempt markers remain set across
 partial failures so a retry revisits every possibly allocated resource, and the
 address reservation is released only after the final exact absence audit.
 
-`NET-003` remains the separate guest boundary: installation of the guest
-kill-switch, WireGuard activation, handshake/leak tests, tunnel-loss response
-and orchestrator/QEMU start ordering are not implied by host-network readiness.
+`NET-003` is a separate guest boundary; host-network readiness is never treated
+as guest readiness. QEMU receives the scoped TAP only as inherited file
+descriptor 4 (after the capability on descriptor 3), and offline roles reject
+that descriptor. Guestd owns a serialized VPN controller. It arms the guest
+nftables policy before configuring `eth0`, creating `proton0`, installing the
+WireGuard peer, routes or DNS. A downloader service consumes and clears the
+bounded RPC profile buffer and does not return configured success until the
+injected verifier proves every required gate.
+
+Profile-derived nftables, `ip -batch`, and `wg setconf` values travel only over
+bounded stdin buffers which are cleared on return; fixed tool/interface
+arguments and a minimal environment contain no profile value. DNS has a typed
+systemd-resolved D-Bus boundary so an implementation cannot fall back to a
+profile-derived command line or configuration file. Missing DNS or verification
+adapters fail construction. The role matrix admits workstation, downloader,
+and scanner-update policies; scanner-scan and exporter networking fail closed.
 
 ## Guest policy
 
@@ -263,6 +276,15 @@ Before role readiness:
 Tests must avoid sending secrets or torrent metadata to third-party leak-test
 sites. Use minimal controlled endpoints or Proton-provided IP checks.
 
+The source verifier boundary returns booleans only and requires handshake,
+tunnel DNS, IPv4 tunnel routing, direct IPv4 and IPv6 blocking, optional IPv6
+tunnel routing, and downloader interface binding. It cannot return probe
+targets, public IPs, DNS answers, endpoint values, or raw command output.
+Controlled mock-peer packet tests, namespace counters, the concrete
+systemd-resolved D-Bus adapter, qBittorrent binding, image composition and live
+Proton smoke proof remain image/acceptance work; none is reported as passed by
+the source suite.
+
 ## VPN loss
 
 guestd continuously monitors:
@@ -280,3 +302,10 @@ On failure:
 - daemon emits `VPN_DEGRADED`
 - session remains available for local save/export
 - user may retry or stop
+
+The monitor changes the safe state to `degraded`, invokes one bounded typed
+role responder, and returns `GUEST_VPN_TUNNEL_LOST`; it never disarms the kill
+switch. Cleanup removes the tunnel before the kill switch and refuses to remove
+the latter if tunnel cleanup failed. Both operations are retryable and
+idempotent. Workstation-warning and downloader-pause implementations are
+composed by their role owners rather than a generic command API.

@@ -87,6 +87,7 @@ cli          command definitions and output
 config       typed TOML and migrations
 daemon       Unix gRPC server and authorization
 guest        VSOCK client/server and capability model
+guestvpn     guest kill switch, WireGuard state and verification monitor
 image        OCI pull/cache/manifest
 network      netns, TAP, veth, nftables
 orchestrator workflow state machines
@@ -125,6 +126,13 @@ public-endpoint range policy. Resolver errors discard hostname and external
 error text. DNS executes without the store mutex: an injected adapter that
 violates its context contract can strand only its own `Resolve` caller, not
 import, remove, close, or daemon shutdown.
+
+`internal/guestvpn` owns one serialized fail-closed state machine. Its Linux
+adapter accepts only fixed semantic operations, uses nftables/`ip -batch`/`wg`
+stdin for profile-derived values, and delegates DNS to a typed D-Bus boundary.
+An injected verifier can return only boolean proof results. The downloader
+guest RPC adapter lives in `internal/guest`, clears the received profile slice,
+and maps controller errors to stable safe gRPC details.
 
 The memory store has no path, marshal, restore or startup-loading operation and
 admits at most eight profile names per owner and 64 across the daemon.

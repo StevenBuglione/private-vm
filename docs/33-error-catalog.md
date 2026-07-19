@@ -263,6 +263,12 @@ ordinary, detailed and structural `fmt` verbs cannot reveal that cause.
 - `HOST_EGRESS_POLICY_FAILED`
 - `NETWORK_TOPOLOGY_NOT_READY`
 - `NETWORK_CLEANUP_INCOMPLETE`
+- `GUEST_VPN_REQUEST_INVALID`
+- `GUEST_KILL_SWITCH_FAILED`
+- `GUEST_VPN_CONFIGURATION_FAILED`
+- `GUEST_VPN_VERIFICATION_FAILED`
+- `GUEST_VPN_TUNNEL_LOST`
+- `GUEST_VPN_CLEANUP_INCOMPLETE`
 - `VPN_HANDSHAKE_FAILED`
 - `DNS_LEAK_DETECTED`
 - `IPV4_BYPASS_DETECTED`
@@ -299,6 +305,16 @@ Host-network operations additionally use these stable safe codes:
 | `HOST_EGRESS_POLICY_FAILED` | 13 | An exact endpoint nftables transaction failed. | Do not start QEMU; verify nftables support, clean the session network and rebuild from a current VPN plan. |
 | `NETWORK_TOPOLOGY_NOT_READY` | 13 | A stale or incomplete network handle was used for a guest handoff. | Complete topology and policy creation or create a new session after cleanup. |
 | `NETWORK_CLEANUP_INCOMPLETE` | 24 | At least one owned network resource could not be removed or audited absent. | Keep the session in cleanup state and retry verified cleanup. |
+| `GUEST_VPN_REQUEST_INVALID` | 13 | The requested guest role, underlay or lifecycle transition is invalid. | Use the typed online-role workflow and start from a fresh verified guest. |
+| `GUEST_KILL_SWITCH_FAILED` | 13 | The guest default-drop policy was not installed atomically. | Do not start guest applications; stop and clean the session. |
+| `GUEST_VPN_CONFIGURATION_FAILED` | 13 | WireGuard, routing or tunnel DNS configuration failed. | Keep the kill switch armed, stop the guest and retry with a current profile. |
+| `GUEST_VPN_VERIFICATION_FAILED` | 13 | At least one required handshake, tunnel, bypass or binding proof is absent. | Keep applications stopped and run the controlled verification again. |
+| `GUEST_VPN_TUNNEL_LOST` | 13 | Continuous verification detected a previously verified tunnel failure. | Keep the kill switch armed, pause network work, and reconnect or stop. |
+| `GUEST_VPN_CLEANUP_INCOMPLETE` | 24 | Tunnel or kill-switch teardown did not complete in safe order. | Retain cleanup state and retry tunnel removal before policy removal. |
+
+Guest RPC cancellation and deadline failures use `GUEST_VPN_CANCELLED` and
+`GUEST_VPN_TIMEOUT` in gRPC `ErrorDetail`; their CLI projection remains the
+canonical cancellation/runtime-timeout mapping.
 
 The redacted VPN status schema uses corresponding state codes
 `VPN_ENDPOINT_CHECK_REQUIRED`, `VPN_PROFILE_CURRENT` and

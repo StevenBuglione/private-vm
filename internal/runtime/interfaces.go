@@ -1,6 +1,13 @@
 package runtime
 
-import "context"
+import (
+	"context"
+	"io"
+	"net/netip"
+	"os"
+
+	"github.com/StevenBuglione/private-vm/internal/vpn"
+)
 
 type LaunchSpec struct {
 	SessionID    string
@@ -31,7 +38,15 @@ type Process interface {
 
 type QEMU interface {
 	Validate(LaunchSpec) error
-	Launch(context.Context, LaunchSpec) (Process, error)
+	Launch(context.Context, LaunchSpec, InheritedFiles) (Process, error)
+}
+
+// InheritedFiles is a typed descriptor contract, never an interface name or
+// arbitrary QEMU argument. Networked launches require TAP; offline launches
+// must leave it nil.
+type InheritedFiles struct {
+	Capability *os.File
+	TAP        *os.File
 }
 
 type Storage interface {
@@ -46,18 +61,22 @@ type Scratch interface {
 }
 
 type Network interface {
-	CreateVPNRestricted(context.Context, string, Endpoint) (NetworkHandle, error)
+	CreateVPNRestricted(context.Context, string, uint32, string, *vpn.MemoryStore, vpn.ResolutionPlan) (NetworkHandle, error)
 	CreateOffline(context.Context, string) (NetworkHandle, error)
 }
 
-type Endpoint struct {
-	IP   string
-	Port uint16
+type NetworkHandle interface {
+	WithTAP(context.Context, func(context.Context, *os.File) error) error
+	WithGuestAddressing(context.Context, func(context.Context, GuestAddressing) error) error
+	WithGuestVPNConfig(context.Context, func(context.Context, io.Reader) error) error
+	Destroy(context.Context) error
 }
 
-type NetworkHandle interface {
-	TAPName() string
-	Destroy(context.Context) error
+type GuestAddressing interface {
+	IPv4Address() netip.Prefix
+	IPv4Gateway() netip.Addr
+	IPv6Address() netip.Prefix
+	IPv6Gateway() netip.Addr
 }
 
 type USB interface {

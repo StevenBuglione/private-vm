@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "state": "verified",
+  "kill_switch_armed": true,
+  "configured": true,
+  "handshake": true,
+  "dns_through_tunnel": true,
+  "ipv4_through_tunnel": true,
+  "ipv6_through_tunnel": true,
+  "ipv4_bypass_blocked": true,
+  "ipv6_bypass_blocked": true,
+  "torrent_bound": true,
+  "code": "GUEST_VPN_VERIFIED",
+  "remediation": "No action is required while continuous verification remains healthy."
+}

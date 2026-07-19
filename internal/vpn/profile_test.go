@@ -236,6 +236,82 @@ func TestWithResolvedConfigCancellationAndCallbackFailure(t *testing.T) {
 	}
 }
 
+func TestGuestSetupIsResolvedMinimalAndCallbackScoped(t *testing.T) {
+	profile := mustParseProfile(t, validProfile(true, "1.1.1.1:51820"))
+	defer profile.Destroy()
+
+	var retained GuestSetup
+	var endpoints int
+	var addresses int
+	var dnsServers int
+	var wireGuard []byte
+	err := profile.WithGuestSetup(context.Background(), func(ctx context.Context, setup GuestSetup) error {
+		retained = setup
+		if err := setup.Endpoint(ctx, func(address netip.Addr, port uint16) error {
+			endpoints++
+			if address != netip.MustParseAddr("1.1.1.1") || port != 51820 {
+				t.Fatalf("unexpected endpoint callback: %v:%d", address, port)
+			}
+			return nil
+		}); err != nil {
+			return err
+		}
+		if err := setup.InterfaceAddresses(ctx, func(netip.Prefix) error { addresses++; return nil }); err != nil {
+			return err
+		}
+		if err := setup.DNSServers(ctx, func(netip.Addr) error { dnsServers++; return nil }); err != nil {
+			return err
+		}
+		return setup.WithWireGuardConfig(ctx, func(_ context.Context, reader io.Reader) error {
+			var readErr error
+			wireGuard, readErr = io.ReadAll(reader)
+			return readErr
+		})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer clear(wireGuard)
+	if endpoints != 1 || addresses != 2 || dnsServers != 2 {
+		t.Fatalf("guest setup counts = endpoint %d, addresses %d, DNS %d", endpoints, addresses, dnsServers)
+	}
+	for _, required := range []string{"[Interface]", "PrivateKey = " + encodedKey(0x11), "[Peer]", "PublicKey = " + encodedKey(0x22), "AllowedIPs = 0.0.0.0/0, ::/0", "Endpoint = 1.1.1.1:51820"} {
+		if !bytes.Contains(wireGuard, []byte(required)) {
+			t.Fatalf("minimal WireGuard config lacks %q", required)
+		}
+	}
+	for _, forbidden := range []string{"Address =", "DNS =", "vpn.proton.test"} {
+		if bytes.Contains(wireGuard, []byte(forbidden)) {
+			t.Fatalf("minimal WireGuard config contains %q", forbidden)
+		}
+	}
+	if err := retained.Endpoint(context.Background(), func(netip.Addr, uint16) error { return nil }); !errors.Is(err, ErrProfileRotated) {
+		t.Fatalf("retained guest setup remained usable: %v", err)
+	}
+	if got := fmt.Sprintf("%+v", retained); got != redactedConfig {
+		t.Fatalf("guest setup formatting was not redacted: %q", got)
+	}
+	if _, err := json.Marshal(retained); !errors.Is(err, secret.ErrSerialization) {
+		t.Fatalf("guest setup JSON error = %v", err)
+	}
+}
+
+func TestGuestSetupRejectsUnresolvedAndCanceledProfile(t *testing.T) {
+	profile := mustParseProfile(t, validProfile(false, "vpn.proton.test:51820"))
+	defer profile.Destroy()
+	if err := profile.WithGuestSetup(context.Background(), func(context.Context, GuestSetup) error { return nil }); !errors.Is(err, ErrInvalidProfile) {
+		t.Fatalf("unresolved guest profile error = %v", err)
+	}
+
+	resolved := mustParseProfile(t, validProfile(false, "1.1.1.1:51820"))
+	defer resolved.Destroy()
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := resolved.WithGuestSetup(ctx, func(context.Context, GuestSetup) error { return nil }); !errors.Is(err, context.Canceled) {
+		t.Fatalf("canceled guest setup error = %v", err)
+	}
+}
+
 func TestEndpointAndConfigReaderFormattingAreRedacted(t *testing.T) {
 	endpointValue := endpoint{host: "vpn.proton.test.", port: 51820}
 	resolvedValue := resolvedEndpoint{address: netip.MustParseAddr("1.1.1.1"), port: 51820}

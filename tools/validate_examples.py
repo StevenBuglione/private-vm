@@ -37,6 +37,7 @@ pairs = [
         "json",
     ),
     ("schemas/guest-image-identity.schema.json", "examples/guest-image-identity.example.json", "json"),
+    ("schemas/guest-vpn-status.schema.json", "examples/guest-vpn-status.example.json", "json"),
     ("schemas/image-cache-entry.schema.json", "examples/image-cache-entry.example.json", "json"),
     ("schemas/image-manifest.schema.json", "examples/image-manifest.example.json", "json"),
     ("schemas/image-provenance-payload.schema.json", "examples/image-provenance-payload.example.json", "json"),
@@ -157,6 +158,18 @@ for field, value in forbidden_network_fields.items():
     unsafe_network = deepcopy(network_status)
     unsafe_network[field] = value
     negative_cases.append((f"network {field} in status", network_status_schema, unsafe_network))
+guest_vpn_status_schema = json.loads((ROOT / "schemas/guest-vpn-status.schema.json").read_text(encoding="utf-8"))
+guest_vpn_status = json.loads((ROOT / "examples/guest-vpn-status.example.json").read_text(encoding="utf-8"))
+for field, value in {
+    "endpoint": "1.1.1.1:51820",
+    "address": "10.2.0.2/32",
+    "dns_server": "10.2.0.1",
+    "public_ip": "1.0.0.1",
+    "raw_output": "synthetic command output",
+}.items():
+    unsafe_guest_vpn = deepcopy(guest_vpn_status)
+    unsafe_guest_vpn[field] = value
+    negative_cases.append((f"guest VPN {field} in status", guest_vpn_status_schema, unsafe_guest_vpn))
 weakened = deepcopy(safe_policy)
 weakened["rules"]["sanitize_documents"] = False
 negative_cases.append(("weakened safe policy", policy_schema, weakened))

@@ -52,10 +52,29 @@ const (
 // endpoint, address, DNS or key fields.
 type Profile interface {
 	Inspect() (Inspection, error)
+	WithGuestSetup(context.Context, func(context.Context, GuestSetup) error) error
 	Destroy()
 	privateVPNProfile()
 	endpointSnapshot() (endpoint, error)
 	withResolvedConfig(context.Context, resolvedEndpoint, func(context.Context, io.Reader) error) error
+}
+
+// GuestSetup is a callback-scoped view of the already resolved configuration
+// received by a guest. It deliberately has no formatter or field access. The
+// WireGuard key is available only through a bounded reader callback; endpoint,
+// interface-address and DNS values are available only one item at a time.
+// Retaining this view after Profile.WithGuestSetup returns is ineffective.
+type GuestSetup interface {
+	Endpoint(context.Context, func(netip.Addr, uint16) error) error
+	InterfaceAddresses(context.Context, func(netip.Prefix) error) error
+	DNSServers(context.Context, func(netip.Addr) error) error
+	WithWireGuardConfig(context.Context, func(context.Context, io.Reader) error) error
+	privateGuestSetup()
+}
+
+type guestSetup struct {
+	state *profileState
+	lease *planLease
 }
 
 // profile is a copy-safe handle to shared private state. Value and pointer
@@ -611,6 +630,160 @@ func (p profile) endpointSnapshot() (endpoint, error) {
 	return p.state.endpoint, nil
 }
 
+// WithGuestSetup exposes the minimum resolved values needed by the guest's
+// typed network controller. The profile lock remains held for the callback so
+// Destroy cannot race a configuration handoff. A lease makes a retained view
+// unusable as soon as the callback returns.
+func (p profile) WithGuestSetup(ctx context.Context, fn func(context.Context, GuestSetup) error) error {
+	if ctx == nil || fn == nil {
+		return ErrCallbackRequired
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if p.state == nil {
+		return invalidProfile()
+	}
+	p.state.mu.Lock()
+	defer p.state.mu.Unlock()
+	if p.state.destroyed || !p.state.endpoint.literal.IsValid() || !publicEndpointAddress(p.state.endpoint.literal) {
+		return invalidProfile()
+	}
+	lease := newPlanLease()
+	defer lease.close()
+	return fn(ctx, guestSetup{state: p.state, lease: lease})
+}
+
+func (guestSetup) privateGuestSetup() {}
+
+func (setup guestSetup) Endpoint(ctx context.Context, fn func(netip.Addr, uint16) error) error {
+	if ctx == nil || fn == nil || setup.state == nil {
+		return ErrCallbackRequired
+	}
+	return setup.lease.use(func() error {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		return fn(setup.state.endpoint.literal, setup.state.endpoint.port)
+	})
+}
+
+func (setup guestSetup) InterfaceAddresses(ctx context.Context, fn func(netip.Prefix) error) error {
+	if ctx == nil || fn == nil || setup.state == nil {
+		return ErrCallbackRequired
+	}
+	return setup.lease.use(func() error {
+		for _, address := range setup.state.addresses {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			if err := fn(address); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
+func (setup guestSetup) DNSServers(ctx context.Context, fn func(netip.Addr) error) error {
+	if ctx == nil || fn == nil || setup.state == nil {
+		return ErrCallbackRequired
+	}
+	return setup.lease.use(func() error {
+		for _, address := range setup.state.dnsServers {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			if err := fn(address); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
+func (setup guestSetup) WithWireGuardConfig(ctx context.Context, fn func(context.Context, io.Reader) error) error {
+	if ctx == nil || fn == nil || setup.state == nil {
+		return ErrCallbackRequired
+	}
+	return setup.lease.use(func() error {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		backing := make([]byte, MaximumProfileBytes)
+		buffer := bytes.NewBuffer(backing[:0])
+		defer func() {
+			clear(backing)
+			runtime.KeepAlive(buffer)
+			runtime.KeepAlive(backing)
+		}()
+		_, _ = buffer.WriteString("[Interface]\nPrivateKey = ")
+		if err := writePrivateKey(buffer, setup.state.privateKey); err != nil {
+			return invalidProfile()
+		}
+		_, _ = buffer.WriteString("\n\n[Peer]\nPublicKey = ")
+		writePublicKey(buffer, setup.state.publicKey)
+		_, _ = buffer.WriteString("\nAllowedIPs = 0.0.0.0/0")
+		if setup.state.allowedV6 {
+			_, _ = buffer.WriteString(", ::/0")
+		}
+		_, _ = buffer.WriteString("\nEndpoint = ")
+		writeEndpoint(buffer, setup.state.endpoint.literal, setup.state.endpoint.port)
+		_ = buffer.WriteByte('\n')
+		if buffer.Len() > MaximumProfileBytes {
+			return invalidProfile()
+		}
+		return fn(ctx, &contextReader{ctx: ctx, reader: bytes.NewReader(buffer.Bytes())})
+	})
+}
+
+func (guestSetup) String() string   { return redactedConfig }
+func (guestSetup) GoString() string { return redactedConfig }
+func (guestSetup) Format(formatter fmt.State, _ rune) {
+	_, _ = formatter.Write([]byte(redactedConfig))
+}
+func (guestSetup) MarshalJSON() ([]byte, error)   { return nil, secret.ErrSerialization }
+func (guestSetup) MarshalText() ([]byte, error)   { return nil, secret.ErrSerialization }
+func (guestSetup) MarshalBinary() ([]byte, error) { return nil, secret.ErrSerialization }
+func (guestSetup) GobEncode() ([]byte, error)     { return nil, secret.ErrSerialization }
+func (guestSetup) MarshalXML(*xml.Encoder, xml.StartElement) error {
+	return secret.ErrSerialization
+}
+
+func writePrivateKey(destination *bytes.Buffer, privateKey *secret.Bytes) error {
+	return privateKey.WithReader(func(reader io.Reader) error {
+		var raw [32]byte
+		defer clear(raw[:])
+		if _, err := io.ReadFull(reader, raw[:]); err != nil {
+			return err
+		}
+		var encoded [44]byte
+		defer clear(encoded[:])
+		base64.StdEncoding.Encode(encoded[:], raw[:])
+		_, err := destination.Write(encoded[:])
+		return err
+	})
+}
+
+func writePublicKey(destination *bytes.Buffer, publicKey [32]byte) {
+	var encoded [44]byte
+	defer clear(encoded[:])
+	base64.StdEncoding.Encode(encoded[:], publicKey[:])
+	_, _ = destination.Write(encoded[:])
+}
+
+func writeEndpoint(destination *bytes.Buffer, address netip.Addr, port uint16) {
+	if address.Is6() {
+		_ = destination.WriteByte('[')
+	}
+	_, _ = destination.Write(address.AppendTo(nil))
+	if address.Is6() {
+		_ = destination.WriteByte(']')
+	}
+	_ = destination.WriteByte(':')
+	_, _ = destination.Write(strconv.AppendUint(nil, uint64(port), 10))
+}
+
 // WithResolvedConfig constructs the guest's ephemeral WireGuard configuration
 // only for the duration of fn. The key is encoded into a byte buffer, never a
 // Go string; the buffer is cleared immediately after the callback. Callbacks
@@ -639,18 +812,7 @@ func (p profile) withResolvedConfig(ctx context.Context, resolved resolvedEndpoi
 		runtime.KeepAlive(backing)
 	}()
 	_, _ = buffer.WriteString("[Interface]\nPrivateKey = ")
-	err := p.state.privateKey.WithReader(func(reader io.Reader) error {
-		var raw [32]byte
-		defer clear(raw[:])
-		if _, err := io.ReadFull(reader, raw[:]); err != nil {
-			return err
-		}
-		var encoded [44]byte
-		defer clear(encoded[:])
-		base64.StdEncoding.Encode(encoded[:], raw[:])
-		_, err := buffer.Write(encoded[:])
-		return err
-	})
+	err := writePrivateKey(buffer, p.state.privateKey)
 	if err != nil {
 		return invalidProfile()
 	}
@@ -659,24 +821,13 @@ func (p profile) withResolvedConfig(ctx context.Context, resolved resolvedEndpoi
 	_, _ = buffer.WriteString("\nDNS = ")
 	writeAddresses(buffer, p.state.dnsServers)
 	_, _ = buffer.WriteString("\n\n[Peer]\nPublicKey = ")
-	var publicEncoded [44]byte
-	base64.StdEncoding.Encode(publicEncoded[:], p.state.publicKey[:])
-	_, _ = buffer.Write(publicEncoded[:])
-	clear(publicEncoded[:])
+	writePublicKey(buffer, p.state.publicKey)
 	_, _ = buffer.WriteString("\nAllowedIPs = 0.0.0.0/0")
 	if p.state.allowedV6 {
 		_, _ = buffer.WriteString(", ::/0")
 	}
 	_, _ = buffer.WriteString("\nEndpoint = ")
-	if resolved.address.Is6() {
-		_ = buffer.WriteByte('[')
-	}
-	_, _ = buffer.Write(resolved.address.AppendTo(nil))
-	if resolved.address.Is6() {
-		_ = buffer.WriteByte(']')
-	}
-	_ = buffer.WriteByte(':')
-	_, _ = buffer.Write(strconv.AppendUint(nil, uint64(resolved.port), 10))
+	writeEndpoint(buffer, resolved.address, resolved.port)
 	_ = buffer.WriteByte('\n')
 	if buffer.Len() > MaximumProfileBytes {
 		return invalidProfile()

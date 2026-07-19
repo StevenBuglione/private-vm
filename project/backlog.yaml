@@ -469,12 +469,15 @@
             "guest nftables kill switch",
             "WireGuard setup",
             "DNS/IPv4/IPv6 tests",
-            "desktop status"
+            "desktop status",
+            "typed continuous tunnel-loss monitor and role response"
           ],
           "acceptance": [
             "removing proton0 immediately stops app traffic",
             "direct IPv4 and IPv6 tests fail",
-            "VPN handshake required before online state"
+            "VPN handshake required before online state",
+            "QEMU inherits the session TAP by descriptor without receiving its host name",
+            "partial guest cleanup retains the kill switch until tunnel removal succeeds"
           ]
         }
       ]

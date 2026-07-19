@@ -249,6 +249,14 @@ Downloader:
 - `GetDownloadStatus`
 - `SealQuarantine`
 
+The implemented downloader VPN adapter accepts at most the frozen 64-KiB
+profile size, clears and detaches the protobuf byte slice on every handler
+return (including rejected role/context), and parses only a host-resolved
+literal endpoint. `ConfigureWireGuard` returns success only for controller
+state `verified`; `VerifyVPN` re-runs the complete injected proof. VPN status
+and diagnostics contain booleans and stable codes only—never profile values,
+probe targets, public IPs or raw command output.
+
 Scanner:
 
 - `UpdateDefinitions`

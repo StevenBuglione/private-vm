@@ -442,9 +442,24 @@ Linux-adapter tests prove endpoints appear only in transient nft stdin, those
 buffers are cleared on success and failure, endpoint-like stdout never enters
 an error, generic exit status `1` cannot claim absence, and repeated exact
 inventory of already absent resources performs no mutation. These tests do not
-exercise host privileges or a real credential. `NET-003` later adds the
-namespace packet tests, mock WireGuard peer, guest kill switch, live QEMU
-ordering and controlled Proton smoke test.
+exercise host privileges or a real credential.
+
+NET-003 source tests prove that the guest kill switch is installed before any
+underlay/tunnel configuration, permits only `proton0`, the exact UDP endpoint
+and required neighbor discovery, and contains no clear-interface DNS or TCP
+allowance. Adapter tests prove profile-derived nftables, address, route and
+WireGuard values do not enter argv/environment; they travel through bounded
+stdin readers, while DNS uses only the typed D-Bus boundary. Controller tests
+cover complete/incomplete proofs, downloader binding, cancellation, timeout,
+tunnel loss, role response and retryable tunnel-before-policy cleanup. Guest
+RPC tests prove the protobuf profile slice is detached and cleared on success
+and rejection. QEMU tests prove descriptors 3 and 4 are inherited and no TAP
+name enters argv.
+
+These tests remain unprivileged and synthetic. Namespace packet tests, a mock
+WireGuard peer, the concrete systemd-resolved D-Bus adapter, qBittorrent
+binding, role UI/pause composition, live QEMU ordering and the controlled
+Proton smoke test remain image/acceptance gates.
 
 Mock Proton endpoint:
 
