@@ -228,6 +228,23 @@ content, skipped/unreadable files, scan limits, timeouts, protocol ambiguity and
 transport errors are blocking. Raw clamd responses are never returned or
 logged.
 
+The production guest adapter uses only image-owned absolute executable paths.
+FreshClam is invoked through its exact systemd unit after the scoped VPN marker;
+stdout and stderr are discarded and every status probe is bounded. The update
+receipt is written with no-follow descriptor operations, atomic rename and
+directory fsync. The offline boot mounts the exact virtio quarantine device in
+the guest—not the host—and independently compares the mount source, block
+read-only bit and four required mount flags before opening any content.
+
+MIME identification receives only a bounded prefix on stdin. ClamAV receives
+only bounded stream frames. PDF and media probes use bounded stdout; PDF,
+Office, image, media and text reconstruction operate as the unprivileged guestd
+account in its private tmpfs namespace, discard tool stderr, rescan every new
+output and retain it only until scanner cleanup. ZIP and TAR structure is
+inspected with the core traversal/count/size/ratio rules; formats or recursive
+content that cannot complete the safe v1 reconstruction contract are rejected,
+never copied through unchanged.
+
 ZIP and TAR manifests are validated before extraction. Absolute/traversing,
 duplicate, encrypted, linked and special entries reject. Declared count,
 per-file size, total expansion, depth and compression ratio are checked before

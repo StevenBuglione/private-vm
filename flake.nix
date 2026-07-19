@@ -720,9 +720,20 @@
         assert !(builtins.hasAttr "clamav-freshclam" scannerConfiguration.config.systemd.timers);
         assert builtins.hasAttr "private-vm-scanner-definitions-update" scannerConfiguration.config.systemd.services;
         assert scannerConfiguration.config.systemd.services.private-vm-scanner-definitions-update.wantedBy == [ ];
+        assert scannerConfiguration.config.systemd.services.private-vm-guestd.serviceConfig.User == "private-vm-scanner";
+        assert scannerConfiguration.config.systemd.services.private-vm-guestd.serviceConfig.StateDirectory == "private-vm/scanner";
+        assert scannerConfiguration.config.security.polkit.enable;
+        assert builtins.hasAttr "private-vm/policy.safe.toml" scannerConfiguration.config.environment.etc;
         assert !offlineConfiguration.networking.networkmanager.enable;
         assert !offlineConfiguration.networking.dhcpcd.enable;
         assert !offlineConfiguration.services.resolved.enable;
+        assert offlineConfiguration.fileSystems."/mnt/quarantine".device == "/dev/disk/by-id/virtio-quarantine";
+        assert builtins.all (option: builtins.elem option offlineConfiguration.fileSystems."/mnt/quarantine".options) [
+          "ro"
+          "nodev"
+          "nosuid"
+          "noexec"
+        ];
         assert !offlineConfiguration.services.clamav.updater.enable;
         assert !(builtins.hasAttr "clamav-freshclam" offlineConfiguration.systemd.services);
         assert !(builtins.hasAttr "clamav-freshclam" offlineConfiguration.systemd.timers);

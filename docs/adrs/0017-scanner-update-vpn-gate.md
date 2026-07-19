@@ -28,6 +28,12 @@ device graph has a NIC and no quarantine. After bounded shutdown and absence
 audit, the same root overlay is booted with `-nic none` and exactly one
 read-only quarantine disk.
 
+Guestd runs as the dedicated unprivileged `private-vm-scanner` account. A
+guest-local Polkit rule authorizes that account to start only the fixed update
+unit and restart only clamd. The production adapter records a strict atomic
+definition receipt and opaque overlay identity in the disposable scanner root;
+the offline boot loads that receipt from the same overlay and cannot update it.
+
 ## Consequences
 
 - No definition request can run on a merely host-filtered underlay.

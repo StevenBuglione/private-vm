@@ -130,6 +130,10 @@ func guestCompositionMessage(err error) string {
 	return "the role-specific guest service could not be composed"
 }
 
+var scannerServiceFactory = func(identity guest.Identity, token *guest.Token) (*guest.ScannerService, error) {
+	return guest.NewProductionScannerService(identity, token, guest.DefaultProductionScannerConfig())
+}
+
 func composeGuestServerConfig(identity guest.Identity, token *guest.Token) (guest.ServerConfig, roleCleanup, error) {
 	config := guest.ServerConfig{Identity: identity, Token: token}
 	switch identity.Role {
@@ -156,7 +160,7 @@ func composeGuestServerConfig(identity guest.Identity, token *guest.Token) (gues
 	default:
 		return config, nil, nil
 	}
-	scannerService, err := guest.NewFailClosedScannerService(identity, token)
+	scannerService, err := scannerServiceFactory(identity, token)
 	if err != nil {
 		return guest.ServerConfig{}, nil, err
 	}

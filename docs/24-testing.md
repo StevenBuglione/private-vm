@@ -199,6 +199,12 @@ VPN and host-egress sequence before its scanner client is available, and QEMU
 renders update as NIC/no-quarantine then scan as no-NIC/read-only-quarantine.
 Failure, cancellation and timeout return the same idempotent cleanup owner.
 
+Focused production guest-adapter tests prove the fixed FreshClam/clamscan/clamd
+unit order, complete official receipt evidence, per-overlay identity retention,
+the scoped VPN context gate, bounded one-output text reconstruction and
+idempotent volatile cleanup. A malicious ZIP traversal fixture becomes a
+blocking finding rather than an extracted path or promotion.
+
 ### Session, QEMU and ephemeral-storage evidence
 
 Batch 1 runtime tests exhaust every allowed lifecycle transition and each

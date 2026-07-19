@@ -67,11 +67,13 @@ func (scannerRPCVPNVerifier) Verify(context.Context, guestvpn.RolePolicy) (guest
 
 type scannerDefinitionsFixture struct {
 	privatevmv1.UnimplementedScannerGuestServiceServer
-	updates int
+	updates       int
+	vpnContextSet bool
 }
 
-func (fixture *scannerDefinitionsFixture) UpdateDefinitions(context.Context, *privatevmv1.ScannerRequest) (*privatevmv1.DefinitionsStatus, error) {
+func (fixture *scannerDefinitionsFixture) UpdateDefinitions(ctx context.Context, _ *privatevmv1.ScannerRequest) (*privatevmv1.DefinitionsStatus, error) {
 	fixture.updates++
+	fixture.vpnContextSet, _ = ctx.Value(scannerVPNVerifiedContextKey{}).(bool)
 	return &privatevmv1.DefinitionsStatus{Current: true, DatabaseVersion: "fixture", UpdatedUnixSeconds: 1}, nil
 }
 
@@ -228,7 +230,7 @@ func TestScannerVPNRPCRequiresScannerUpdatePolicyAndRole(t *testing.T) {
 		t.Fatalf("scanner VerifyVPN = %#v, %v", verified, err)
 	}
 	updated, err := handler.UpdateDefinitions(t.Context(), &privatevmv1.ScannerRequest{Context: helloRequest(session.RoleScanner, APIMajor, APIMinor).GetContext()})
-	if err != nil || !updated.GetCurrent() || definitions.updates != 1 {
+	if err != nil || !updated.GetCurrent() || definitions.updates != 1 || !definitions.vpnContextSet {
 		t.Fatalf("scanner definitions after VPN = %#v, %v updates=%d", updated, err, definitions.updates)
 	}
 	wrong := downloaderProfile()

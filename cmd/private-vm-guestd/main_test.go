@@ -42,6 +42,9 @@ func TestCurrentVersionReportsCompiledRoleAndCapabilities(t *testing.T) {
 }
 
 func TestComposeGuestServerConfigWiresOnlyScannerCompiledRole(t *testing.T) {
+	previousFactory := scannerServiceFactory
+	scannerServiceFactory = guest.NewFailClosedScannerService
+	t.Cleanup(func() { scannerServiceFactory = previousFactory })
 	token, err := guest.TokenFromBytes(make([]byte, guest.TokenSize))
 	if err != nil {
 		t.Fatal(err)

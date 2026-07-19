@@ -43,6 +43,18 @@ in
   ]
   ++ toolchain.packages;
 
+  users.groups.private-vm-scanner = { };
+  users.users.private-vm-scanner = {
+    isSystemUser = true;
+    group = "private-vm-scanner";
+    extraGroups = [ "clamav" ];
+  };
+
+  environment.etc."private-vm/policy.safe.toml" = {
+    mode = "0444";
+    source = ../../examples/policy.safe.toml;
+  };
+
   # Only the definitions-update boot grants guestd the socket families and
   # capability needed by the typed WireGuard/nftables controller.
   systemd.services.private-vm-guestd.serviceConfig.RestrictAddressFamilies = lib.mkForce [
@@ -56,6 +68,14 @@ in
     "CAP_IPC_LOCK"
     "CAP_NET_ADMIN"
   ];
+  systemd.services.private-vm-guestd.serviceConfig.AmbientCapabilities = [
+    "CAP_IPC_LOCK"
+    "CAP_NET_ADMIN"
+  ];
+  systemd.services.private-vm-guestd.serviceConfig.User = lib.mkForce "private-vm-scanner";
+  systemd.services.private-vm-guestd.serviceConfig.Group = lib.mkForce "private-vm-scanner";
+  systemd.services.private-vm-guestd.serviceConfig.StateDirectory = "private-vm/scanner";
+  systemd.services.private-vm-guestd.serviceConfig.StateDirectoryMode = "0700";
 
   environment.etc."private-vm/scanner-toolchain.json" = {
     mode = "0444";
@@ -124,6 +144,7 @@ in
     serviceConfig = {
       Type = "oneshot";
       ExecStart = "${pkgs.clamav}/bin/freshclam --config-file=${freshclamConfig} --stdout";
+      SuccessExitStatus = "1";
       User = "clamav";
       Group = "clamav";
       ReadWritePaths = [ "/var/lib/clamav" ];
@@ -138,8 +159,30 @@ in
       ProtectKernelTunables = true;
       TasksMax = 32;
       TimeoutStartSec = "5min";
+      StandardOutput = "null";
+      StandardError = "null";
     };
   };
+
+  # The unprivileged guest daemon may manage only the two fixed units required
+  # by its authenticated definition-update RPC. It receives no generic unit or
+  # command authorization.
+  security.polkit.enable = true;
+  security.polkit.extraConfig = ''
+    polkit.addRule(function(action, subject) {
+      if (subject.user != "private-vm-scanner" ||
+          action.id != "org.freedesktop.systemd1.manage-units") {
+        return polkit.Result.NOT_HANDLED;
+      }
+      var unit = action.lookup("unit");
+      var verb = action.lookup("verb");
+      if ((unit == "private-vm-scanner-definitions-update.service" && (verb == "start" || verb == "stop")) ||
+          (unit == "clamav-daemon.service" && verb == "restart")) {
+        return polkit.Result.YES;
+      }
+      return polkit.Result.NOT_HANDLED;
+    });
+  '';
 
   specialisation.scan-offline.configuration = {
     imports = [ ./scanner-offline.nix ];

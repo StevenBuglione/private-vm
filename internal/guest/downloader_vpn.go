@@ -218,7 +218,10 @@ func (server *ScannerVPNServer) UpdateDefinitions(ctx context.Context, request *
 		!verified.GetIpv6ThroughTunnel() || !verified.GetIpv4BypassBlocked() || !verified.GetIpv6BypassBlocked() {
 		return nil, guestRPCError(codes.FailedPrecondition, "GUEST_VPN_UNVERIFIED", "Scanner definitions cannot update before the guest VPN is verified.", "Configure and verify Proton through the authenticated host workflow before updating definitions.", false)
 	}
-	return server.ScannerGuestServiceServer.UpdateDefinitions(ctx, request)
+	// The unforgeable in-process marker is consumed by the production boot
+	// probe. It is scoped to this one serialized call and is set only after the
+	// controller has repeated the complete verified-state proof above.
+	return server.ScannerGuestServiceServer.UpdateDefinitions(scannerVPNVerifiedContext(ctx), request)
 }
 
 // Close tears down the scanner's VPN before closing parser/output resources.
