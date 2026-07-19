@@ -499,21 +499,21 @@
       "id": "WORKSPACE",
       "tests": [
         {
-          "id": "WS-001",
+          "id": "WS-003",
           "name": "Unexported work blocks stop",
           "given": "new file in ~/Export",
           "when": "desktop stop without discard",
           "then": "stop blocked"
         },
         {
-          "id": "WS-002",
+          "id": "WS-001",
           "name": "Host import is explicit",
           "given": "single selected local file",
           "when": "workspace import",
           "then": "only that byte stream reaches ~/Inbox and guest cannot enumerate parent directory"
         },
         {
-          "id": "WS-003",
+          "id": "WS-002",
           "name": "Safe promotion excludes original",
           "given": "torrent document sanitized",
           "when": "open in workstation",
