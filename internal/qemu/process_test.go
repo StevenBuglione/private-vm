@@ -27,12 +27,7 @@ func TestLauncherSupervisesFakeQEMUAndCleansCgroup(t *testing.T) {
 	}
 	launcher.commandBuilder = fakeQEMUCommand("powerdown-exits")
 	launcher.qmpWait = 2 * time.Second
-	capability, err := os.CreateTemp(t.TempDir(), "capability")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer capability.Close()
-	process, err := launcher.Launch(context.Background(), spec, capability)
+	process, err := launcher.Launch(context.Background(), spec, testInheritedFiles(t, true))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -72,12 +67,7 @@ func TestLauncherEscalatesAfterIgnoredPowerdown(t *testing.T) {
 	launcher.qmpWait = 2 * time.Second
 	launcher.graceWait = 25 * time.Millisecond
 	launcher.termWait = time.Second
-	capability, err := os.CreateTemp(t.TempDir(), "capability")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer capability.Close()
-	process, err := launcher.Launch(context.Background(), spec, capability)
+	process, err := launcher.Launch(context.Background(), spec, testInheritedFiles(t, true))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -99,16 +89,63 @@ func TestLauncherFailsWhenQEMUExitsBeforeQMP(t *testing.T) {
 		t.Fatal(err)
 	}
 	launcher.qmpWait = 2 * time.Second
-	launcher.commandBuilder = func(Spec, *os.File) (*exec.Cmd, error) {
+	launcher.commandBuilder = func(Spec, InheritedFiles) (*exec.Cmd, error) {
 		return exec.Command(os.Args[0], "-test.run=TestImmediateExitHelper", "--"), nil
 	}
-	capability, err := os.CreateTemp(t.TempDir(), "capability")
+	if _, err := launcher.Launch(context.Background(), spec, testInheritedFiles(t, true)); err == nil {
+		t.Fatal("early QEMU exit unexpectedly passed")
+	}
+}
+
+func TestLauncherRejectsDescriptorRoleMismatchBeforeCommand(t *testing.T) {
+	launcher, err := NewLauncher(&fakeCgroupFactory{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer capability.Close()
-	if _, err := launcher.Launch(context.Background(), spec, capability); err == nil {
-		t.Fatal("early QEMU exit unexpectedly passed")
+	called := false
+	launcher.commandBuilder = func(Spec, InheritedFiles) (*exec.Cmd, error) {
+		called = true
+		return nil, errors.New("must not be called")
+	}
+
+	spec := validSpec(t)
+	files := testInheritedFiles(t, false)
+	if _, err := launcher.Launch(context.Background(), spec, files); err == nil {
+		t.Fatal("networked role without TAP unexpectedly passed")
+	}
+	if called {
+		t.Fatal("command builder ran after descriptor validation failed")
+	}
+
+	spec.Role = "scanner"
+	spec.ScannerMode = ScannerModeScan
+	spec.Networked = false
+	spec.NetworkFD = 0
+	spec.Data = []Disk{{Path: filepath.Join(t.TempDir(), "quarantine.raw"), Format: "raw", ReadOnly: true, Serial: "quarantine"}}
+	files = testInheritedFiles(t, true)
+	if _, err := launcher.Launch(context.Background(), spec, files); err == nil {
+		t.Fatal("offline role with TAP unexpectedly passed")
+	}
+	if called {
+		t.Fatal("command builder ran after offline descriptor validation failed")
+	}
+}
+
+func TestProductionCommandInheritsOnlyTypedDescriptors(t *testing.T) {
+	spec := validSpec(t)
+	files := testInheritedFiles(t, true)
+	command, err := productionCommand(spec, files)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(command.ExtraFiles) != 2 || command.ExtraFiles[0] != files.Capability || command.ExtraFiles[1] != files.TAP {
+		t.Fatalf("unexpected inherited descriptors: %#v", command.ExtraFiles)
+	}
+	if got := strings.Join(command.Args, " "); strings.Contains(got, files.TAP.Name()) || strings.Contains(got, "ifname=") {
+		t.Fatalf("TAP identity leaked into argv: %s", got)
+	}
+	if len(command.Env) != 1 || command.Env[0] != "LANG=C.UTF-8" {
+		t.Fatalf("unexpected command environment: %q", command.Env)
 	}
 }
 
@@ -350,10 +387,32 @@ func TestNoQMPHelper(t *testing.T) {
 	}
 }
 
-func fakeQEMUCommand(mode string) func(Spec, *os.File) (*exec.Cmd, error) {
-	return func(spec Spec, _ *os.File) (*exec.Cmd, error) {
+func fakeQEMUCommand(mode string) func(Spec, InheritedFiles) (*exec.Cmd, error) {
+	return func(spec Spec, files InheritedFiles) (*exec.Cmd, error) {
+		if files.Capability == nil || (spec.Networked && files.TAP == nil) {
+			return nil, errors.New("missing inherited test descriptor")
+		}
 		return exec.Command(os.Args[0], "-test.run=TestQEMUHelperProcess", "--", mode, spec.QMPSocket, spec.SPICESocket), nil
 	}
+}
+
+func testInheritedFiles(t *testing.T, networked bool) InheritedFiles {
+	t.Helper()
+	capability, err := os.CreateTemp(t.TempDir(), "capability")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = capability.Close() })
+	files := InheritedFiles{Capability: capability}
+	if networked {
+		tap, err := os.CreateTemp(t.TempDir(), "tap")
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = tap.Close() })
+		files.TAP = tap
+	}
+	return files
 }
 
 func testBinary(t *testing.T) string {

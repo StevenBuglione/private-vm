@@ -23,8 +23,8 @@ func validSpec(t *testing.T) Spec {
 		QMPSocket:    filepath.Join(dir, "qmp.sock"),
 		SPICESocket:  filepath.Join(dir, "spice.sock"),
 		VSOCKCID:     42,
-		TAPName:      "tap-pvm-test",
 		Networked:    true,
+		NetworkFD:    4,
 		FWCfgTokenFD: 3,
 	}
 }
@@ -55,12 +55,13 @@ func TestWorkstationArgsUseOnlyUnixDisplayAndExpectedDevices(t *testing.T) {
 		"vhost-vsock-pci",
 		"virtio-rng-pci",
 		"virtio-net-pci",
+		"tap,id=net0,fd=4,vhost=on",
 	} {
 		if !strings.Contains(joined, required) {
 			t.Fatalf("missing required argument %q: %s", required, joined)
 		}
 	}
-	for _, forbidden := range []string{"virtiofs", "9p", "usb-redir", "usb-host", "-daemonize", "port="} {
+	for _, forbidden := range []string{"virtiofs", "9p", "usb-redir", "usb-host", "-daemonize", "port=", "ifname=", "script="} {
 		if strings.Contains(joined, forbidden) {
 			t.Fatalf("forbidden argument %q present", forbidden)
 		}
@@ -70,12 +71,22 @@ func TestWorkstationArgsUseOnlyUnixDisplayAndExpectedDevices(t *testing.T) {
 	}
 }
 
+func TestNetworkDescriptorPositionIsFixed(t *testing.T) {
+	spec := validSpec(t)
+	for _, descriptor := range []int{-1, 0, 3, 5} {
+		spec.NetworkFD = descriptor
+		if err := spec.Validate(); err == nil {
+			t.Fatalf("network descriptor %d unexpectedly passed", descriptor)
+		}
+	}
+}
+
 func TestScannerScanArgsHaveReadOnlyQuarantineAndNoNIC(t *testing.T) {
 	spec := validSpec(t)
 	spec.Role = session.RoleScanner
 	spec.ScannerMode = ScannerModeScan
 	spec.Networked = false
-	spec.TAPName = ""
+	spec.NetworkFD = 0
 	spec.Data = []Disk{{Path: filepath.Join(t.TempDir(), "quarantine.raw"), Format: "raw", ReadOnly: true, Serial: "quarantine"}}
 	args, err := spec.Args()
 	if err != nil {
@@ -91,7 +102,7 @@ func TestExporterHasNoDisplayOrNetwork(t *testing.T) {
 	spec := validSpec(t)
 	spec.Role = session.RoleExporter
 	spec.Networked = false
-	spec.TAPName = ""
+	spec.NetworkFD = 0
 	spec.SPICESocket = ""
 	spec.USB = &USBDevice{Bus: 2, Address: 4}
 	args, err := spec.Args()
@@ -109,7 +120,7 @@ func TestExporterHasNoDisplayOrNetwork(t *testing.T) {
 
 func TestRoleDeviceMatrixFailsClosed(t *testing.T) {
 	tests := []func(*Spec){
-		func(spec *Spec) { spec.Networked, spec.TAPName = false, "" },
+		func(spec *Spec) { spec.Networked, spec.NetworkFD = false, 0 },
 		func(spec *Spec) {
 			spec.Role = session.RoleDownloader
 			spec.Data = nil
