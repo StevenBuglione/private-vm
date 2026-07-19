@@ -183,8 +183,9 @@ and UDisks disabled.
 - udev and USB identity inspection tools
 - checksum tools
 
-The exporter defaults to `multi-user.target`, omits compatibility filesystem
-formatters and UDisks, and is boot-tested with no emulated NIC. Its role-specific
+The exporter defaults to `multi-user.target`, overrides NixOS's normally
+inherited `system.fsPackages` to omit FAT/compatibility filesystem formatters,
+omits UDisks, and is boot-tested with no emulated NIC. Its role-specific
 guestd advertises the common service plus only the exact exporter capability
 set; workstation, downloader and scanner services are not registered. USB
 attachment and the narrowly scoped device access needed for a confirmed export

@@ -48,6 +48,12 @@ in
     text = builtins.toJSON exporterToolInventory;
   };
 
+  # NixOS places dosfstools in system.fsPackages even when the declared root
+  # filesystem is ext4. The frozen exporter format is LUKS2 plus ext4 only, so
+  # keep FAT formatters out of the runtime PATH. UEFI boot support remains in
+  # the image/initrd closure and does not require a guest-visible formatter.
+  system.fsPackages = lib.mkForce [ ];
+
   # A physical transfer device is attached only by the typed exporter launch
   # model. Keep the storage drivers available without adding an automounter or
   # broadening the guestd service's device policy in the base image.
