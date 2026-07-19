@@ -134,6 +134,8 @@ var scannerServiceFactory = func(identity guest.Identity, token *guest.Token) (*
 	return guest.NewProductionScannerService(identity, token, guest.DefaultProductionScannerConfig())
 }
 
+var newFixedExporterAdapter = guest.NewFixedExporterAdapter
+
 func composeGuestServerConfig(identity guest.Identity, token *guest.Token) (guest.ServerConfig, roleCleanup, error) {
 	config := guest.ServerConfig{Identity: identity, Token: token}
 	switch identity.Role {
@@ -158,7 +160,16 @@ func composeGuestServerConfig(identity guest.Identity, token *guest.Token) (gues
 		config.Downloader = downloader
 		return config, cleanup, nil
 	case session.RoleExporter:
-		return guest.ServerConfig{}, nil, errors.New("fixed-path exporter LUKS2/ext4 adapter is not configured")
+		adapter, err := newFixedExporterAdapter()
+		if err != nil {
+			return guest.ServerConfig{}, nil, err
+		}
+		exporter, err := guest.NewExporterService(guest.ExporterServiceConfig{Identity: identity, Adapter: adapter})
+		if err != nil {
+			return guest.ServerConfig{}, nil, err
+		}
+		config.Exporter = exporter
+		return config, exporter, nil
 	default:
 		return config, nil, nil
 	}
