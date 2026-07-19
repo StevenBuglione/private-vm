@@ -52,6 +52,7 @@ const (
 	CodeUSBEnrollment   Code = "USB_ENROLLMENT_STATUS"
 	CodeUSBPrepared     Code = "USB_PREPARED"
 	CodeUSBExported     Code = "USB_EXPORT_VERIFIED"
+	CodeSystemPlan      Code = "SYSTEM_PLAN"
 	CodeInternalError   Code = "INTERNAL_ERROR"
 	CodeRenderFailed    Code = "OUTPUT_RENDER_FAILED"
 )
@@ -149,6 +150,22 @@ type WorkspaceStatusPayload struct {
 }
 
 func (WorkspaceStatusPayload) machinePayload() {}
+
+// SystemChangePayload is one non-sensitive fixed host integration mutation.
+type SystemChangePayload struct {
+	Operation string `json:"operation"`
+	Path      string `json:"path"`
+}
+
+// SystemPlanPayload is the generic install/uninstall preview or receipt.
+type SystemPlanPayload struct {
+	Action  string                `json:"action"`
+	Version string                `json:"version"`
+	Applied bool                  `json:"applied"`
+	Changes []SystemChangePayload `json:"changes"`
+}
+
+func (SystemPlanPayload) machinePayload() {}
 
 // TorrentStatusPayload deliberately carries only aggregate counters and
 // stable state. Torrent names, file paths, hashes and peer identifiers never
@@ -467,6 +484,18 @@ func validSuccess(success SuccessEnvelope) bool {
 		return success.Code == CodeWorkspaceStatus && data.SchemaVersion == 1 &&
 			oneOf(data.State, "CLEAN", "READY", "UNEXPORTED", "CHANGED") &&
 			data.ExportedCount <= data.FileCount && data.UnexportedCount <= data.FileCount && data.ChangedCount <= data.FileCount
+	case SystemPlanPayload:
+		if success.Code != CodeSystemPlan || !oneOf(data.Action, "install", "uninstall") ||
+			!validRequiredString(data.Version, 64) || data.Changes == nil || len(data.Changes) == 0 || len(data.Changes) > 64 {
+			return false
+		}
+		for _, change := range data.Changes {
+			if !oneOf(change.Operation, "create", "replace", "preserve", "remove", "ensure-group", "enable-service", "disable-service") ||
+				!validRequiredString(change.Path, 256) || strings.ContainsAny(change.Path, "\r\n\x00") {
+				return false
+			}
+		}
+		return true
 	case TorrentStatusPayload:
 		return success.Code == CodeTorrentStatus && data.SchemaVersion == 1 &&
 			validCode(Code(data.State)) && data.CompletedBytes <= data.TotalBytes &&
@@ -643,6 +672,16 @@ func humanSuccess(code Code, data MachinePayload) string {
 				workflow = " workflow=" + safeLine(current.WorkflowState)
 			}
 			fmt.Fprintf(&buffer, "%s role=%s phase=%s%s\n", safeLine(current.ID), safeLine(current.Role), safeLine(current.Phase), workflow)
+		}
+		return buffer.String()
+	case WorkspaceStatusPayload:
+		return fmt.Sprintf("workspace=%s files=%d exported=%d unexported=%d changed=%d\n",
+			safeLine(value.State), value.FileCount, value.ExportedCount, value.UnexportedCount, value.ChangedCount)
+	case SystemPlanPayload:
+		var buffer strings.Builder
+		fmt.Fprintf(&buffer, "%s %s (applied: %t)\n", safeLine(value.Action), safeLine(value.Version), value.Applied)
+		for _, change := range value.Changes {
+			fmt.Fprintf(&buffer, "  %s %s\n", safeLine(change.Operation), safeLine(change.Path))
 		}
 		return buffer.String()
 	case TorrentStatusPayload:

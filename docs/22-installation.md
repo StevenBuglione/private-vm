@@ -177,6 +177,18 @@ The installer:
 - refuses unsupported init systems
 - never downloads and executes additional scripts
 
+The generic command works only from the extracted archive whose `manifest.json`
+is beside the CLI. It accepts no destination override. The closed manifest binds
+all sixteen files to fixed host paths, modes, sizes and SHA-256 digests. The
+installer rejects an active daemon before install or upgrade, so clean up and
+stop all sessions first. Its exact systemd actions have an empty environment,
+discard subprocess output and are bounded. A failed file or activation step
+rolls back; an unprovable rollback is exit 24 and requires operator inspection.
+
+After installation, the same commands use the fixed root-owned installed
+manifest for uninstall. Configuration, image cache, USB enrollment state and
+user exports are preserved and are not accepted as removal-plan inputs.
+
 ## Post-install
 
 ```bash

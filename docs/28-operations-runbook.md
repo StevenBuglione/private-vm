@@ -134,6 +134,13 @@ Supported behavior: package manager should refuse/recommend stopping sessions.
 Do not hot-restart daemon during active workflow unless recovery compatibility is
 tested.
 
+The generic installer fails before mutation when `private-vmd.service` is
+active. Clean and stop every session, stop the daemon, rerun `system install
+--dry-run`, and only then accept the upgrade. If installation reports
+`SYSTEM_ROLLBACK_INCOMPLETE`, do not retry blindly: preserve the fixed-path plan,
+run `doctor --strict`, and inspect only `.private-vm-install-*` or
+`.private-vm-rollback-*` entries under the displayed package destinations.
+
 ## Security incident
 
 1. disconnect network if host compromise suspected

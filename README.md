@@ -52,7 +52,8 @@ continue to fail closed.
 - versioned JSON schemas and example configurations
 - Go package boundaries, interfaces and tested starter implementations
 - NixOS host module and six image-output scaffolds
-- systemd, Polkit, tmpfiles and udev packaging assets
+- NixOS module plus hook-free DEB/RPM and manifest-bound generic-archive sources
+- systemd, Polkit, tmpfiles, sysusers, udev, completions and manual-page assets
 - public source/image-build CI plus a tag-only protected image-publication workflow
 - machine-readable implementation backlog, milestones and acceptance suites
 - source drafts preserved under `references/`
@@ -76,8 +77,9 @@ This is not yet an operational security product. Configuration, diagnostics,
 the authenticated host daemon, volatile session records, typed QEMU/QMP
 lifecycle, ephemeral storage primitives, and the authenticated role-restricted
 guest channel are implemented and unit/integration tested. End-to-end role
-orchestration, VPN/torrent/scanner/USB workflows, remote image-publication
-acceptance, packaging, and the complete acceptance runbook remain in progress.
+orchestration, VPN/torrent/scanner/USB workflows, remote publication,
+clean-distribution package tests, host installation and the complete acceptance
+runbook remain in progress.
 Unfinished security-sensitive commands intentionally fail as not implemented.
 
 ## License

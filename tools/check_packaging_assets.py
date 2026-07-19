@@ -110,6 +110,7 @@ def main() -> int:
     service = (ROOT / "packaging/systemd/private-vmd.service").read_text(encoding="utf-8")
     for required in (
         "ExecStart=/usr/libexec/private-vmd --config /etc/private-vm/config.toml --group private-vm",
+        "Environment=PATH=/usr/sbin:/usr/bin:/sbin:/bin",
         "NoNewPrivileges=yes", "ProtectSystem=strict", "LimitCORE=0", "Delegate=yes",
     ):
         if required not in service:

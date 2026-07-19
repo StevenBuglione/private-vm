@@ -14,6 +14,7 @@ pairs = [
     ("schemas/cli-event.schema.json", "examples/cli-event.example.json", "json"),
     ("schemas/cli-success.schema.json", "examples/cli-success.example.json", "json"),
     ("schemas/cli-success.schema.json", "examples/cli-session-success.example.json", "json"),
+    ("schemas/install-manifest.schema.json", "examples/install-manifest.example.json", "json"),
     ("schemas/cli-success.schema.json", "examples/cli-torrent-success.example.json", "json"),
     ("schemas/cli-success.schema.json", "examples/cli-scanner-success.example.json", "json"),
     ("schemas/cli-success.schema.json", "examples/cli-workspace-success.example.json", "json"),

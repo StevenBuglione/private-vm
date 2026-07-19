@@ -8,6 +8,7 @@ import (
 	"syscall"
 
 	"github.com/StevenBuglione/private-vm/internal/cli"
+	"github.com/StevenBuglione/private-vm/internal/systeminstall"
 )
 
 func main() {
@@ -17,5 +18,10 @@ func main() {
 }
 
 func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
-	return cli.Run(ctx, args, stdout, stderr)
+	installer := systeminstall.NewDefault()
+	return cli.New(cli.Dependencies{
+		Stdout:  stdout,
+		Stderr:  stderr,
+		Invoker: cli.NewSystemInstallInvoker(installer),
+	}).Execute(ctx, args)
 }

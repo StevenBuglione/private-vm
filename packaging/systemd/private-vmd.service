@@ -12,6 +12,7 @@ RestartSec=2
 User=root
 Group=private-vm
 UMask=0007
+Environment=PATH=/usr/sbin:/usr/bin:/sbin:/bin
 RuntimeDirectory=private-vm
 RuntimeDirectoryMode=0750
 StateDirectory=private-vm

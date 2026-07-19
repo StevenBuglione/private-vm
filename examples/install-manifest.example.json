@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "product": "private-vm",
+  "version": "1.0.0-rc.1",
+  "os": "linux",
+  "architecture": "amd64",
+  "files": [
+    { "source": "LICENSE", "destination": "/usr/share/doc/private-vm/LICENSE", "mode": 292, "size": 1, "sha256": "0000000000000000000000000000000000000000000000000000000000000000", "preserve": false },
+    { "source": "README.md", "destination": "/usr/share/doc/private-vm/README.md", "mode": 292, "size": 1, "sha256": "0000000000000000000000000000000000000000000000000000000000000000", "preserve": false },
+    { "source": "completions/bash/private-vm", "destination": "/usr/share/bash-completion/completions/private-vm", "mode": 292, "size": 1, "sha256": "0000000000000000000000000000000000000000000000000000000000000000", "preserve": false },
+    { "source": "completions/fish/private-vm.fish", "destination": "/usr/share/fish/vendor_completions.d/private-vm.fish", "mode": 292, "size": 1, "sha256": "0000000000000000000000000000000000000000000000000000000000000000", "preserve": false },
+    { "source": "completions/zsh/_private-vm", "destination": "/usr/share/zsh/site-functions/_private-vm", "mode": 292, "size": 1, "sha256": "0000000000000000000000000000000000000000000000000000000000000000", "preserve": false },
+    { "source": "config.toml", "destination": "/etc/private-vm/config.toml", "mode": 384, "size": 1, "sha256": "0000000000000000000000000000000000000000000000000000000000000000", "preserve": true },
+    { "source": "integration/90-private-vm.rules", "destination": "/usr/lib/udev/rules.d/90-private-vm.rules", "mode": 292, "size": 1, "sha256": "0000000000000000000000000000000000000000000000000000000000000000", "preserve": false },
+    { "source": "integration/org.private-vm.policy", "destination": "/usr/share/polkit-1/actions/org.private-vm.policy", "mode": 292, "size": 1, "sha256": "0000000000000000000000000000000000000000000000000000000000000000", "preserve": false },
+    { "source": "integration/private-vm.conf.example", "destination": "/usr/share/private-vm/usbguard/private-vm.conf.example", "mode": 292, "size": 1, "sha256": "0000000000000000000000000000000000000000000000000000000000000000", "preserve": false },
+    { "source": "integration/private-vm.sysusers", "destination": "/usr/lib/sysusers.d/private-vm.conf", "mode": 292, "size": 1, "sha256": "0000000000000000000000000000000000000000000000000000000000000000", "preserve": false },
+    { "source": "integration/private-vm.tmpfiles", "destination": "/usr/lib/tmpfiles.d/private-vm.conf", "mode": 292, "size": 1, "sha256": "0000000000000000000000000000000000000000000000000000000000000000", "preserve": false },
+    { "source": "integration/private-vmd.service", "destination": "/usr/lib/systemd/system/private-vmd.service", "mode": 292, "size": 1, "sha256": "0000000000000000000000000000000000000000000000000000000000000000", "preserve": false },
+    { "source": "man/private-vm.1", "destination": "/usr/share/man/man1/private-vm.1", "mode": 292, "size": 1, "sha256": "0000000000000000000000000000000000000000000000000000000000000000", "preserve": false },
+    { "source": "man/private-vmd.8", "destination": "/usr/share/man/man8/private-vmd.8", "mode": 292, "size": 1, "sha256": "0000000000000000000000000000000000000000000000000000000000000000", "preserve": false },
+    { "source": "private-vm", "destination": "/usr/bin/private-vm", "mode": 493, "size": 1, "sha256": "0000000000000000000000000000000000000000000000000000000000000000", "preserve": false },
+    { "source": "private-vmd", "destination": "/usr/libexec/private-vmd", "mode": 493, "size": 1, "sha256": "0000000000000000000000000000000000000000000000000000000000000000", "preserve": false }
+  ]
+}

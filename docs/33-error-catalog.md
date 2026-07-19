@@ -42,6 +42,11 @@ CLI API.
 | `OUTPUT_RENDER_FAILED` | 70 | The CLI could not safely encode or write bounded output. Wrapped writer or encoder details are not exposed. |
 | `INTERNAL_ERROR` | 70 | An invalid or unclassified internal result was normalized to the redacted internal-error contract. |
 | `COMPLETION_FAILED` | 70 | Shell completion generation exceeded its bound or could not be safely produced or written. |
+| `SYSTEM_INSTALL_INVALID` | 10 | The generic install intent did not match its typed command contract. |
+| `SYSTEM_INSTALL_FAILED` | 10 | Host compatibility, bundle verification, fixed-path mutation, activation or rollback failed closed. |
+| `SYSTEM_UNINSTALL_INVALID` | 10 | The generic uninstall intent did not match its typed command contract. |
+| `SYSTEM_UNINSTALL_FAILED` | 10 | Installed-manifest verification, deactivation, fixed-path removal or rollback failed closed. |
+| `SYSTEM_ROLLBACK_INCOMPLETE` | 24 | A generic install/uninstall transaction could not prove rollback or staging cleanup complete. |
 
 ## Stable daemon RPC errors
 
