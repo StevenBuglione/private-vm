@@ -63,7 +63,7 @@ func validateSensitiveFile(file *os.File, requireOwnerOnly bool) error {
 		return ErrUnsafeInputFile
 	}
 	switch filesystem.Type {
-	case unix.FUSE_SUPER_MAGIC, unix.NFS_SUPER_MAGIC, unix.SMB2_SUPER_MAGIC, unix.V9FS_MAGIC:
+	case unix.CIFS_SUPER_MAGIC, unix.FUSE_SUPER_MAGIC, unix.NFS_SUPER_MAGIC, unix.SMB2_SUPER_MAGIC, unix.V9FS_MAGIC:
 		// These filesystems can turn a regular-file read into an unbounded
 		// userspace or network operation that cannot honor a Go deadline.
 		return ErrUnsafeInputFile

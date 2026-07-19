@@ -33,7 +33,7 @@ const (
 )
 
 // Status contains no owner, endpoint, key, address, DNS value, source path or
-// time. Generation is an opaque same-owner concurrency token.
+// time. Generation is an opaque, owner-local concurrency token.
 type Status struct {
 	SchemaVersion int           `json:"schema_version"`
 	Present       bool          `json:"present"`
@@ -51,9 +51,10 @@ type ResolutionPlan interface {
 	privateResolutionPlan()
 }
 
-// ResolvedProfile is a short-lived view supplied only after a plan is proven
-// current. Host firewall planning must iterate Endpoints and guest delivery
-// must call WithGuestConfig on this same view.
+// ResolvedProfile is a callback-scoped view supplied only after a plan is
+// proven current. Host firewall planning must iterate Endpoints and guest
+// delivery must call WithGuestConfig on this same view. Retaining the view
+// beyond the UsePlan callback cannot extend its lifetime.
 type ResolvedProfile interface {
 	Endpoints(context.Context, func(netip.Addr, uint16) error) error
 	WithGuestConfig(context.Context, func(context.Context, io.Reader) error) error
@@ -66,6 +67,18 @@ type resolutionPlan struct {
 	generation uint64
 	epoch      uint64
 	endpoints  []resolvedEndpoint
+}
+
+func (p *resolutionPlan) destroy() {
+	if p == nil {
+		return
+	}
+	clear(p.endpoints)
+	p.endpoints = nil
+	p.owner = 0
+	p.name = ""
+	p.generation = 0
+	p.epoch = 0
 }
 
 func (resolutionPlan) privateResolutionPlan() {}
@@ -85,6 +98,38 @@ func (resolutionPlan) MarshalXML(*xml.Encoder, xml.StartElement) error {
 type resolvedProfile struct {
 	plan    *resolutionPlan
 	profile Profile
+	lease   *planLease
+}
+
+// planLease prevents a callback from retaining a usable resolved view after
+// UsePlan returns. The store mutex protects the installed plan; this separate
+// scope guard protects the view's lifetime.
+type planLease struct {
+	mu     sync.RWMutex
+	active bool
+}
+
+func newPlanLease() *planLease { return &planLease{active: true} }
+
+func (l *planLease) use(fn func() error) error {
+	if l == nil {
+		return profileRotated()
+	}
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+	if !l.active {
+		return profileRotated()
+	}
+	return fn()
+}
+
+func (l *planLease) close() {
+	if l == nil {
+		return
+	}
+	l.mu.Lock()
+	l.active = false
+	l.mu.Unlock()
 }
 
 func (resolvedProfile) privateResolvedProfile() {}
@@ -105,24 +150,31 @@ func (view resolvedProfile) Endpoints(ctx context.Context, fn func(netip.Addr, u
 	if ctx == nil || fn == nil || view.plan == nil {
 		return ErrCallbackRequired
 	}
-	for _, endpoint := range view.plan.endpoints {
-		if err := ctx.Err(); err != nil {
-			return err
+	return view.lease.use(func() error {
+		for _, endpoint := range view.plan.endpoints {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			if err := fn(endpoint.address, endpoint.port); err != nil {
+				return err
+			}
 		}
-		if err := fn(endpoint.address, endpoint.port); err != nil {
-			return err
-		}
-	}
-	return nil
+		return nil
+	})
 }
 
 func (view resolvedProfile) WithGuestConfig(ctx context.Context, fn func(context.Context, io.Reader) error) error {
-	if view.plan == nil || len(view.plan.endpoints) == 0 {
+	if view.plan == nil {
 		return profileNotReady()
 	}
-	// Resolution is sorted, so the same deterministic first endpoint is used
-	// for guest configuration while the firewall allows exactly the full set.
-	return view.profile.withResolvedConfig(ctx, view.plan.endpoints[0], fn)
+	return view.lease.use(func() error {
+		if len(view.plan.endpoints) == 0 {
+			return profileNotReady()
+		}
+		// Resolution is sorted, so the same deterministic first endpoint is used
+		// for guest configuration while the firewall allows exactly the full set.
+		return view.profile.withResolvedConfig(ctx, view.plan.endpoints[0], fn)
+	})
 }
 
 type profileKey struct {
@@ -141,14 +193,17 @@ type storedProfile struct {
 // MemoryStore is the only v1 profile store. It has no file path, persistence,
 // marshaling or restore API. Close is the daemon-restart cleanup boundary.
 type MemoryStore struct {
-	mu       sync.Mutex
-	profiles map[profileKey]*storedProfile
-	next     uint64
-	closed   bool
+	mu          sync.Mutex
+	profiles    map[profileKey]*storedProfile
+	nextByOwner map[uint32]uint64
+	closed      bool
 }
 
 func NewMemoryStore() *MemoryStore {
-	return &MemoryStore{profiles: make(map[profileKey]*storedProfile)}
+	return &MemoryStore{
+		profiles:    make(map[profileKey]*storedProfile),
+		nextByOwner: make(map[uint32]uint64),
+	}
 }
 
 // Import parses protected source bytes and atomically replaces one owner's
@@ -178,16 +233,24 @@ func (s *MemoryStore) Import(owner uint32, name string, source *secret.Bytes) (S
 			return Status{}, profileLimit()
 		}
 	}
-	s.next++
-	if s.next == 0 {
+	if s.profiles == nil {
+		s.profiles = make(map[profileKey]*storedProfile)
+	}
+	if s.nextByOwner == nil {
+		s.nextByOwner = make(map[uint32]uint64)
+	}
+	next := s.nextByOwner[owner] + 1
+	if next == 0 {
 		parsed.Destroy()
+		s.closeLocked()
 		return Status{}, storeClosed()
 	}
+	s.nextByOwner[owner] = next
 	old := s.profiles[key]
-	entry := &storedProfile{profile: parsed, generation: s.next, rotation: RotationResolutionNeeded}
+	entry := &storedProfile{profile: parsed, generation: next, rotation: RotationResolutionNeeded}
 	s.profiles[key] = entry
 	if old != nil {
-		old.plan = nil
+		invalidatePlan(old)
 		old.profile.Destroy()
 	}
 	return statusFor(entry), nil
@@ -220,7 +283,7 @@ func (s *MemoryStore) Resolve(ctx context.Context, owner uint32, name string, re
 		s.mu.Unlock()
 		return nil, Status{}, storeClosed()
 	}
-	entry.plan = nil
+	invalidatePlan(entry)
 	entry.rotation = RotationResolutionNeeded
 	profileSnapshot := entry.profile
 	generation, epoch := entry.generation, entry.epoch
@@ -233,6 +296,7 @@ func (s *MemoryStore) Resolve(ctx context.Context, owner uint32, name string, re
 	} else {
 		endpoints, resolveErr = resolver.resolve(ctx, profileSnapshot)
 	}
+	defer clear(endpoints)
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -245,6 +309,9 @@ func (s *MemoryStore) Resolve(ctx context.Context, owner uint32, name string, re
 	}
 	if current != entry || current.generation != generation || current.epoch != epoch {
 		return nil, statusFor(current), profileRotated()
+	}
+	if resolveErr == nil && ctx != nil {
+		resolveErr = ctx.Err()
 	}
 	if resolveErr != nil {
 		if ctx != nil && ctx.Err() != nil {
@@ -293,7 +360,9 @@ func (s *MemoryStore) UsePlan(ctx context.Context, owner uint32, name string, pl
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	return fn(resolvedProfile{plan: concrete, profile: entry.profile})
+	lease := newPlanLease()
+	defer lease.close()
+	return fn(resolvedProfile{plan: concrete, profile: entry.profile, lease: lease})
 }
 
 func (s *MemoryStore) Inspect(owner uint32, name string) Status {
@@ -318,7 +387,7 @@ func (s *MemoryStore) Remove(owner uint32, name string) {
 	entry := s.profiles[key]
 	delete(s.profiles, key)
 	if entry != nil {
-		entry.plan = nil
+		invalidatePlan(entry)
 		entry.profile.Destroy()
 	}
 }
@@ -329,15 +398,29 @@ func (s *MemoryStore) Close() {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.closeLocked()
+}
+
+func (s *MemoryStore) closeLocked() {
 	if s.closed {
 		return
 	}
 	for key, entry := range s.profiles {
-		entry.plan = nil
+		invalidatePlan(entry)
 		entry.profile.Destroy()
 		delete(s.profiles, key)
 	}
+	clear(s.nextByOwner)
+	s.nextByOwner = nil
 	s.closed = true
+}
+
+func invalidatePlan(entry *storedProfile) {
+	if entry == nil || entry.plan == nil {
+		return
+	}
+	entry.plan.destroy()
+	entry.plan = nil
 }
 
 func (s *MemoryStore) ownerCount(owner uint32) int {

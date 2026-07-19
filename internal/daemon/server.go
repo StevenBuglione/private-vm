@@ -173,6 +173,9 @@ func (s *Server) Serve() error {
 	if s.listen == nil {
 		return errors.New("daemon server is not listening")
 	}
+	// Serve returning is a daemon-lifetime boundary even when the listener or
+	// gRPC stack fails unexpectedly. Volatile VPN profiles must not survive it.
+	defer s.closeProfiles()
 	if err := s.grpc.Serve(s.serve); err != nil && !errors.Is(err, grpc.ErrServerStopped) {
 		return fmt.Errorf("serve private-vmd RPC: %w", err)
 	}

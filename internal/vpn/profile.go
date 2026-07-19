@@ -14,6 +14,7 @@ import (
 	"io"
 	"net"
 	"net/netip"
+	"reflect"
 	"runtime"
 	"sort"
 	"strconv"
@@ -32,6 +33,8 @@ const (
 	maximumAddresses    = 8
 	maximumDNSServers   = 8
 	redactedProfile     = "[REDACTED VPN PROFILE]"
+	redactedEndpoint    = "[REDACTED VPN ENDPOINT]"
+	redactedConfig      = "[REDACTED VPN CONFIG READER]"
 )
 
 var allocateProfileBuffer = func() []byte { return make([]byte, MaximumProfileBytes+1) }
@@ -92,7 +95,7 @@ type Inspection struct {
 // Parse reads one bounded profile and clears its private parsing buffer before
 // returning. Callers own and must close or destroy the input source itself.
 func Parse(reader io.Reader) (Profile, error) {
-	if reader == nil {
+	if isNilLike(reader) {
 		return nil, invalidProfile()
 	}
 	raw := allocateProfileBuffer()
@@ -444,6 +447,11 @@ func parseEndpoint(value []byte) (endpoint, bool) {
 	if err != nil || host == "" {
 		return endpoint{}, false
 	}
+	for _, character := range portText {
+		if character < '0' || character > '9' {
+			return endpoint{}, false
+		}
+	}
 	port, err := strconv.ParseUint(portText, 10, 16)
 	if err != nil || port == 0 {
 		return endpoint{}, false
@@ -699,6 +707,19 @@ type contextReader struct {
 	reader io.Reader
 }
 
+func (contextReader) String() string   { return redactedConfig }
+func (contextReader) GoString() string { return redactedConfig }
+func (contextReader) Format(formatter fmt.State, _ rune) {
+	_, _ = formatter.Write([]byte(redactedConfig))
+}
+func (contextReader) MarshalJSON() ([]byte, error)   { return nil, secret.ErrSerialization }
+func (contextReader) MarshalText() ([]byte, error)   { return nil, secret.ErrSerialization }
+func (contextReader) MarshalBinary() ([]byte, error) { return nil, secret.ErrSerialization }
+func (contextReader) GobEncode() ([]byte, error)     { return nil, secret.ErrSerialization }
+func (contextReader) MarshalXML(*xml.Encoder, xml.StartElement) error {
+	return secret.ErrSerialization
+}
+
 func (r *contextReader) Read(destination []byte) (int, error) {
 	if err := r.ctx.Err(); err != nil {
 		return 0, err
@@ -727,6 +748,32 @@ type resolvedEndpoint struct {
 	port    uint16
 }
 
+func (endpoint) String() string   { return redactedEndpoint }
+func (endpoint) GoString() string { return redactedEndpoint }
+func (endpoint) Format(formatter fmt.State, _ rune) {
+	_, _ = formatter.Write([]byte(redactedEndpoint))
+}
+func (endpoint) MarshalJSON() ([]byte, error)   { return nil, secret.ErrSerialization }
+func (endpoint) MarshalText() ([]byte, error)   { return nil, secret.ErrSerialization }
+func (endpoint) MarshalBinary() ([]byte, error) { return nil, secret.ErrSerialization }
+func (endpoint) GobEncode() ([]byte, error)     { return nil, secret.ErrSerialization }
+func (endpoint) MarshalXML(*xml.Encoder, xml.StartElement) error {
+	return secret.ErrSerialization
+}
+
+func (resolvedEndpoint) String() string   { return redactedEndpoint }
+func (resolvedEndpoint) GoString() string { return redactedEndpoint }
+func (resolvedEndpoint) Format(formatter fmt.State, _ rune) {
+	_, _ = formatter.Write([]byte(redactedEndpoint))
+}
+func (resolvedEndpoint) MarshalJSON() ([]byte, error)   { return nil, secret.ErrSerialization }
+func (resolvedEndpoint) MarshalText() ([]byte, error)   { return nil, secret.ErrSerialization }
+func (resolvedEndpoint) MarshalBinary() ([]byte, error) { return nil, secret.ErrSerialization }
+func (resolvedEndpoint) GobEncode() ([]byte, error)     { return nil, secret.ErrSerialization }
+func (resolvedEndpoint) MarshalXML(*xml.Encoder, xml.StartElement) error {
+	return secret.ErrSerialization
+}
+
 func (e resolvedEndpoint) valid() bool { return publicEndpointAddress(e.address) && e.port != 0 }
 
 func sortEndpoints(endpoints []resolvedEndpoint) {
@@ -735,9 +782,31 @@ func sortEndpoints(endpoints []resolvedEndpoint) {
 	})
 }
 
+func isNilLike(value any) bool {
+	if value == nil {
+		return true
+	}
+	reflected := reflect.ValueOf(value)
+	switch reflected.Kind() {
+	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
+		return reflected.IsNil()
+	default:
+		return false
+	}
+}
+
 var (
 	_ Profile        = profile{}
 	_ fmt.Formatter  = profile{}
 	_ json.Marshaler = profile{}
 	_ xml.Marshaler  = profile{}
+	_ fmt.Formatter  = endpoint{}
+	_ json.Marshaler = endpoint{}
+	_ xml.Marshaler  = endpoint{}
+	_ fmt.Formatter  = resolvedEndpoint{}
+	_ json.Marshaler = resolvedEndpoint{}
+	_ xml.Marshaler  = resolvedEndpoint{}
+	_ fmt.Formatter  = contextReader{}
+	_ json.Marshaler = contextReader{}
+	_ xml.Marshaler  = contextReader{}
 )

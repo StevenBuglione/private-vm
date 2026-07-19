@@ -17,6 +17,12 @@ func (fn lookupFunc) LookupNetIP(ctx context.Context, network, host string) ([]n
 	return fn(ctx, network, host)
 }
 
+type panicLookup struct{}
+
+func (*panicLookup) LookupNetIP(context.Context, string, string) ([]netip.Addr, error) {
+	panic("typed-nil resolver was invoked")
+}
+
 func TestEndpointResolverReturnsBoundedSortedPublicAddresses(t *testing.T) {
 	profile := mustParseProfile(t, validProfile(false, "vpn.proton.test:51820"))
 	defer profile.Destroy()
@@ -84,6 +90,19 @@ func TestEndpointResolverFailureIsActionableAndRedacted(t *testing.T) {
 				t.Fatal("endpoint error was not redacted and actionable")
 			}
 		})
+	}
+}
+
+func TestEndpointResolverRejectsTypedNilAdapters(t *testing.T) {
+	parsedProfile := mustParseProfile(t, validProfile(false, "vpn.proton.test:51820"))
+	defer parsedProfile.Destroy()
+	var lookup *panicLookup
+	if _, err := NewEndpointResolverWithLookup(lookup).resolve(context.Background(), parsedProfile); !errors.Is(err, ErrEndpointUnresolved) {
+		t.Fatalf("typed-nil lookup error = %v", err)
+	}
+	var typedNilProfile *profile
+	if _, err := NewEndpointResolver().resolve(context.Background(), typedNilProfile); !errors.Is(err, ErrEndpointUnresolved) {
+		t.Fatalf("typed-nil profile error = %v", err)
 	}
 }
 

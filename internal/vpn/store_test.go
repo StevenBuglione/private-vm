@@ -100,6 +100,46 @@ func TestMemoryStorePlanBindsOwnerNameGenerationEpochAndEndpoints(t *testing.T) 
 	}
 }
 
+func TestResolvedProfileCannotEscapeUsePlanScope(t *testing.T) {
+	store := NewMemoryStore()
+	defer store.Close()
+	importFixtureProfile(t, store, testOwner, "proton-p2p", validProfile(false, "1.1.1.1:51820"))
+	plan, _, err := store.Resolve(context.Background(), testOwner, "proton-p2p", NewEndpointResolver())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	callbackFailure := errors.New("synthetic callback failure")
+	var escaped ResolvedProfile
+	err = store.UsePlan(context.Background(), testOwner, "proton-p2p", plan, func(view ResolvedProfile) error {
+		escaped = view
+		if err := view.Endpoints(context.Background(), func(netip.Addr, uint16) error { return nil }); err != nil {
+			return err
+		}
+		return callbackFailure
+	})
+	if !errors.Is(err, callbackFailure) {
+		t.Fatalf("UsePlan callback error = %v", err)
+	}
+	if err := escaped.Endpoints(context.Background(), func(netip.Addr, uint16) error { return nil }); !errors.Is(err, ErrProfileRotated) {
+		t.Fatalf("escaped endpoint view error = %v", err)
+	}
+	if err := escaped.WithGuestConfig(context.Background(), func(context.Context, io.Reader) error { return nil }); !errors.Is(err, ErrProfileRotated) {
+		t.Fatalf("escaped config view error = %v", err)
+	}
+}
+
+func TestMemoryStoreGenerationsAreOwnerLocal(t *testing.T) {
+	store := NewMemoryStore()
+	defer store.Close()
+	firstOwner := importFixtureProfile(t, store, testOwner, "first", validProfile(false, "1.1.1.1:51820"))
+	otherOwner := importFixtureProfile(t, store, testOwner+1, "first", validProfile(false, "1.0.0.1:51820"))
+	secondForFirstOwner := importFixtureProfile(t, store, testOwner, "second", validProfile(false, "8.8.8.8:51820"))
+	if firstOwner.Generation != 1 || otherOwner.Generation != 1 || secondForFirstOwner.Generation != 2 {
+		t.Fatalf("owner-local generations = %d, %d, %d", firstOwner.Generation, otherOwner.Generation, secondForFirstOwner.Generation)
+	}
+}
+
 func TestFailedResolutionInvalidatesPlanAndRequiresRotation(t *testing.T) {
 	store := NewMemoryStore()
 	defer store.Close()
@@ -203,6 +243,7 @@ func TestCloseDestroysProfilesPlansAndBlocksRestore(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	concrete := plan.(*resolutionPlan)
 	store.Close()
 	store.Close()
 	if _, err := owned.Inspect(); !errors.Is(err, ErrInvalidProfile) {
@@ -210,6 +251,9 @@ func TestCloseDestroysProfilesPlansAndBlocksRestore(t *testing.T) {
 	}
 	if err := store.UsePlan(context.Background(), testOwner, "proton-p2p", plan, func(ResolvedProfile) error { return nil }); !errors.Is(err, ErrStoreClosed) {
 		t.Fatalf("closed store plan error = %v", err)
+	}
+	if concrete.owner != 0 || concrete.name != "" || concrete.generation != 0 || concrete.epoch != 0 || len(concrete.endpoints) != 0 {
+		t.Fatal("closed store retained invalidated plan material")
 	}
 	replacement := newProfileSecret(t, validProfile(false, "vpn.proton.test:51820"))
 	defer replacement.Destroy()
@@ -239,7 +283,14 @@ func TestStatusAndOpaquePlanFormattingAreRedacted(t *testing.T) {
 		}
 	}
 	concrete := plan.(*resolutionPlan)
-	for _, subject := range []any{*concrete, concrete} {
+	var resolved ResolvedProfile
+	if err := store.UsePlan(context.Background(), testOwner, "proton-p2p", plan, func(view ResolvedProfile) error {
+		resolved = view
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	for _, subject := range []any{*concrete, concrete, resolved} {
 		for _, verb := range []string{"%s", "%v", "%+v", "%#v", "%q", "%x", "%X"} {
 			if got := fmt.Sprintf(verb, subject); got != redactedPlan {
 				t.Fatalf("plan formatting %s = %q", verb, got)

@@ -115,9 +115,10 @@ there is no detached dial goroutine.
 `internal/vpn` owns the closed Proton WireGuard grammar, protected private-key
 handle, trusted-host endpoint resolver and daemon-lifetime memory store. Parsing
 is capped at 64 KiB and 256 lines. The private key is decoded directly from a
-byte slice into `secret.Bytes`; no profile, key or endpoint type supports JSON,
-text or diagnostic formatting. Only a schema-versioned aggregate inspection is
-serializable. The resolver accepts a narrow context-aware `LookupNetIP`
+byte slice into `secret.Bytes`; profile, key, endpoint, resolved-view and
+guest-configuration reader types reject serialization and redact diagnostic
+formatting. Only a schema-versioned aggregate inspection is serializable. The
+resolver accepts a narrow context-aware `LookupNetIP`
 interface, has a hard ten-second ceiling, resolves hostnames as absolute names,
 and returns at most 16 sorted unique addresses that pass the explicit reviewed
 public-endpoint range policy. Resolver errors discard hostname and external
@@ -127,12 +128,16 @@ import, remove, close, or daemon shutdown.
 
 The memory store has no path, marshal, restore or startup-loading operation and
 admits at most eight profile names per owner and 64 across the daemon.
-Import atomically replaces a named generation and destroys the old key. Remove,
+Generation counters are owner-local so one caller cannot infer another owner's
+import activity. Import atomically replaces a named generation and destroys the
+old key. Remove,
 close and daemon restart converge on owned-key destruction. A resolved guest
 configuration is reconstructed into a bounded byte buffer only while consuming
 the exact opaque owner/name/generation/resolution-epoch plan that also supplies
-the host firewall endpoints. Re-resolution invalidates the prior plan before
-DNS starts; rotation, removal, failure and close invalidate it as well. The
+the host firewall endpoints. The resolved view is usable only during its
+`UsePlan` callback and fails closed if retained. Re-resolution invalidates and
+clears the prior endpoint set before DNS starts; rotation, removal, failure and
+close invalidate and clear it as well. The
 private key is never converted to a Go string and the transient buffer is
 cleared after success, failure or cancellation.
 

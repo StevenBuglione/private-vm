@@ -236,6 +236,9 @@ func (s *Service) ImportVPNProfile(stream privatevmv1.PrivateVMDaemonService_Imp
 	if used == 0 || used > vpn.MaximumProfileBytes {
 		return rpcError(codes.InvalidArgument, "VPN_PROFILE_INVALID", "The Proton WireGuard profile is invalid.", "Generate a current bounded Proton WireGuard profile and retry.", false)
 	}
+	if err := ctx.Err(); err != nil {
+		return sessionError(err)
+	}
 	source, err := secret.New(buffer[:used])
 	if err != nil {
 		return vpnRPCError(err)
@@ -294,6 +297,9 @@ func (s *Service) RemoveVPNProfile(ctx context.Context, request *privatevmv1.VPN
 	}
 	if s.Profiles == nil {
 		return nil, vpnRPCError(vpn.ErrStoreClosed)
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, sessionError(err)
 	}
 	s.Profiles.Remove(identity.UID, request.GetProfileName())
 	return vpnStatusToProto(s.Profiles.Inspect(identity.UID, request.GetProfileName())), nil

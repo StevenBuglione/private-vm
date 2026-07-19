@@ -426,20 +426,26 @@ func TestSensitiveFileRejectsOwnerMismatchAndUnsafeFilesystem(t *testing.T) {
 			t.Fatalf("got %v, want owner rejection", err)
 		}
 	})
-	t.Run("filesystem", func(t *testing.T) {
-		original := inputFstatfs
-		inputFstatfs = func(_ int, stat *unix.Statfs_t) error {
-			stat.Type = unix.FUSE_SUPER_MAGIC
-			return nil
-		}
-		defer func() { inputFstatfs = original }()
-		_, err := SensitiveInput(context.Background(), ValueRequest{
-			Source: InputSourceFile, Path: path, MaxBytes: 16,
+	for name, filesystem := range map[string]int64{
+		"fuse": unix.FUSE_SUPER_MAGIC,
+		"cifs": unix.CIFS_SUPER_MAGIC,
+		"smb2": unix.SMB2_SUPER_MAGIC,
+	} {
+		t.Run(name, func(t *testing.T) {
+			original := inputFstatfs
+			inputFstatfs = func(_ int, stat *unix.Statfs_t) error {
+				stat.Type = filesystem
+				return nil
+			}
+			defer func() { inputFstatfs = original }()
+			_, err := SensitiveInput(context.Background(), ValueRequest{
+				Source: InputSourceFile, Path: path, MaxBytes: 16,
+			})
+			if !errors.Is(err, ErrUnsafeInputFile) {
+				t.Fatalf("got %v, want filesystem rejection", err)
+			}
 		})
-		if !errors.Is(err, ErrUnsafeInputFile) {
-			t.Fatalf("got %v, want filesystem rejection", err)
-		}
-	})
+	}
 }
 
 func TestSensitiveFileOpenHonorsTimeoutAndRedactsError(t *testing.T) {

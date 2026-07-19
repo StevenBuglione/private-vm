@@ -51,19 +51,17 @@ func TestParseAndRenderResolvedProfile(t *testing.T) {
 func TestParseRejectsUnsafeProfiles(t *testing.T) {
 	valid := validProfile(false, "vpn.proton.test:51820")
 	cases := map[string]string{
-		"pre-up hook":        strings.Replace(valid, "Address =", "PreUp = echo forbidden\nAddress =", 1),
-		"post-up hook":       strings.Replace(valid, "Address =", "PostUp = echo forbidden\nAddress =", 1),
-		"pre-down hook":      strings.Replace(valid, "Address =", "PreDown = echo forbidden\nAddress =", 1),
-		"post-down hook":     strings.Replace(valid, "Address =", "PostDown = echo forbidden\nAddress =", 1),
-		"duplicate field":    strings.Replace(valid, "DNS =", "DNS = 10.2.0.1\nDNS =", 1),
-		"multiple peers":     valid + "\n[Peer]\nPublicKey = " + encodedKey(0x22) + "\nAllowedIPs = 0.0.0.0/0\nEndpoint = vpn.proton.test:51820\n",
-		"missing ipv4 route": strings.Replace(valid, "0.0.0.0/0", "::/0", 1),
-		"partial route":      strings.Replace(valid, "0.0.0.0/0", "0.0.0.0/1", 1),
-		"extra route":        strings.Replace(valid, "0.0.0.0/0", "0.0.0.0/0, 10.0.0.0/8", 1),
-		"reversed routes":    strings.Replace(valid, "0.0.0.0/0", "::/0, 0.0.0.0/0", 1),
-		"ipv6 no route": strings.Replace(
-			strings.Replace(valid, "Address = 10.2.0.2/32", "Address = 10.2.0.2/32, 2001:db8::2/128", 1),
-			"AllowedIPs = 0.0.0.0/0", "AllowedIPs = 0.0.0.0/0", 1),
+		"pre-up hook":            strings.Replace(valid, "Address =", "PreUp = echo forbidden\nAddress =", 1),
+		"post-up hook":           strings.Replace(valid, "Address =", "PostUp = echo forbidden\nAddress =", 1),
+		"pre-down hook":          strings.Replace(valid, "Address =", "PreDown = echo forbidden\nAddress =", 1),
+		"post-down hook":         strings.Replace(valid, "Address =", "PostDown = echo forbidden\nAddress =", 1),
+		"duplicate field":        strings.Replace(valid, "DNS =", "DNS = 10.2.0.1\nDNS =", 1),
+		"multiple peers":         valid + "\n[Peer]\nPublicKey = " + encodedKey(0x22) + "\nAllowedIPs = 0.0.0.0/0\nEndpoint = vpn.proton.test:51820\n",
+		"missing ipv4 route":     strings.Replace(valid, "0.0.0.0/0", "::/0", 1),
+		"partial route":          strings.Replace(valid, "0.0.0.0/0", "0.0.0.0/1", 1),
+		"extra route":            strings.Replace(valid, "0.0.0.0/0", "0.0.0.0/0, 10.0.0.0/8", 1),
+		"reversed routes":        strings.Replace(valid, "0.0.0.0/0", "::/0, 0.0.0.0/0", 1),
+		"ipv6 no route":          strings.Replace(validProfile(true, "vpn.proton.test:51820"), "AllowedIPs = 0.0.0.0/0, ::/0", "AllowedIPs = 0.0.0.0/0", 1),
 		"endpoint no port":       strings.Replace(valid, "vpn.proton.test:51820", "vpn.proton.test", 1),
 		"private endpoint":       strings.Replace(valid, "vpn.proton.test:51820", "10.0.0.1:51820", 1),
 		"persistent keepalive":   strings.Replace(valid, "Endpoint =", "PersistentKeepalive = 25\nEndpoint =", 1),
@@ -82,6 +80,7 @@ func TestParseRejectsUnsafeProfiles(t *testing.T) {
 		"zoned endpoint":         strings.Replace(valid, "vpn.proton.test:51820", "[2606:4700:4700::1111%eth0]:51820", 1),
 		"documentation endpoint": strings.Replace(valid, "vpn.proton.test:51820", "192.0.2.1:51820", 1),
 		"mapped public endpoint": strings.Replace(valid, "vpn.proton.test:51820", "[::ffff:1.1.1.1]:51820", 1),
+		"signed endpoint port":   strings.Replace(valid, "vpn.proton.test:51820", "vpn.proton.test:+51820", 1),
 	}
 	for name, input := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -107,6 +106,10 @@ func TestParseRejectsBoundsAndReadFailure(t *testing.T) {
 	}
 	if _, err := Parse(nil); !errors.Is(err, ErrInvalidProfile) {
 		t.Fatalf("nil Parse error = %v", err)
+	}
+	var typedNil *panicReader
+	if _, err := Parse(typedNil); !errors.Is(err, ErrInvalidProfile) {
+		t.Fatalf("typed-nil Parse error = %v", err)
 	}
 	tooManyLines := strings.Repeat("# synthetic\n", maximumProfileLines+1)
 	if _, err := Parse(strings.NewReader(tooManyLines)); !errors.Is(err, ErrInvalidProfile) {
@@ -233,6 +236,38 @@ func TestWithResolvedConfigCancellationAndCallbackFailure(t *testing.T) {
 	}
 }
 
+func TestEndpointAndConfigReaderFormattingAreRedacted(t *testing.T) {
+	endpointValue := endpoint{host: "vpn.proton.test.", port: 51820}
+	resolvedValue := resolvedEndpoint{address: netip.MustParseAddr("1.1.1.1"), port: 51820}
+	for _, subject := range []any{endpointValue, &endpointValue, resolvedValue, &resolvedValue} {
+		for _, verb := range []string{"%s", "%v", "%+v", "%#v", "%q", "%x", "%X"} {
+			if got := fmt.Sprintf(verb, subject); got != redactedEndpoint {
+				t.Fatalf("endpoint formatting %s = %q", verb, got)
+			}
+		}
+		if _, err := json.Marshal(subject); !errors.Is(err, secret.ErrSerialization) {
+			t.Fatalf("endpoint JSON error = %v", err)
+		}
+	}
+
+	parsed := mustParseProfile(t, validProfile(false, "vpn.proton.test:51820"))
+	defer parsed.Destroy()
+	err := parsed.withResolvedConfig(context.Background(), resolvedValue, func(_ context.Context, reader io.Reader) error {
+		for _, verb := range []string{"%s", "%v", "%+v", "%#v", "%q", "%x", "%X"} {
+			if got := fmt.Sprintf(verb, reader); got != redactedConfig {
+				t.Fatalf("config-reader formatting %s = %q", verb, got)
+			}
+		}
+		if _, err := json.Marshal(reader); !errors.Is(err, secret.ErrSerialization) {
+			t.Fatalf("config-reader JSON error = %v", err)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
 func FuzzWireGuardProfile(f *testing.F) {
 	f.Add([]byte(validProfile(false, "vpn.proton.test:51820")))
 	f.Add([]byte("[Interface]\nPrivateKey = redacted\n[Peer]\n"))
@@ -286,4 +321,10 @@ type errorReader struct{}
 
 func (errorReader) Read([]byte) (int, error) {
 	return 0, errors.New("synthetic read failure with sensitive detail")
+}
+
+type panicReader struct{}
+
+func (*panicReader) Read([]byte) (int, error) {
+	panic("typed-nil reader was invoked")
 }

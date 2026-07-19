@@ -40,7 +40,7 @@ func NewEndpointResolverWithLookup(lookup NetIPLookup) *EndpointResolver {
 // opaque generation/epoch plan. Error details never contain the hostname or
 // resolver output.
 func (r *EndpointResolver) resolve(ctx context.Context, profile Profile) ([]resolvedEndpoint, error) {
-	if ctx == nil || r == nil || r.lookup == nil {
+	if ctx == nil || r == nil || isNilLike(r.lookup) || isNilLike(profile) {
 		return nil, endpointUnresolved()
 	}
 	if err := ctx.Err(); err != nil {

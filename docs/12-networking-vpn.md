@@ -67,7 +67,8 @@ replacement destroys the old generation; remove and daemon shutdown are
 idempotent and destroy all owned keys.
 
 Inspection is intentionally aggregate-only. It exposes the schema version,
-presence, opaque generation, IPv4/IPv6 enablement, address/DNS counts and one of
+presence, owner-local opaque generation, IPv4/IPv6 enablement, address/DNS
+counts and one of
 `not_imported`, `resolution_required`, `current` or `rotation_required`. It
 never exposes keys, endpoints, addresses, DNS values, source paths or times.
 The state becomes `current` only after trusted-host endpoint resolution succeeds.
@@ -88,7 +89,11 @@ its own caller and cannot block import, remove, close or daemon shutdown.
 The result is sealed into an opaque plan bound to the exact owner, profile name,
 generation, resolution epoch, endpoint set and port. The same current plan must
 be consumed for host firewall endpoints and guest configuration; cross-owner,
-cross-name, stale and substituted handles fail closed. The endpoint hostname is
+cross-name, stale and substituted handles fail closed. Its resolved view is
+scope-bound to the `UsePlan` callback, so retaining it cannot extend the plan's
+lifetime. Invalidation also clears the plan's owned endpoint set. Endpoint and
+configuration-reader diagnostic formatting is redacted and serialization is
+rejected. The endpoint hostname is
 replaced by the selected IP, the encoded private key is never represented as a
 Go string, and the callback buffer is cleared on return. This explicit
 destruction reduces exposure but is not a perfect-erasure claim.

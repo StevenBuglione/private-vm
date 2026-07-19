@@ -405,14 +405,17 @@ field, multiple peers, duplicate fields, invalid key shapes, unsafe DNS and
 addresses, missing/partial/additional default routes, missing endpoint ports,
 IPv4-mapped public/loopback values, special-use ranges, malformed key padding,
 `PersistentKeepalive`, zoned addresses, line/input bounds, read failure and
-destroyed input. Formatting and
-serialization tests prove that the private key, endpoint, address and DNS values
-cannot enter status JSON or diagnostic formatting.
+destroyed input. Formatting and serialization tests prove that the private key,
+endpoint, resolved view, guest-configuration reader, address and DNS values
+cannot enter status JSON or diagnostic formatting. Typed-nil input and resolver
+adapters are rejected without invocation, and Linux source tests include legacy
+CIFS as well as SMB2/FUSE/NFS/9P remote-filesystem rejection.
 
 Resolver tests prove literal-IP behavior, trusted-host hostname resolution,
 absolute-name lookup, mapped/special/empty/oversized result rejection,
 deduplication/order, cancellation and a bounded timeout. Memory-store tests
-prove owner isolation, atomic generation replacement, exact-plan binding,
+prove owner isolation, owner-local generation counters, atomic generation
+replacement, exact-plan binding and post-callback resolved-view expiry,
 cross-profile and cross-owner substitution rejection, invalidation on every
 resolution attempt, non-cooperative resolver isolation, actionable rotation
 status, idempotent remove/close and no restore after daemon shutdown.
