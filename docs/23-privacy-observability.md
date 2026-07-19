@@ -28,6 +28,15 @@ Do not persist:
 - guest screenshots
 - QMP raw messages
 - scan file paths
+- peer PID, process start time, supplementary groups, or raw `/proc` evidence
+- raw external-command stdout, stderr, environment, or wrapped failure text
+
+Unix peer identity evidence is bounded, parsed, and revalidated in memory for
+each authorization decision. Missing or changed PID/start-time/UID/group
+evidence is exposed only as `AUTHORIZATION_DENIED`; the response does not reveal
+which identity check failed. Request-context and selector failures likewise use
+the typed safe messages and remediation in `docs/33-error-catalog.md`, never the
+rejected raw value.
 
 ## Session events
 
@@ -52,6 +61,25 @@ may expose fixture-only details, but official binaries do not provide a
 
 No network metrics endpoint and no telemetry. Local `status --json` derives live
 metrics from session state.
+
+## Privileged helper output
+
+The daemon permits only the absolute `pkcheck` executable selected at startup
+and only the fixed `org.private-vm.usb.prepare` action. It launches `pkcheck`
+with an empty environment, discards both stdout and stderr, and converts denial
+or failure to a safe classification rather than wrapping the child-process
+output. Its PID/start-time/UID subject is revalidated before invocation.
+
+`ClaimUSB` is currently non-destructive and unimplemented, so it returns the
+typed `NOT_IMPLEMENTED` response without invoking Polkit. When destructive USB
+prepare is implemented, the Polkit decision belongs immediately before that
+mutation; it must not be moved earlier into claim, planning, or logging paths.
+
+RPC cancellation and bounded-deadline failures are reported as
+`REQUEST_CANCELED` and `REQUEST_TIMEOUT` with safe remediation. An RPC server
+startup failure occurs before typed RPC is available, so `private-vmd` emits one
+fixed `DAEMON_START_FAILED` line and suppresses the wrapped configuration,
+socket, process-evidence, and helper cause.
 
 ## Crash handling
 

@@ -13,6 +13,14 @@ import (
 
 var sessionIDPattern = regexp.MustCompile(`^pvm-[a-f0-9]{32}$`)
 
+// ValidateID accepts only daemon-generated opaque v1 session identifiers.
+func ValidateID(id string) error {
+	if !sessionIDPattern.MatchString(id) {
+		return errors.New("invalid internal session identifier")
+	}
+	return nil
+}
+
 type Store struct {
 	root string
 }
@@ -136,8 +144,8 @@ func (s *Store) ListIDs() ([]string, error) {
 }
 
 func (s *Store) sessionDir(id string) (string, error) {
-	if !sessionIDPattern.MatchString(id) {
-		return "", errors.New("invalid internal session identifier")
+	if err := ValidateID(id); err != nil {
+		return "", err
 	}
 	return filepath.Join(s.root, id), nil
 }

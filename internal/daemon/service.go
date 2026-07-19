@@ -3,13 +3,16 @@ package daemon
 import (
 	"context"
 	"errors"
+	"io"
 	"regexp"
 	"time"
 
 	privatevmv1 "github.com/StevenBuglione/private-vm/gen/privatevm/v1"
 	"github.com/StevenBuglione/private-vm/internal/buildinfo"
+	"github.com/StevenBuglione/private-vm/internal/config"
 	"github.com/StevenBuglione/private-vm/internal/preflight"
 	"github.com/StevenBuglione/private-vm/internal/session"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 )
 
@@ -22,9 +25,12 @@ var requestIDPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{7,127}$`)
 
 type Service struct {
 	privatevmv1.UnimplementedPrivateVMDaemonServiceServer
-	Sessions  *session.Manager
-	DoctorRun func(bool) preflight.Report
-	Polkit    Polkit
+	Sessions              *session.Manager
+	Config                config.Config
+	DoctorRun             func(context.Context, bool) preflight.Report
+	Polkit                Polkit
+	afterCreate           func()
+	cleanupCanceledCreate func(context.Context, string, uint32) error
 }
 
 func (s *Service) GetVersion(context.Context, *privatevmv1.Empty) (*privatevmv1.VersionResponse, error) {
@@ -36,11 +42,19 @@ func (s *Service) Doctor(ctx context.Context, request *privatevmv1.DoctorRequest
 	if err := validateRequestContext(request.GetContext(), false); err != nil {
 		return nil, err
 	}
+	if err := ctx.Err(); err != nil {
+		return nil, sessionError(err)
+	}
 	run := s.DoctorRun
 	if run == nil {
-		run = func(strict bool) preflight.Report { return preflight.Doctor{Strict: strict}.Run() }
+		run = func(ctx context.Context, strict bool) preflight.Report {
+			return preflight.Doctor{Strict: strict}.RunContext(ctx)
+		}
 	}
-	report := run(request.GetStrict())
+	report := run(ctx, s.Config.Strict() || request.GetStrict())
+	if err := ctx.Err(); err != nil {
+		return nil, sessionError(err)
+	}
 	return &privatevmv1.DoctorResponse{Diagnostics: diagnosticsToProto(report.Diagnostics), Runnable: report.Runnable}, nil
 }
 
@@ -48,18 +62,30 @@ func (s *Service) PlanSession(ctx context.Context, request *privatevmv1.PlanSess
 	if err := validateRequestContext(request.GetContext(), false); err != nil {
 		return nil, err
 	}
-	if _, err := roleFromProto(request.GetRole()); err != nil {
+	role, err := roleFromProto(request.GetRole())
+	if err != nil {
 		return nil, err
 	}
-	resources, err := validateResources(request.GetResources())
+	if err := validateSelectors(role, request.GetImageBundle(), request.GetPolicyName(), s.Config); err != nil {
+		return nil, err
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, sessionError(err)
+	}
+	resources, err := validateResources(request.GetResources(), resourceDefaults(role, s.Config))
 	if err != nil {
 		return nil, err
 	}
 	run := s.DoctorRun
 	if run == nil {
-		run = func(strict bool) preflight.Report { return preflight.Doctor{Strict: strict}.Run() }
+		run = func(ctx context.Context, strict bool) preflight.Report {
+			return preflight.Doctor{Strict: strict}.RunContext(ctx)
+		}
 	}
-	report := run(true)
+	report := run(ctx, true)
+	if err := ctx.Err(); err != nil {
+		return nil, sessionError(err)
+	}
 	return &privatevmv1.PlanSessionResponse{
 		Diagnostics: diagnosticsToProto(report.Diagnostics), ResolvedResources: resources, Runnable: report.Runnable,
 	}, nil
@@ -73,15 +99,39 @@ func (s *Service) CreateSession(ctx context.Context, request *privatevmv1.Create
 	if err != nil {
 		return nil, err
 	}
-	if _, err := validateResources(request.GetResources()); err != nil {
+	if err := validateSelectors(role, request.GetImageBundle(), request.GetPolicyName(), s.Config); err != nil {
+		return nil, err
+	}
+	if _, err := validateResources(request.GetResources(), resourceDefaults(role, s.Config)); err != nil {
 		return nil, err
 	}
 	identity, err := identityFromContext(ctx)
 	if err != nil {
 		return nil, sessionError(err)
 	}
+	if err := ctx.Err(); err != nil {
+		return nil, sessionError(err)
+	}
 	snapshot, err := s.Sessions.Create(identity.UID, role)
 	if err != nil {
+		return nil, sessionError(err)
+	}
+	if s.afterCreate != nil {
+		s.afterCreate()
+	}
+	if err := ctx.Err(); err != nil {
+		cleanupCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		cleanup := func(ctx context.Context, id string, ownerUID uint32) error {
+			_, cleanupErr := s.Sessions.Cleanup(ctx, id, ownerUID)
+			return cleanupErr
+		}
+		if s.cleanupCanceledCreate != nil {
+			cleanup = s.cleanupCanceledCreate
+		}
+		if cleanupErr := cleanup(cleanupCtx, snapshot.ID, identity.UID); cleanupErr != nil {
+			return nil, sessionError(cleanupErr)
+		}
 		return nil, sessionError(err)
 	}
 	return sessionToProto(snapshot), nil
@@ -118,7 +168,10 @@ func (s *Service) ListSessions(ctx context.Context, request *privatevmv1.ListSes
 	return result, nil
 }
 
-func (s *Service) StartRole(context.Context, *privatevmv1.StartRoleRequest) (*privatevmv1.Session, error) {
+func (s *Service) StartRole(_ context.Context, request *privatevmv1.StartRoleRequest) (*privatevmv1.Session, error) {
+	if err := validateRequestContext(request.GetContext(), true); err != nil {
+		return nil, err
+	}
 	return nil, unimplemented("Role launch")
 }
 
@@ -156,10 +209,11 @@ func (s *Service) cleanup(ctx context.Context, id string) (*privatevmv1.Session,
 }
 
 func (s *Service) StreamEvents(request *privatevmv1.GetSessionRequest, stream privatevmv1.PrivateVMDaemonService_StreamEventsServer) error {
-	if err := validateRequestContext(request.GetContext(), true); err != nil {
+	ctx, err := requestContextWithMetadata(stream.Context(), request.GetContext(), true)
+	if err != nil {
 		return err
 	}
-	identity, err := identityFromContext(stream.Context())
+	identity, err := identityFromContext(ctx)
 	if err != nil {
 		return sessionError(err)
 	}
@@ -169,7 +223,7 @@ func (s *Service) StreamEvents(request *privatevmv1.GetSessionRequest, stream pr
 	for {
 		snapshot, getErr := s.Sessions.Get(request.GetContext().GetSessionId(), identity.UID)
 		if errors.Is(getErr, session.ErrNotFound) {
-			return nil
+			return sessionError(getErr)
 		}
 		if getErr != nil {
 			return sessionError(getErr)
@@ -179,7 +233,7 @@ func (s *Service) StreamEvents(request *privatevmv1.GetSessionRequest, stream pr
 				continue
 			}
 			if err := stream.Send(eventToProto(snapshot, event)); err != nil {
-				return err
+				return sessionError(err)
 			}
 			sent = event.Sequence
 		}
@@ -187,18 +241,42 @@ func (s *Service) StreamEvents(request *privatevmv1.GetSessionRequest, stream pr
 			return nil
 		}
 		select {
-		case <-stream.Context().Done():
-			return stream.Context().Err()
+		case <-ctx.Done():
+			return sessionError(ctx.Err())
 		case <-ticker.C:
 		}
 	}
 }
 
-func (s *Service) ImportWorkspaceFile(privatevmv1.PrivateVMDaemonService_ImportWorkspaceFileServer) error {
+func (s *Service) ImportWorkspaceFile(stream privatevmv1.PrivateVMDaemonService_ImportWorkspaceFileServer) error {
+	frame, err := stream.Recv()
+	if err != nil {
+		if errors.Is(err, io.EOF) {
+			return rpcError(codes.InvalidArgument, "TRANSFER_BEGIN_REQUIRED", "The first transfer frame must be TransferBegin.", "Start the stream with a bounded TransferBegin record.", false)
+		}
+		return sessionError(err)
+	}
+	if frame.GetBegin() == nil {
+		return rpcError(codes.InvalidArgument, "TRANSFER_BEGIN_REQUIRED", "The first transfer frame must be TransferBegin.", "Start the stream with a bounded TransferBegin record.", false)
+	}
+	ctx, err := requestContextWithMetadata(stream.Context(), frame.GetBegin().GetContext(), true)
+	if err != nil {
+		return err
+	}
+	if err := ctx.Err(); err != nil {
+		return sessionError(err)
+	}
 	return unimplemented("Workspace import")
 }
 
-func (s *Service) ExportWorkspaceFile(*privatevmv1.ExportWorkspaceRequest, privatevmv1.PrivateVMDaemonService_ExportWorkspaceFileServer) error {
+func (s *Service) ExportWorkspaceFile(request *privatevmv1.ExportWorkspaceRequest, stream privatevmv1.PrivateVMDaemonService_ExportWorkspaceFileServer) error {
+	ctx, err := requestContextWithMetadata(stream.Context(), request.GetContext(), true)
+	if err != nil {
+		return err
+	}
+	if err := ctx.Err(); err != nil {
+		return sessionError(err)
+	}
 	return unimplemented("Workspace export")
 }
 
@@ -206,17 +284,13 @@ func (s *Service) ClaimUSB(ctx context.Context, request *privatevmv1.ClaimUSBReq
 	if err := validateRequestContext(request.GetContext(), true); err != nil {
 		return nil, err
 	}
-	identity, err := identityFromContext(ctx)
-	if err != nil {
-		return nil, sessionError(err)
-	}
-	if s.Polkit == nil || s.Polkit.Authorize(ctx, identity, "org.private-vm.usb.prepare") != nil {
-		return nil, rpcError(codes.PermissionDenied, "POLKIT_AUTHORIZATION_DENIED", "Destructive USB authorization was denied.", "Retry interactively and approve the exact displayed USB identity.", false)
-	}
 	return nil, unimplemented("USB claim")
 }
 
-func (s *Service) ReleaseUSB(context.Context, *privatevmv1.ReleaseUSBRequest) (*privatevmv1.Empty, error) {
+func (s *Service) ReleaseUSB(_ context.Context, request *privatevmv1.ReleaseUSBRequest) (*privatevmv1.Empty, error) {
+	if err := validateRequestContext(request.GetContext(), true); err != nil {
+		return nil, err
+	}
 	return nil, unimplemented("USB release")
 }
 
@@ -227,33 +301,115 @@ func validateRequestContext(value *privatevmv1.RequestContext, requireSession bo
 	if !requestIDPattern.MatchString(value.GetRequestId()) {
 		return rpcError(codes.InvalidArgument, "REQUEST_ID_INVALID", "The request ID is missing or malformed.", "Use an opaque 8-128 character request identifier.", false)
 	}
-	if requireSession && value.GetSessionId() == "" {
-		return rpcError(codes.InvalidArgument, "SESSION_ID_REQUIRED", "A session ID is required.", "Supply an active session ID returned by CreateSession.", false)
+	if value.GetSessionId() != "" {
+		if err := session.ValidateID(value.GetSessionId()); err != nil {
+			return rpcError(codes.InvalidArgument, "SESSION_ID_INVALID", "The session ID is malformed.", "Use the opaque session ID returned by CreateSession.", false)
+		}
+	}
+	if requireSession {
+		if value.GetSessionId() == "" {
+			return rpcError(codes.InvalidArgument, "SESSION_ID_REQUIRED", "A session ID is required.", "Supply an active session ID returned by CreateSession.", false)
+		}
 	}
 	return nil
 }
 
-func validateResources(value *privatevmv1.ResourceRequest) (*privatevmv1.ResourceRequest, error) {
+func validateResources(value, defaults *privatevmv1.ResourceRequest) (*privatevmv1.ResourceRequest, error) {
 	if value == nil {
-		return &privatevmv1.ResourceRequest{Vcpus: 4, MemoryBytes: 8 << 30, RootBytes: 32 << 30}, nil
+		return defaults, nil
 	}
 	copy := privatevmv1.ResourceRequest{
 		Vcpus: value.GetVcpus(), MemoryBytes: value.GetMemoryBytes(),
 		RootBytes: value.GetRootBytes(), ScratchBytes: value.GetScratchBytes(),
 	}
 	if copy.Vcpus == 0 {
-		copy.Vcpus = 4
+		copy.Vcpus = defaults.GetVcpus()
 	}
 	if copy.MemoryBytes == 0 {
-		copy.MemoryBytes = 8 << 30
+		copy.MemoryBytes = defaults.GetMemoryBytes()
 	}
 	if copy.RootBytes == 0 {
-		copy.RootBytes = 32 << 30
+		copy.RootBytes = defaults.GetRootBytes()
 	}
 	if copy.Vcpus > 64 || copy.MemoryBytes < 512<<20 || copy.MemoryBytes > 256<<30 || copy.RootBytes > 2<<40 || copy.ScratchBytes > 16<<40 {
 		return nil, rpcError(codes.InvalidArgument, "RESOURCE_REQUEST_INVALID", "Requested resources are outside supported bounds.", "Use at most 64 vCPUs, 256 GiB RAM, 2 TiB root and 16 TiB scratch.", false)
 	}
 	return &copy, nil
+}
+
+func resourceDefaults(role session.Role, snapshot config.Config) *privatevmv1.ResourceRequest {
+	result := &privatevmv1.ResourceRequest{Vcpus: 4, MemoryBytes: 8 << 30, RootBytes: 32 << 30}
+	if role == session.RoleWorkstation {
+		result.Vcpus = snapshot.Desktop().VCPUs()
+		result.MemoryBytes = snapshot.Desktop().MemoryBytes()
+	}
+	return result
+}
+
+func validateSelectors(role session.Role, bundle, policyName string, snapshot config.Config) error {
+	if role == session.RoleWorkstation {
+		if bundle == "" {
+			bundle = snapshot.Desktop().Bundle()
+		}
+		if bundle != "basic" && bundle != "office" && bundle != "development" {
+			return rpcError(codes.InvalidArgument, "IMAGE_BUNDLE_INVALID", "The workstation image bundle is unsupported.", "Choose basic, office, or development.", false)
+		}
+	} else if bundle != "" {
+		return rpcError(codes.InvalidArgument, "IMAGE_BUNDLE_INVALID", "Image bundles apply only to workstation sessions.", "Omit the image bundle for non-workstation roles.", false)
+	}
+	if policyName != "" && policyName != "safe" && policyName != "quarantine" {
+		return rpcError(codes.InvalidArgument, "POLICY_NAME_INVALID", "The policy name is unsupported.", "Choose safe or quarantine.", false)
+	}
+	return nil
+}
+
+type requestMetadata struct {
+	requestID string
+	sessionID string
+}
+
+type requestMetadataKey struct{}
+
+type contextualDaemonRequest interface {
+	GetContext() *privatevmv1.RequestContext
+}
+
+var unarySessionRequirement = map[string]bool{
+	privatevmv1.PrivateVMDaemonService_Doctor_FullMethodName:         false,
+	privatevmv1.PrivateVMDaemonService_PlanSession_FullMethodName:    false,
+	privatevmv1.PrivateVMDaemonService_CreateSession_FullMethodName:  false,
+	privatevmv1.PrivateVMDaemonService_GetSession_FullMethodName:     true,
+	privatevmv1.PrivateVMDaemonService_ListSessions_FullMethodName:   false,
+	privatevmv1.PrivateVMDaemonService_StartRole_FullMethodName:      true,
+	privatevmv1.PrivateVMDaemonService_StopRole_FullMethodName:       true,
+	privatevmv1.PrivateVMDaemonService_AbortSession_FullMethodName:   true,
+	privatevmv1.PrivateVMDaemonService_CleanupSession_FullMethodName: true,
+	privatevmv1.PrivateVMDaemonService_ClaimUSB_FullMethodName:       true,
+	privatevmv1.PrivateVMDaemonService_ReleaseUSB_FullMethodName:     true,
+}
+
+func requestContextUnaryInterceptor(ctx context.Context, request any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
+	if info.FullMethod == privatevmv1.PrivateVMDaemonService_GetVersion_FullMethodName {
+		return handler(ctx, request)
+	}
+	requireSession, known := unarySessionRequirement[info.FullMethod]
+	contextual, ok := request.(contextualDaemonRequest)
+	if !known || !ok {
+		return nil, rpcError(codes.Internal, "RPC_CONTEXT_CONTRACT_INVALID", "The daemon request contract is invalid.", "Install matching verified private-vm binaries.", false)
+	}
+	ctx, err := requestContextWithMetadata(ctx, contextual.GetContext(), requireSession)
+	if err != nil {
+		return nil, err
+	}
+	return handler(ctx, request)
+}
+
+func requestContextWithMetadata(ctx context.Context, value *privatevmv1.RequestContext, requireSession bool) (context.Context, error) {
+	if err := validateRequestContext(value, requireSession); err != nil {
+		return nil, err
+	}
+	metadata := requestMetadata{requestID: value.GetRequestId(), sessionID: value.GetSessionId()}
+	return context.WithValue(ctx, requestMetadataKey{}, metadata), nil
 }
 
 func roleFromProto(role privatevmv1.GuestRole) (session.Role, error) {

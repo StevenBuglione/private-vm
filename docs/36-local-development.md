@@ -13,6 +13,7 @@ git diff --exit-code -- gen
 test -z "$(git ls-files --others --exclude-standard -- gen)"
 buf breaking --against '.git#branch=main'
 nix flake check
+nix build .#checks.x86_64-linux.host-module-contract
 ```
 
 `buf generate` removes stale generated files before invoking the immutable
@@ -108,9 +109,17 @@ serialized transitions, and retryable idempotent cleanup:
 
 ```bash
 nix develop --command go test -race ./internal/daemon ./internal/session
+nix develop --command go test ./internal/daemon -run='^$' \
+  -fuzz='^FuzzDaemonRPCInputs$' -fuzztime=2s -parallel=1
 ```
+
+The second command reproduces the active bounded fuzz smoke gate. Its
+deterministic corpus covers every context-bearing daemon request protobuf shape
+plus context and resource validation and the process stat, status, and pidfd-info
+parsers; each generated input is capped at 64 KiB.
 
 `private-vmd` itself refuses to run without effective UID 0. It loads only the
 system file passed by `--config`; it never layers root's user configuration into
 the privileged service. The production socket is always
-`/run/private-vm/control.sock`, owned by `root:private-vm`.
+`/run/private-vm/control.sock`, owned by `root:<configured-group>` (the default
+group is `private-vm`).

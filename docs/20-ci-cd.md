@@ -37,6 +37,7 @@ For pull requests and pushes:
 - formatting
 - Go unit tests
 - race tests
+- bounded daemon RPC fuzz smoke
 - vet
 - staticcheck
 - govulncheck
@@ -44,12 +45,19 @@ For pull requests and pushes:
 - clean protobuf regeneration with committed-output drift rejection
 - schema tests
 - Nix flake check/evaluation
+- enabled host-module contract with custom group/package override, pinned daemon
+  PATH, directory modes, and independent Polkit policy identity
 - package builds
 - workflow policy validation with locked actionlint and zizmor
 - no publishing
 
-Fuzz targets and their bounded smoke runs are planned but are not an active gate
-until task-specific fuzz harnesses are committed. `image-build.yml.template` and
+The daemon request-protobuf, context-validation, and process-evidence parser
+fuzz target runs for two seconds with one worker in both `ci.yml` and the Nix
+flake checks. It rejects individual corpus inputs above 64 KiB and includes
+deterministic seeds for each context-bearing daemon request shape, resource
+validation, and the `/proc` stat, status, and pidfd-info parsers. Additional
+task-specific fuzz harnesses and a longer nightly fuzz workflow remain planned.
+`image-build.yml.template` and
 `release.yml.template` are policy-checked dormant templates; renaming either
 file is a separate reviewed activation change. There is no active nightly
 workflow yet.
