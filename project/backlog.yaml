@@ -430,7 +430,10 @@
           "acceptance": [
             "namespace isolated from host services",
             "address collisions prevented",
-            "all interfaces removed after cleanup"
+            "TAP is handed to QEMU only as a scoped inherited descriptor after it moves into the namespace",
+            "provisioning, handoffs and cleanup share one serialized lifecycle owner",
+            "all interfaces removed after exact inventory-based cleanup",
+            "partial cleanup is retryable until the final absence audit passes"
           ]
         },
         {
@@ -448,8 +451,10 @@
           ],
           "acceptance": [
             "guest clear interface reaches only Proton endpoint",
-            "host LAN and metadata addresses blocked",
-            "rule failure prevents QEMU start"
+            "IPv4 and IPv6 source/destination anti-spoofing blocks host LAN, metadata and unrelated public addresses",
+            "nftables receives endpoints only through destroyed stdin buffers, never argv, environment or errors",
+            "rule failure prevents QEMU start",
+            "the exact opaque VPN resolution plan is shared by the host policy and guest configuration"
           ]
         },
         {

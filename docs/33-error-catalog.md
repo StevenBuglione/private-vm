@@ -256,7 +256,13 @@ ordinary, detailed and structural `fmt` verbs cannot reveal that cause.
 
 - `VPN_PROFILE_INVALID`
 - `VPN_ENDPOINT_UNRESOLVED`
+- `NETWORK_REQUEST_INVALID`
+- `NETWORK_TOPOLOGY_EXISTS`
+- `NETWORK_COLLISION_EXHAUSTED`
+- `NETWORK_TOPOLOGY_FAILED`
 - `HOST_EGRESS_POLICY_FAILED`
+- `NETWORK_TOPOLOGY_NOT_READY`
+- `NETWORK_CLEANUP_INCOMPLETE`
 - `VPN_HANDSHAKE_FAILED`
 - `DNS_LEAK_DETECTED`
 - `IPV4_BYPASS_DETECTED`
@@ -281,6 +287,18 @@ VPN profile operations additionally use these stable safe codes:
 | `VPN_PROFILE_READ_FAILED` | 13 | The selected sensitive-input adapter could not read the profile safely. | Select a readable owner-only file or bounded standard input. |
 | `VPN_REQUEST_INVALID` | 13 | The CLI VPN intent or local control-socket configuration is invalid. | Use the documented VPN command syntax and installed control socket. |
 | `DAEMON_UNAVAILABLE` | 13 | A VPN RPC failed without a valid safe daemon `ErrorDetail`. | Verify `private-vmd` and its Unix control socket, then retry. |
+
+Host-network operations additionally use these stable safe codes:
+
+| Code | Exit | Safe meaning | Remediation |
+|---|---:|---|---|
+| `NETWORK_REQUEST_INVALID` | 13 | The internal session or opaque VPN-plan network contract is invalid. | Create networking only for an active internal session and current resolved VPN plan. |
+| `NETWORK_TOPOLOGY_EXISTS` | 13 | This session already owns a network topology. | Reuse it or complete its verified cleanup before retrying. |
+| `NETWORK_COLLISION_EXHAUSTED` | 13 | No collision-free slot was found within the bounded allocation search. | Clean verified private-vm network orphans and retry. |
+| `NETWORK_TOPOLOGY_FAILED` | 13 | A semantic namespace, veth, TAP, route or forwarding operation failed. | Run strict diagnostics, clean verified owned resources and retry. |
+| `HOST_EGRESS_POLICY_FAILED` | 13 | An exact endpoint nftables transaction failed. | Do not start QEMU; verify nftables support, clean the session network and rebuild from a current VPN plan. |
+| `NETWORK_TOPOLOGY_NOT_READY` | 13 | A stale or incomplete network handle was used for a guest handoff. | Complete topology and policy creation or create a new session after cleanup. |
+| `NETWORK_CLEANUP_INCOMPLETE` | 24 | At least one owned network resource could not be removed or audited absent. | Keep the session in cleanup state and retry verified cleanup. |
 
 The redacted VPN status schema uses corresponding state codes
 `VPN_ENDPOINT_CHECK_REQUIRED`, `VPN_PROFILE_CURRENT` and

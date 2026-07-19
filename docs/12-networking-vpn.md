@@ -112,6 +112,24 @@ flowchart LR
 
 Use static guest addressing. Do not run a broad DNS/DHCP service.
 
+### Host implementation contract
+
+For each session, the daemon deterministically allocates two non-overlapping
+IPv4 `/30` networks within `10.240.0.0/13` and two IPv6 `/126` networks below
+`fd70:766d::/32`. One pair connects the guest to its TAP gateway and the other
+connects the namespace veth to the host. Allocation tries at most 64
+session-derived slots, rejects any overlapping non-default host route, checks
+exact namespace, root-link and nftables inventories, and reserves both the
+chosen address slot and derived-name set before any mutation. Linux interface
+names never exceed 15 bytes. DHCP, host DNS forwarding and a shared bridge are
+not created.
+
+The TAP is created with `IFF_TAP|IFF_NO_PI`, its descriptor is retained, and the
+named interface is moved into the session namespace before readiness. QEMU may
+receive only a scoped duplicate through an inherited file descriptor; it never
+receives the TAP or namespace name. The QEMU process owner stops the child
+before network cleanup.
+
 The namespace owns an nftables table whose policy:
 
 - default drop
@@ -121,6 +139,37 @@ The namespace owns an nftables table whose policy:
 - deny host LAN/private ranges
 - deny all other IPv4/IPv6
 - no inbound forwarding
+
+The host owns a separate uniquely named nftables table. Its forward hook leaves
+unrelated host traffic unchanged, but for the session veth it accepts only:
+
+- exact guest source address to an `(endpoint IP, UDP port)` in the current
+  opaque Proton resolution plan; and
+- established/related return traffic whose destination is the exact guest
+  address.
+
+Every other packet entering or leaving that veth is dropped. NAT masquerading
+also requires the exact guest source and Proton destination tuple for IPv4 and
+IPv6. This makes public, LAN, metadata, direct DNS and source-spoof paths fail
+closed without maintaining a weaker range blacklist. The namespace table uses
+the same exact source/destination checks with default-drop input, output and
+forward chains. Both complete tables are atomic `nft -f -` transactions before
+the network becomes ready. Endpoint values never appear in argv or environment
+and never leave the adapter through returned errors, status or captured output;
+the transient stdin rule buffer is cleared after every result.
+
+Provisioning, TAP/configuration handoffs and cleanup have one serialized
+lifecycle owner. Once cleanup is accepted it continues in an independent
+bounded context even if the initiating client disconnects. It first disables
+and deletes the host veth to sever egress, then removes both nftables tables,
+the TAP and namespace. Every operation first uses a successful exact inventory;
+exit status `1` is not treated as absence. Attempt markers remain set across
+partial failures so a retry revisits every possibly allocated resource, and the
+address reservation is released only after the final exact absence audit.
+
+`NET-003` remains the separate guest boundary: installation of the guest
+kill-switch, WireGuard activation, handshake/leak tests, tunnel-loss response
+and orchestrator/QEMU start ordering are not implied by host-network readiness.
 
 ## Guest policy
 

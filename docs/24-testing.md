@@ -425,6 +425,27 @@ cleanup, and aggregate-only status output. Guest-config tests consume the epheme
 reader and cover success, callback failure and cancellation; fixtures never use
 a real Proton credential.
 
+NET-001/NET-002 source tests use only a semantic in-memory Linux backend and
+synthetic VPN plans. They cover deterministic collision-bounded naming,
+overlapping host-route rejection and static IPv4/IPv6 allocation; partial
+failure after namespace, veth, host and namespace configuration, TAP and each
+policy transaction; cancellation and
+timeout rollback; repeated cleanup after false-success deletion; and final
+absence auditing. Concurrent tests prove provisioning, scoped TAP/config
+handoffs and cleanup cannot overlap, caller cancellation cannot abandon an
+accepted cleanup, stale handles fail closed, and VPN rotation invalidates every
+handoff without obstructing cleanup.
+
+Rule-model tests prove exact IPv4/IPv6 guest source, endpoint destination and
+return destination matching, interface-bound default drops, and exact NAT.
+Linux-adapter tests prove endpoints appear only in transient nft stdin, those
+buffers are cleared on success and failure, endpoint-like stdout never enters
+an error, generic exit status `1` cannot claim absence, and repeated exact
+inventory of already absent resources performs no mutation. These tests do not
+exercise host privileges or a real credential. `NET-003` later adds the
+namespace packet tests, mock WireGuard peer, guest kill switch, live QEMU
+ordering and controlled Proton smoke test.
+
 Mock Proton endpoint:
 
 - underlay permitted only to mock endpoint
@@ -449,12 +470,13 @@ Inject failure after each:
 6. overlay create
 7. netns create
 8. veth create
-9. nft apply
-10. TAP create
-11. QEMU start
-12. QMP connect
-13. guest handshake
-14. USB claim
+9. TAP create/configure
+10. namespace nft apply
+11. host nft apply
+12. QEMU start
+13. QMP connect
+14. guest handshake
+15. USB claim
 
 Then assert zero remaining resources or a specific recoverable cleanup record.
 

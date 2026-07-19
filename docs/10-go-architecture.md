@@ -141,6 +141,31 @@ close invalidate and clear it as well. The
 private key is never converted to a Go string and the transient buffer is
 cleared after success, failure or cancellation.
 
+`internal/network` is the sole owner of deterministic per-session network
+allocation. It derives bounded netns, veth, TAP and nftables names only from an
+already validated opaque session ID, searches at most 64 deterministic address
+slots, and reserves a slot before mutation. The Linux adapter exposes semantic
+operations only; `ip`, `nft` and `sysctl` paths have exact package-controlled
+basenames, output is bounded, stderr is discarded, and nftables transactions
+arrive through stdin. A generic nonzero tool status is never interpreted as
+resource absence. Cleanup first inventories exact names, attempts every resource
+that creation may have touched, and releases ownership only after a final exact
+inventory proves absence.
+
+One lifecycle mutex is acquired before a network state becomes visible. It
+serializes provisioning, scoped TAP/static-address/VPN-config handoffs and the
+idempotent cleanup owner. Cleanup invalidates readiness immediately, uses its
+own bounded context after accepting the request, keeps all attempt markers
+until the final audit passes, and destroys the copied endpoint policy before
+releasing the slot. The TAP has already moved into the session namespace before
+`WithTAP` supplies a scoped duplicated descriptor and closes that parent-side
+duplicate on callback return; trusted callbacks must not duplicate it again.
+The QEMU process owner must terminate the child before network cleanup, so its
+inherited descriptor cannot outlive the VM lifecycle.
+No API reveals namespace/interface names, static addresses, endpoint tuples or
+raw rule text. Only the aggregate `network-status.schema.json` inspection is
+serializable.
+
 ## Volatile secret contract
 
 `internal/secret.Bytes` is a bounded handle to shared private state. Copying the

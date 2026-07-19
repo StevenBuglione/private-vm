@@ -1,0 +1,7 @@
+{
+  "schema_version": 1,
+  "ready": true,
+  "ipv4_endpoint_count": 1,
+  "ipv6_endpoint_count": 1,
+  "tap_ready": true
+}

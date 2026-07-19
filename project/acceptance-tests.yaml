@@ -316,8 +316,8 @@
           "id": "VPN-002",
           "name": "Host endpoint allowlist",
           "given": "guest clear interface",
-          "when": "guest targets non-Proton public or LAN address",
-          "then": "host namespace drops traffic"
+          "when": "the exact guest source targets the resolved Proton UDP tuple or any spoofed, non-Proton, DNS, public, LAN or metadata destination over IPv4 or IPv6",
+          "then": "only the exact Proton tuple is forwarded/NATed and every other path is dropped before QEMU readiness"
         },
         {
           "id": "VPN-003",
