@@ -70,7 +70,7 @@ Any device outside the role allowlist is a launch validation failure.
 
 Use a typed `LaunchSpec` and render one argument per field. The renderer validates:
 
-- absolute executable path
+- canonical, directly referenced executable path with trusted owner and modes
 - known machine and CPU mode
 - bounded vCPU/RAM
 - unique, daemon-owned socket paths
@@ -81,6 +81,13 @@ Use a typed `LaunchSpec` and render one argument per field. The renderer validat
 - no TCP monitor/display
 - no user-provided raw arguments
 - no secret values
+
+The runtime rejects a symlinked executable, a group/other-writable executable,
+or an executable whose parent is not trusted. After `Start`, it compares the
+child's `/proc/<pid>/exe` device/inode to that verified file before accepting
+the process. Session IDs, VM names, disk serials, TAP names, socket paths,
+memory alignment and VSOCK CIDs are bounded typed values rather than raw QEMU
+arguments.
 
 Representative conceptual flags:
 
@@ -125,6 +132,20 @@ The daemon:
 All QMP JSON is size-bounded and decoded with strict expected shapes. Unknown
 events may be logged safely but cannot drive state transitions.
 
+QMP and SPICE destinations must be absent beneath an exact daemon-owned `0700`
+session directory. The launcher waits for each Unix socket, pins its expected
+owner/type and changes it to `0600` before use. QMP frames, queued events,
+greeting fields and error descriptions are bounded; unknown JSON fields,
+ambiguous envelopes, mismatched request IDs and trailing documents fail closed.
+The accepted Unix connection's `SO_PEERCRED` PID must equal the verified QEMU
+child PID and its UID/GID must equal the daemon. A separate non-consuming poll
+watch detects QMP hangup/error even while no command is active; losing QMP
+triggers bounded process termination and requests the same session cleanup
+owner used for client-initiated stop. Canceled contexts interrupt blocked reads
+and writes. Cleanup removes a socket
+relative to an opened parent directory only after revalidating its type, owner,
+mode and parent identity, so it never unlinks a caller-substituted path.
+
 ## PID ownership
 
 Use pidfds where available. Store:
@@ -140,9 +161,14 @@ identity.
 The supervisor requires pidfd support, records the kernel process start time and
 the executable device/inode, and places QEMU in a delegated child of the
 daemon's cgroups-v2 scope with memory, swap, CPU, and PID limits. Shutdown uses
-QMP `system_powerdown` followed by bounded TERM/KILL escalation. One goroutine
+QMP `system_powerdown`, bounded `quit`, and bounded TERM/KILL escalation. A
+canceled stop caller does not abandon that escalation. One goroutine
 owns `Wait`; cgroup and pidfd cleanup run from that owner after expected and
-unexpected exits.
+unexpected exits, and runtime socket cleanup is part of the same owner.
+The session actor acquires the verified base/overlay image lease immediately
+before launch and releases it only after process cleanup. If QMP disconnects or
+QEMU exits unexpectedly, the supervisor submits daemon-owned cleanup; client
+death cannot revoke it.
 
 The argument renderer is role-aware. Exporter specs reject SPICE, GPU, network,
 audio, and quarantine devices. Scanner scan specs require `-nic none` and one
