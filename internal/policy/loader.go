@@ -17,10 +17,11 @@ const (
 	SchemaVersion     = 1
 	maximumPolicySize = 1 << 20
 	maximumInputBytes = uint64(1 << 40)
+	maximumSingleFile = uint64(4 << 30)
 	maximumFiles      = uint64(1_000_000)
-	maximumExpanded   = uint64(4 << 40)
+	maximumExpanded   = uint64(4 << 30)
 	maximumRatio      = 1000.0
-	maximumTimeout    = uint64(24 * 60 * 60)
+	maximumTimeout    = uint64(300)
 )
 
 var policyNamePattern = regexp.MustCompile(`^[a-z][a-z0-9-]{1,31}$`)
@@ -43,6 +44,7 @@ type Policy struct {
 
 type Limits struct {
 	maxInputBytes      uint64
+	maxSingleFileBytes uint64
 	maxFiles           uint64
 	maxArchiveDepth    uint32
 	maxExpansionRatio  float64
@@ -57,6 +59,7 @@ func (p Policy) Limits() Limits     { return p.limits }
 func (p Policy) Rules() Rules       { return p.rules }
 
 func (l Limits) MaxInputBytes() uint64      { return l.maxInputBytes }
+func (l Limits) MaxSingleFileBytes() uint64 { return l.maxSingleFileBytes }
 func (l Limits) MaxFiles() uint64           { return l.maxFiles }
 func (l Limits) MaxArchiveDepth() uint32    { return l.maxArchiveDepth }
 func (l Limits) MaxExpansionRatio() float64 { return l.maxExpansionRatio }
@@ -73,6 +76,7 @@ type wirePolicy struct {
 
 type wireLimits struct {
 	MaxInputBytes      uint64  `toml:"max_input_bytes" json:"max_input_bytes"`
+	MaxSingleFileBytes uint64  `toml:"max_single_file_bytes" json:"max_single_file_bytes"`
 	MaxFiles           uint64  `toml:"max_files" json:"max_files"`
 	MaxArchiveDepth    uint32  `toml:"max_archive_depth" json:"max_archive_depth"`
 	MaxExpansionRatio  float64 `toml:"max_expansion_ratio" json:"max_expansion_ratio"`
@@ -100,6 +104,7 @@ func policyFromWire(value wirePolicy) Policy {
 		mode:          value.Mode,
 		limits: Limits{
 			maxInputBytes:      value.Limits.MaxInputBytes,
+			maxSingleFileBytes: value.Limits.MaxSingleFileBytes,
 			maxFiles:           value.Limits.MaxFiles,
 			maxArchiveDepth:    value.Limits.MaxArchiveDepth,
 			maxExpansionRatio:  value.Limits.MaxExpansionRatio,
@@ -126,7 +131,9 @@ func (p Policy) wire() wirePolicy {
 	return wirePolicy{
 		SchemaVersion: p.schemaVersion, Name: p.name, Mode: p.mode,
 		Limits: wireLimits{
-			MaxInputBytes: p.limits.maxInputBytes, MaxFiles: p.limits.maxFiles,
+			MaxInputBytes:      p.limits.maxInputBytes,
+			MaxSingleFileBytes: p.limits.maxSingleFileBytes,
+			MaxFiles:           p.limits.maxFiles,
 			MaxArchiveDepth:    p.limits.maxArchiveDepth,
 			MaxExpansionRatio:  p.limits.maxExpansionRatio,
 			MaxExpandedBytes:   p.limits.maxExpandedBytes,
@@ -161,6 +168,8 @@ func (p Policy) Validate() error {
 	}
 	limits := p.limits
 	if limits.maxInputBytes == 0 || limits.maxInputBytes > maximumInputBytes ||
+		limits.maxSingleFileBytes == 0 || limits.maxSingleFileBytes > maximumSingleFile ||
+		limits.maxSingleFileBytes > limits.maxInputBytes ||
 		limits.maxFiles == 0 || limits.maxFiles > maximumFiles ||
 		limits.maxArchiveDepth > 10 ||
 		math.IsNaN(limits.maxExpansionRatio) || math.IsInf(limits.maxExpansionRatio, 0) ||
@@ -345,7 +354,7 @@ func completePolicyDocument(document map[string]any) bool {
 	if !ok {
 		return false
 	}
-	for _, field := range []string{"max_input_bytes", "max_files", "max_archive_depth", "max_expansion_ratio", "max_expanded_bytes", "scan_timeout_seconds"} {
+	for _, field := range []string{"max_input_bytes", "max_single_file_bytes", "max_files", "max_archive_depth", "max_expansion_ratio", "max_expanded_bytes", "scan_timeout_seconds"} {
 		if _, ok := limits[field]; !ok {
 			return false
 		}

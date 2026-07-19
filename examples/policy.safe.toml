@@ -4,11 +4,12 @@ mode = "safe"
 
 [limits]
 max_input_bytes = 536870912000
+max_single_file_bytes = 4294967296
 max_files = 100000
 max_archive_depth = 3
 max_expansion_ratio = 100.0
-max_expanded_bytes = 1073741824000
-scan_timeout_seconds = 14400
+max_expanded_bytes = 4294967296
+scan_timeout_seconds = 300
 
 [rules]
 reject_on_malware = true

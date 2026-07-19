@@ -25,6 +25,11 @@ func TestPolicyExamplesLoadAndMatchFixedSemantics(t *testing.T) {
 				!loaded.Rules().RejectOnSkippedFile() || !loaded.Rules().RejectEncrypted() {
 				t.Fatal("mandatory fail-closed rule was disabled")
 			}
+			limits := loaded.Limits()
+			if limits.MaxInputBytes() != 536870912000 || limits.MaxSingleFileBytes() != maximumSingleFile ||
+				limits.MaxExpandedBytes() != maximumExpanded || limits.ScanTimeoutSeconds() != maximumTimeout {
+				t.Fatalf("scanner-compatible limits drifted: %#v", limits)
+			}
 			if name == "safe" && (!loaded.Rules().SanitizeDocuments() || !loaded.Rules().ReencodeMedia() || !loaded.Rules().StripMetadata()) {
 				t.Fatal("safe reconstruction rule was disabled")
 			}
@@ -69,7 +74,8 @@ func TestPolicyRejectsUnknownSecretAndWeakening(t *testing.T) {
 func TestPolicyRequiresEveryDocumentedField(t *testing.T) {
 	quarantine := readExample(t, "policy.quarantine.toml")
 	for _, line := range []string{
-		"name = \"quarantine\"\n", "max_archive_depth = 3\n", "block_executables = false\n",
+		"name = \"quarantine\"\n", "max_single_file_bytes = 4294967296\n",
+		"max_archive_depth = 3\n", "block_executables = false\n",
 	} {
 		_, err := Decode(strings.NewReader(strings.Replace(quarantine, line, "", 1)))
 		if Code(err) != "POLICY_PARSE" {
@@ -81,15 +87,26 @@ func TestPolicyRequiresEveryDocumentedField(t *testing.T) {
 func TestPolicyLimitsFailClosed(t *testing.T) {
 	safe := readExample(t, "policy.safe.toml")
 	for _, replacement := range []struct{ old, new string }{
+		{"max_single_file_bytes = 4294967296", "max_single_file_bytes = 4294967297"},
 		{"max_files = 100000", "max_files = 0"},
 		{"max_archive_depth = 3", "max_archive_depth = 11"},
 		{"max_expansion_ratio = 100.0", "max_expansion_ratio = 1001.0"},
-		{"scan_timeout_seconds = 14400", "scan_timeout_seconds = 29"},
+		{"max_expanded_bytes = 4294967296", "max_expanded_bytes = 4294967297"},
+		{"scan_timeout_seconds = 300", "scan_timeout_seconds = 301"},
+		{"scan_timeout_seconds = 300", "scan_timeout_seconds = 29"},
 	} {
 		_, err := Decode(strings.NewReader(strings.Replace(safe, replacement.old, replacement.new, 1)))
 		if Code(err) != "POLICY_LIMIT" {
 			t.Fatalf("got %v for %s", err, replacement.new)
 		}
+	}
+}
+
+func TestPolicyRejectsSingleFileLimitAboveCumulativeInput(t *testing.T) {
+	safe := readExample(t, "policy.safe.toml")
+	safe = strings.Replace(safe, "max_input_bytes = 536870912000", "max_input_bytes = 1024", 1)
+	if _, err := Decode(strings.NewReader(safe)); Code(err) != "POLICY_LIMIT" {
+		t.Fatalf("got %v, want single-file/cumulative limit rejection", err)
 	}
 }
 

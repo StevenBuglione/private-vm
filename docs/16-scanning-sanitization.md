@@ -52,18 +52,30 @@ Before opening through desktop applications:
 ## ClamAV
 
 Use a configured `clamd` Unix socket or one-time `clamscan`. `clamd` is preferred
-for multiple files after definitions load.
+after definitions load, but guestd submits and accounts for one regular file at
+a time; recursive directory and multi-file batch submissions are forbidden.
 
 Explicitly configure:
 
 - official database only where required
-- file-size limit above policy maximum
-- scan-size limit above archive policy
+- a 4 GiB ClamAV file-size ceiling matched exactly by
+  `limits.max_single_file_bytes`
+- a 4 GiB ClamAV scan-size ceiling matched by the maximum total expanded
+  archive work
 - recursion depth
 - archive scanning
 - heuristic alerts
 - encrypted-content alerts
-- timeouts
+- a 300-second ClamAV one-file invocation ceiling matched by
+  `limits.scan_timeout_seconds`
+
+`limits.max_input_bytes` is the cumulative selected/quarantine-capacity bound;
+it may be larger than 4 GiB only when every individual regular file remains at
+or below `max_single_file_bytes`. `scan_timeout_seconds` bounds each one-file
+ClamAV invocation, including process/RPC completion; the same ceiling is set as
+ClamAV's internal per-file limit. The complete inventory, reconstruction and
+report workflow has a separate bounded orchestration deadline and cannot
+reinterpret this field as an unbounded session allowance.
 
 The report parser treats:
 
@@ -92,6 +104,10 @@ Before extraction, list archive entries and reject:
 - excessive path length
 - excessive declared size
 - unsupported encryption
+
+The sum of all expanded archive members and temporary archive work is bounded
+to `limits.max_expanded_bytes`, which is at most 4 GiB in v1 even when the
+encrypted quarantine contains a larger cumulative selection.
 
 After extraction:
 
