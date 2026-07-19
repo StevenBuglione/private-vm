@@ -47,15 +47,22 @@ func TestInspectQuarantineFormatAcceptsOnlyBlankOrExt4(t *testing.T) {
 }
 
 func TestParseQuarantineMountEvidenceFailsClosed(t *testing.T) {
-	valid := []byte("42 1 253:7 / /mnt/quarantine rw,nosuid,nodev,noexec - ext4 /dev/vdb rw\n")
+	sandbox := "41 1 8:1 /mnt/quarantine /mnt/quarantine rw,relatime shared:2 master:1 - ext4 /dev/vda rw\n"
+	valid := []byte(sandbox + "42 41 253:7 / /mnt/quarantine rw,nosuid,nodev,noexec - ext4 /dev/vdb rw\n")
 	mounted, err := parseQuarantineMountEvidence(valid, 253, 7, "/mnt/quarantine")
 	if err != nil || !mounted {
 		t.Fatalf("valid mount evidence: mounted=%v err=%v", mounted, err)
+	}
+	mounted, err = parseQuarantineMountEvidence([]byte(sandbox), 253, 7, "/mnt/quarantine")
+	if err != nil || mounted {
+		t.Fatalf("trusted systemd staging bind: mounted=%v err=%v", mounted, err)
 	}
 
 	for name, raw := range map[string][]byte{
 		"device elsewhere": []byte("42 1 253:7 / /mnt/other rw,nosuid,nodev,noexec - ext4 /dev/vdb rw\n"),
 		"target occupied":  []byte("42 1 253:8 / /mnt/quarantine rw,nosuid,nodev,noexec - ext4 /dev/vdc rw\n"),
+		"foreign bind":     []byte("42 1 8:1 /other /mnt/quarantine rw - ext4 /dev/vda rw\n"),
+		"readonly staging": []byte("42 1 8:1 /mnt/quarantine /mnt/quarantine ro - ext4 /dev/vda rw\n"),
 		"missing noexec":   []byte("42 1 253:7 / /mnt/quarantine rw,nosuid,nodev - ext4 /dev/vdb rw\n"),
 		"wrong filesystem": []byte("42 1 253:7 / /mnt/quarantine rw,nosuid,nodev,noexec - xfs /dev/vdb rw\n"),
 	} {

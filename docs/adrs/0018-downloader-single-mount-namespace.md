@@ -35,11 +35,15 @@ TERM/KILL escalation and reaps the child; partial starts and canceled operations
 retain ownership until cleanup succeeds. qBittorrent is not represented as a
 second systemd service.
 
-The quarantine mount path is not a guestd `ReadWritePaths=` entry, because that
-entry would install the conflicting bind mount. The newly mounted filesystem is
-the only writable payload tree. Downloader guestd uses read-only home
-protection; the child can read LightDM's Xauthority file but its XDG writable
-paths remain limited to volatile `/run` and quarantine.
+The quarantine mount path is a guestd `ReadWritePaths=` entry so systemd creates
+an exact writable self-bind beneath the otherwise read-only image. The mount
+owner recognizes only the root-equals-target, writable self-bind as trusted
+staging and does not treat it as quarantine evidence; any foreign device or
+bind at the target remains a conflict. The verified quarantine device is
+mounted over that staging path and is the only writable payload tree.
+Downloader guestd uses read-only home protection; the child can read LightDM's
+Xauthority file but its XDG writable paths remain limited to volatile `/run`
+and quarantine.
 
 ## Consequences
 

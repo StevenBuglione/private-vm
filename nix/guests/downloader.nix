@@ -48,6 +48,7 @@ in
     "d /run/private-vm-qbittorrent 0750 root users -"
   ];
   systemd.services.private-vm-guestd.serviceConfig.ReadWritePaths = [
+    quarantineMount
     "/run/private-vm-qbittorrent"
   ];
   systemd.services.private-vm-guestd.serviceConfig.ProtectHome = lib.mkForce "read-only";

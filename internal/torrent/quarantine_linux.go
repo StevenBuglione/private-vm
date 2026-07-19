@@ -279,7 +279,17 @@ func parseQuarantineMountEvidence(raw []byte, major, minor uint32, mountPath str
 		}
 		deviceMatches := string(fields[2]) == prefix
 		targetMatches := string(fields[4]) == mountPath
-		if deviceMatches != targetMatches {
+		if targetMatches && !deviceMatches {
+			// systemd realizes ReadWritePaths beneath ProtectSystem=strict as an
+			// exact bind of the directory to itself before making the surrounding
+			// image read-only. This trusted staging mount is required so guestd can
+			// mount the verified quarantine over it. It is not quarantine evidence.
+			if string(fields[3]) == mountPath && strings.Contains(","+string(fields[5])+",", ",rw,") {
+				continue
+			}
+			return false, errors.New("quarantine mount ownership conflict")
+		}
+		if deviceMatches && !targetMatches {
 			return false, errors.New("quarantine mount ownership conflict")
 		}
 		if !deviceMatches {
