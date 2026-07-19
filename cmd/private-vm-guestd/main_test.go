@@ -69,3 +69,20 @@ func TestCurrentVersionGenericBuildFailsClosed(t *testing.T) {
 		t.Fatalf("generic currentVersion() = %#v", record)
 	}
 }
+
+func TestComposeExporterFailsClosedWithoutFixedPathAdapter(t *testing.T) {
+	token, err := guest.TokenFromBytes(make([]byte, guest.TokenSize))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(token.Destroy)
+	identity := guest.Identity{
+		Role: session.RoleExporter, ImageDigest: "sha256:" + strings.Repeat("a", 64),
+		SourceCommit: strings.Repeat("b", 40), BootNonce: append([]byte{1}, make([]byte, guest.BootNonceSize-1)...),
+		OSRelease: "26.05", GuestdVersion: "test",
+	}
+	config, service, err := composeGuestServerConfig(identity, token)
+	if err == nil || service != nil || config.Exporter != nil {
+		t.Fatalf("generic exporter composition did not fail closed: config=%#v service=%v err=%v", config, service, err)
+	}
+}

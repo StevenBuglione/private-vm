@@ -114,6 +114,8 @@ func composeGuestServerConfig(identity guest.Identity, token *guest.Token) (gues
 		return config, nil, nil
 	case session.RoleScanner:
 		// Continue below and install only the scanner service compiled for this role.
+	case session.RoleExporter:
+		return guest.ServerConfig{}, nil, errors.New("fixed-path exporter LUKS2/ext4 adapter is not configured")
 	default:
 		return config, nil, nil
 	}

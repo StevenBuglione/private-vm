@@ -38,6 +38,7 @@ type Service struct {
 	VPNResolver           *vpn.EndpointResolver
 	USBEnrollments        USBEnrollmentStore
 	USBClaims             USBClaimCoordinator
+	USBWorkflows          USBWorkflowOrchestrator
 	Roles                 RoleOrchestrator
 	Torrents              TorrentOrchestrator
 	roleOperations        *roleOperationSet
@@ -54,6 +55,7 @@ type USBEnrollmentStore interface {
 
 type USBClaimCoordinator interface {
 	Claim(context.Context, string, uint32, usb.Enrollment) (usb.Claim, error)
+	Revalidate(context.Context, string, string, uint32, usb.Enrollment) (usb.Claim, error)
 	Release(context.Context, string, string, uint32) error
 	CleanupSession(context.Context, string, uint32) error
 	AuditAbsent(context.Context, string, string, uint32) error
@@ -729,6 +731,8 @@ var unarySessionRequirement = map[string]bool{
 	privatevmv1.PrivateVMDaemonService_AbortSession_FullMethodName:          true,
 	privatevmv1.PrivateVMDaemonService_CleanupSession_FullMethodName:        true,
 	privatevmv1.PrivateVMDaemonService_ClaimUSB_FullMethodName:              true,
+	privatevmv1.PrivateVMDaemonService_PlanUSBPreparation_FullMethodName:    true,
+	privatevmv1.PrivateVMDaemonService_ExportApprovedToUSB_FullMethodName:   true,
 	privatevmv1.PrivateVMDaemonService_ReleaseUSB_FullMethodName:            true,
 }
 

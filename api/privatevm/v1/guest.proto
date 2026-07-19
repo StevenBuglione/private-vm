@@ -49,9 +49,9 @@ service ScannerGuestService {
 
 service ExporterGuestService {
   rpc InspectUSB(ExporterRequest) returns (USBStatus);
-  rpc PrepareUSB(PrepareUSBRequest) returns (USBStatus);
-  rpc WriteFile(stream TransferFrame) returns (TransferReceipt);
-  rpc VerifyFile(VerifyExportRequest) returns (TransferReceipt);
+  rpc PrepareUSB(stream PrepareUSBFrame) returns (USBStatus);
+  rpc WriteFile(stream TransferFrame) returns (USBTransferReceipt);
+  rpc VerifyFile(VerifyExportRequest) returns (USBTransferReceipt);
   rpc FinalizeUSB(ExporterRequest) returns (USBStatus);
 }
 
@@ -119,7 +119,46 @@ message GuestExportFileRequest { GuestContext context = 1; string output_id = 2;
 message MarkExportVerifiedRequest { GuestContext context = 1; string output_id = 2; Hash digest = 3; }
 message NetworkWarningRequest { GuestContext context = 1; string warning_code = 2; }
 
-message ExporterRequest { GuestContext context = 1; }
-message PrepareUSBRequest { GuestContext context = 1; bool destructive_confirmed = 2; }
+message USBDeviceExpectation {
+  string enrollment_id = 1;
+  string vendor_id = 2;
+  string product_id = 3;
+  string serial = 4;
+  uint64 capacity_bytes = 5;
+}
+message ExporterRequest {
+  GuestContext context = 1;
+  USBDeviceExpectation expected_device = 2;
+}
+message PrepareUSBBegin {
+  GuestContext context = 1;
+  USBDeviceExpectation expected_device = 2;
+}
+message PrepareUSBSecretChunk { bytes data = 1; }
+message PrepareUSBFrame {
+  oneof frame {
+    PrepareUSBBegin begin = 1;
+    PrepareUSBSecretChunk passphrase_chunk = 2;
+  }
+}
 message VerifyExportRequest { GuestContext context = 1; string transfer_id = 2; }
-message USBStatus { bool no_network = 1; bool mounted = 2; bool flushed = 3; bool unmounted = 4; repeated Diagnostic diagnostics = 5; }
+message USBTransferReceipt {
+  string transfer_id = 1;
+  FileDescriptor descriptor = 2;
+  Hash receiver_digest = 3;
+  Hash reread_digest = 4;
+  bool file_synced = 5;
+  bool filesystem_synced = 6;
+  bool atomic_rename = 7;
+}
+message USBStatus {
+  bool no_network = 1;
+  bool mounted = 2;
+  bool flushed = 3;
+  bool unmounted = 4;
+  repeated Diagnostic diagnostics = 5;
+  bool identity_verified = 6;
+  bool luks2 = 7;
+  bool ext4 = 8;
+  bool luks_closed = 9;
+}
