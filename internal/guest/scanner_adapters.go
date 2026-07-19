@@ -73,16 +73,24 @@ type ScannerReceiptStore interface {
 	Load(context.Context) (scan.UpdateReceipt, error)
 }
 
+// ScannerOfflineBootStager makes the immutable scanner-offline Nix
+// specialisation the next boot target. It exposes no path, boot entry, command
+// or argument supplied by an RPC caller.
+type ScannerOfflineBootStager interface {
+	Stage(context.Context) error
+}
+
 // CoreScannerDefinitions binds the source scanner definition manager to an
 // independently probed boot and an overlay-backed receipt store.
 type CoreScannerDefinitions struct {
 	Manager scan.DefinitionManager
 	Probe   ScannerBootProbe
 	Store   ScannerReceiptStore
+	Stager  ScannerOfflineBootStager
 }
 
 func (adapter CoreScannerDefinitions) Update(ctx context.Context) (scan.UpdateReceipt, error) {
-	if adapter.Probe == nil || adapter.Store == nil {
+	if adapter.Probe == nil || adapter.Store == nil || adapter.Stager == nil {
 		return scan.UpdateReceipt{}, scannerAdapterUnavailable("definition update")
 	}
 	boot, err := adapter.Probe.Evidence(ctx)
@@ -95,6 +103,9 @@ func (adapter CoreScannerDefinitions) Update(ctx context.Context) (scan.UpdateRe
 	}
 	if err := adapter.Store.Save(ctx, receipt); err != nil {
 		return scan.UpdateReceipt{}, scannerAdapterError("SCANNER_RECEIPT_WRITE_FAILED", "Definition evidence could not be committed to the retained overlay.", "Destroy the scanner and repeat the online update boot.", err)
+	}
+	if err := adapter.Stager.Stage(ctx); err != nil {
+		return scan.UpdateReceipt{}, err
 	}
 	return receipt, nil
 }

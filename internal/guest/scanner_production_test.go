@@ -24,14 +24,18 @@ type recordingScannerCommand struct {
 }
 
 type failedStartScannerCommand struct {
-	calls [][]string
-	cause error
+	calls     [][]string
+	cause     error
+	stopCause error
 }
 
 func (command *failedStartScannerCommand) Run(_ context.Context, path string, arguments []string, _ uint64) ([]byte, error) {
 	command.calls = append(command.calls, append([]string{path}, arguments...))
 	if slices.Contains(arguments, "start") {
 		return nil, command.cause
+	}
+	if slices.Contains(arguments, "stop") {
+		return nil, command.stopCause
 	}
 	return nil, nil
 }
@@ -130,14 +134,66 @@ func TestProductionDefinitionUpdaterStopsFixedUnitAfterFailureCancellationAndTim
 	}
 }
 
+func TestProductionOfflineBootStagerUsesOnlyFixedUnit(t *testing.T) {
+	command := &recordingScannerCommand{}
+	stager := productionScannerOfflineBootStager{command: command, systemctl: "/fixed/systemctl"}
+	if err := stager.Stage(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	want := [][]string{{"/fixed/systemctl", "start", productionScannerOfflineUnit}}
+	if !slices.EqualFunc(command.calls, want, func(left, right []string) bool { return slices.Equal(left, right) }) {
+		t.Fatalf("fixed command sequence = %#v", command.calls)
+	}
+}
+
+func TestProductionOfflineBootStagerCleansFailureCancellationAndTimeout(t *testing.T) {
+	for _, test := range []struct {
+		name     string
+		cause    error
+		wantCode string
+	}{
+		{name: "failure", cause: errors.New("injected"), wantCode: "SCANNER_OFFLINE_BOOT_STAGE_FAILED"},
+		{name: "cancellation", cause: context.Canceled},
+		{name: "timeout", cause: context.DeadlineExceeded},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			command := &failedStartScannerCommand{cause: test.cause}
+			stager := productionScannerOfflineBootStager{command: command, systemctl: "/fixed/systemctl"}
+			err := stager.Stage(t.Context())
+			if test.wantCode != "" {
+				if scan.ErrorCode(err) != test.wantCode {
+					t.Fatalf("Stage() error = %v", err)
+				}
+			} else if !errors.Is(err, test.cause) {
+				t.Fatalf("Stage() error = %v, want %v", err, test.cause)
+			}
+			if len(command.calls) != 2 || !slices.Equal(command.calls[1], []string{"/fixed/systemctl", "stop", productionScannerOfflineUnit}) {
+				t.Fatalf("failure cleanup calls = %#v", command.calls)
+			}
+		})
+	}
+}
+
+func TestProductionOfflineBootStagerFailsClosedWhenCleanupCannotConverge(t *testing.T) {
+	command := &failedStartScannerCommand{cause: errors.New("start failed"), stopCause: errors.New("stop failed")}
+	stager := productionScannerOfflineBootStager{command: command, systemctl: "/fixed/systemctl"}
+	if err := stager.Stage(t.Context()); scan.ErrorCode(err) != "SCANNER_OFFLINE_BOOT_STAGE_CLEANUP_INCOMPLETE" {
+		t.Fatalf("Stage() error = %v", err)
+	}
+}
+
 func TestProductionUpdateBootProbeRequiresScopedVPNMarkerAndPersistsOverlayIdentity(t *testing.T) {
 	directory := t.TempDir()
 	phase := filepath.Join(directory, "phase.json")
+	bootMode := filepath.Join(directory, "boot-mode")
 	if err := os.WriteFile(phase, []byte(`{"schema_version":1,"role":"scanner","phase":"definitions-update","network_device_policy":"proton-only","quarantine_device_policy":"forbidden","definitions_update":"enabled"}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
+	if err := os.WriteFile(bootMode, []byte("definitions-update"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	probe := &productionScannerBootProbe{
-		phasePath: phase, stateDirectory: directory,
+		phasePath: phase, bootModePath: bootMode, stateDirectory: directory,
 		quarantineRoot: filepath.Join(directory, "absent-mount"), quarantineDevice: filepath.Join(directory, "absent-device"),
 	}
 	unverified, err := probe.Evidence(t.Context())
@@ -155,6 +211,70 @@ func TestProductionUpdateBootProbeRequiresScopedVPNMarkerAndPersistsOverlayIdent
 		t.Fatalf("verified update evidence = %#v", verified)
 	}
 }
+
+func TestProductionBootProbeRejectsMissingUnknownAndMismatchedQEMUMode(t *testing.T) {
+	directory := t.TempDir()
+	phase := filepath.Join(directory, "phase.json")
+	if err := os.WriteFile(phase, []byte(`{"schema_version":1,"role":"scanner","phase":"definitions-update","network_device_policy":"proton-only","quarantine_device_policy":"forbidden","definitions_update":"enabled"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, test := range []struct {
+		name string
+		mode *string
+	}{
+		{name: "missing"},
+		{name: "unknown", mode: stringPointer("arbitrary")},
+		{name: "mismatch", mode: stringPointer("scan-offline")},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			bootMode := filepath.Join(t.TempDir(), "boot-mode")
+			if test.mode != nil {
+				if err := os.WriteFile(bootMode, []byte(*test.mode), 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			probe := &productionScannerBootProbe{
+				phasePath: phase, bootModePath: bootMode, stateDirectory: directory,
+				quarantineRoot: filepath.Join(directory, "absent-mount"), quarantineDevice: filepath.Join(directory, "absent-device"),
+			}
+			if _, err := probe.Evidence(t.Context()); scan.ErrorCode(err) != "SCANNER_BOOT_MODE_MISMATCH" {
+				t.Fatalf("Evidence() error = %v", err)
+			}
+		})
+	}
+}
+
+func TestScannerBootModeAcceptsOnlyExactQEMUStringEncoding(t *testing.T) {
+	for _, test := range []struct {
+		name    string
+		content []byte
+		want    string
+	}{
+		{name: "raw", content: []byte("scan-offline"), want: "scan-offline"},
+		{name: "qemu-nul", content: append([]byte("definitions-update"), 0), want: "definitions-update"},
+		{name: "newline", content: []byte("scan-offline\n")},
+		{name: "two-nuls", content: append([]byte("scan-offline"), 0, 0)},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "boot-mode")
+			if err := os.WriteFile(path, test.content, 0o600); err != nil {
+				t.Fatal(err)
+			}
+			got, err := loadScannerBootMode(path)
+			if test.want == "" {
+				if err == nil {
+					t.Fatalf("loadScannerBootMode() = %q", got)
+				}
+				return
+			}
+			if err != nil || got != test.want {
+				t.Fatalf("loadScannerBootMode() = %q, %v", got, err)
+			}
+		})
+	}
+}
+
+func stringPointer(value string) *string { return &value }
 
 type productionCleanScanner struct{}
 

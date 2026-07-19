@@ -164,9 +164,37 @@ in
     };
   };
 
-  # The unprivileged guest daemon may manage only the two fixed units required
-  # by its authenticated definition-update RPC. It receives no generic unit or
-  # command authorization.
+  # After the authenticated update receipt is committed to this scanner root
+  # overlay, guestd may invoke this one fixed root-owned transition. The NixOS
+  # switch tool records the immutable scan-offline specialisation as the boot
+  # default on the same overlay; no RPC field can select a path or boot entry.
+  systemd.services.private-vm-scanner-stage-offline = {
+    wantedBy = [ ];
+    restartIfChanged = false;
+    serviceConfig = {
+      Type = "oneshot";
+      ExecStart = "/run/current-system/specialisation/scan-offline/bin/switch-to-configuration boot";
+      RemainAfterExit = true;
+      LimitCORE = 0;
+      MemoryMax = "256M";
+      ProtectClock = true;
+      ProtectControlGroups = true;
+      ProtectHostname = true;
+      ProtectKernelLogs = true;
+      ProtectKernelModules = true;
+      ProtectKernelTunables = true;
+      StandardOutput = "null";
+      StandardError = "null";
+      TasksMax = 32;
+      TimeoutStartSec = "2min";
+      TimeoutStopSec = "30s";
+      UMask = "0077";
+    };
+  };
+
+  # The unprivileged guest daemon may manage only the three fixed operations
+  # required by its authenticated definition-update RPC. It receives no
+  # generic unit, boot-entry or command authorization.
   security.polkit.enable = true;
   security.polkit.extraConfig = ''
     polkit.addRule(function(action, subject) {
@@ -177,7 +205,8 @@ in
       var unit = action.lookup("unit");
       var verb = action.lookup("verb");
       if ((unit == "private-vm-scanner-definitions-update.service" && (verb == "start" || verb == "stop")) ||
-          (unit == "clamav-daemon.service" && verb == "restart")) {
+          (unit == "clamav-daemon.service" && verb == "restart") ||
+          (unit == "private-vm-scanner-stage-offline.service" && (verb == "start" || verb == "stop"))) {
         return polkit.Result.YES;
       }
       return polkit.Result.NOT_HANDLED;

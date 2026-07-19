@@ -89,6 +89,13 @@ the process. Session IDs, VM names, disk serials, TAP names, socket paths,
 memory alignment and VSOCK CIDs are bounded typed values rather than raw QEMU
 arguments.
 
+Scanner specs additionally render exactly one non-secret boot-mode `fw_cfg`
+item. Update mode maps only to `definitions-update`; scan mode maps only to
+`scan-offline`; unknown modes and any scanner mode on another role are launch
+validation failures. The scanner guest compares this host intent with its
+immutable Nix phase document, while same-overlay identity and device isolation
+remain independent evidence.
+
 Representative conceptual flags:
 
 ```text

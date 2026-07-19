@@ -268,6 +268,13 @@ opaque transfer ID, and feeding the bounded stream into the existing
 through its own session actor and owns cleanup until the scanner has stopped;
 no host path or generic RPC surface crosses either abstraction.
 
+The scanner definition adapter commits the verified update receipt before
+calling a narrow `ScannerOfflineBootStager`. The production implementation can
+only start the image-owned offline-staging unit; it cannot accept a unit, Nix
+path, boot entry or argument from RPC. The QEMU package separately renders the
+closed scanner boot-mode enum, and the production boot probe compares its
+`fw_cfg` value with the immutable scanner phase document.
+
 ## Volatile secret contract
 
 `internal/secret.Bytes` is a bounded handle to shared private state. Copying the

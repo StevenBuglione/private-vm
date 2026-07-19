@@ -196,14 +196,17 @@ The production scanner-runtime unit gate additionally proves the sealed
 quarantine lease blocks downloader storage cleanup, the same scanner root
 storage is reused across both boots, the update boot completes the full typed
 VPN and host-egress sequence before its scanner client is available, and QEMU
-renders update as NIC/no-quarantine then scan as no-NIC/read-only-quarantine.
-Failure, cancellation and timeout return the same idempotent cleanup owner.
+renders update as NIC/no-quarantine with `definitions-update` boot intent, then
+scan as no-NIC/read-only-quarantine with `scan-offline` boot intent. Failure,
+cancellation and timeout return the same idempotent cleanup owner.
 
 Focused production guest-adapter tests prove the fixed FreshClam/clamscan/clamd
 unit order, complete official receipt evidence, per-overlay identity retention,
-the scoped VPN context gate, bounded one-output text reconstruction and
-idempotent volatile cleanup. A malicious ZIP traversal fixture becomes a
-blocking finding rather than an extracted path or promotion.
+the scoped VPN context gate, receipt-before-offline-staging order, fixed-unit
+staging failure/cancellation/timeout cleanup, QEMU-mode/Nix-phase agreement,
+bounded one-output text reconstruction and idempotent volatile cleanup. A
+malicious ZIP traversal fixture becomes a blocking finding rather than an
+extracted path or promotion.
 
 The WS-002 production promotion gate proves that only the sole output in a
 complete approved report is requested, scanner framing is bounded and rejects
@@ -399,9 +402,13 @@ and 16 GiB maintainer-host budget:
   a real credential.
   It also proves no FreshClam service/timer is present and the fixed guestd-owned
   definitions oneshot is disabled and inactive before authenticated RPC use.
+  It verifies the offline specialisation switch exists and its fixed staging
+  oneshot is disabled and inactive before authenticated RPC use.
 - `scanner-offline` uses explicit QEMU `-nic none`, verifies zero non-loopback
   interfaces, attaches one read-only ext4 fixture, verifies the block read-only
   bit and `ro,nodev,nosuid,noexec` mount flags, then proves writing fails.
+  The update and offline boots inject their exact typed `fw_cfg` phase values;
+  offline also proves neither update nor staging unit is present.
 
 Both scanner boots verify the compiled `scanner` role and the exact advertised
 common-plus-scanner capability list. They also reject SSH/sudo, credential

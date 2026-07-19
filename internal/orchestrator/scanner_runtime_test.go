@@ -227,7 +227,8 @@ func TestScannerQEMUDeviceShapesAreOnlineWithoutQuarantineThenOfflineReadOnly(t 
 	}
 	updateArgs, _ := updateSpec.Args()
 	updateJoined := strings.Join(updateArgs, " ")
-	if !updateSpec.Networked || len(updateSpec.Data) != 0 || !strings.Contains(updateJoined, "-netdev") || strings.Contains(updateJoined, "quarantine") || strings.Contains(updateJoined, "-nic none") {
+	if !updateSpec.Networked || len(updateSpec.Data) != 0 || !strings.Contains(updateJoined, "-netdev") || strings.Contains(updateJoined, "quarantine") || strings.Contains(updateJoined, "-nic none") ||
+		!strings.Contains(updateJoined, "name=opt/private-vm/scanner-boot-mode,string=definitions-update") || strings.Contains(updateJoined, "scan-offline") {
 		t.Fatalf("unsafe scanner update device graph: %s", updateJoined)
 	}
 
@@ -242,7 +243,8 @@ func TestScannerQEMUDeviceShapesAreOnlineWithoutQuarantineThenOfflineReadOnly(t 
 	offlineArgs, _ := offlineSpec.Args()
 	offlineJoined := strings.Join(offlineArgs, " ")
 	if offlineSpec.Networked || len(offlineSpec.Data) != 1 || !offlineSpec.Data[0].ReadOnly ||
-		!strings.Contains(offlineJoined, "-nic none") || !strings.Contains(offlineJoined, "readonly=on") || !strings.Contains(offlineJoined, "quarantine") || strings.Contains(offlineJoined, "-netdev") {
+		!strings.Contains(offlineJoined, "-nic none") || !strings.Contains(offlineJoined, "readonly=on") || !strings.Contains(offlineJoined, "quarantine") || strings.Contains(offlineJoined, "-netdev") ||
+		!strings.Contains(offlineJoined, "name=opt/private-vm/scanner-boot-mode,string=scan-offline") || strings.Contains(offlineJoined, "definitions-update") {
 		t.Fatalf("unsafe scanner offline device graph: %s", offlineJoined)
 	}
 }

@@ -374,6 +374,12 @@ service starts but every affected operation fails with
 `SCANNER_TOOLCHAIN_UNAVAILABLE`; it never replaces a missing check with a
 successful result.
 
+`UpdateDefinitions` succeeds only after the receipt is atomically committed and
+the fixed `scan-offline` Nix specialisation is staged as the next boot target.
+The request contains no boot entry, unit, path or argument. On both scanner
+boots, guestd also requires QEMU's typed `fw_cfg` boot-mode expectation to match
+the immutable image phase before returning boot evidence.
+
 Scanner progress streams disclose only a fixed operation, counts, units and
 stable finding codes. They do not disclose logical names, hashes, tool output or
 malware signature text. `Reconstruct` creates and authenticates the canonical

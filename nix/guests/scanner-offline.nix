@@ -9,6 +9,7 @@
   services.resolved.enable = lib.mkForce false;
   services.clamav.updater.enable = lib.mkForce false;
   systemd.services.private-vm-scanner-definitions-update.enable = lib.mkForce false;
+  systemd.services.private-vm-scanner-stage-offline.enable = lib.mkForce false;
   fileSystems."/mnt/quarantine" = {
     device = "/dev/disk/by-id/virtio-quarantine";
     fsType = "ext4";

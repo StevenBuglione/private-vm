@@ -27,7 +27,10 @@ Then scanner shuts down. Its root overlay is retained only for the same session.
 The image has no automatic FreshClam timer or boot-started updater. The daemon
 exposes the definitions client only after the typed scanner VPN configure and
 verify RPCs plus host egress proof succeed. The fixed updater oneshot is
-reserved for the serialized guestd `UpdateDefinitions` adapter.
+reserved for the serialized guestd `UpdateDefinitions` adapter. After the
+receipt is atomically committed, that adapter invokes one fixed root-owned unit
+which records the immutable `scan-offline` Nix specialisation as the next boot
+default on the same overlay. No caller chooses a boot entry or command.
 
 ## Offline scan boot
 
@@ -39,6 +42,7 @@ The daemon launches the same scanner overlay:
 - guest verifies no non-loopback interfaces
 - guest verifies block device read-only
 - mount options `ro,nodev,nosuid,noexec`
+- QEMU's typed `scan-offline` boot expectation matches the immutable guest phase
 
 A failure is non-overridable.
 
@@ -224,6 +228,9 @@ to shell. The update receipt binds current official ClamAV evidence to one
 opaque scanner-overlay identity. The offline verifier requires that same
 overlay, no non-loopback interface, one read-only quarantine attachment and
 the exact sorted mount options `nodev,noexec,nosuid,ro`.
+The production probe also requires the fixed QEMU `fw_cfg` scanner mode to
+equal the phase embedded by the booted Nix configuration. Missing, unknown or
+mismatched mode evidence blocks update and scan operations.
 
 Inventory uses descriptor-relative Linux traversal with `openat2` beneath the
 quarantine root. It never follows links, crosses a mount boundary or invokes a

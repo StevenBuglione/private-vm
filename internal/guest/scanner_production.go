@@ -26,12 +26,14 @@ import (
 const (
 	productionScannerStateDirectory = "/var/lib/private-vm/scanner"
 	productionScannerPhasePath      = "/etc/private-vm/scanner-phase.json"
+	productionScannerBootModePath   = "/sys/firmware/qemu_fw_cfg/by_name/opt/private-vm/scanner-boot-mode/raw"
 	productionScannerPolicyPath     = "/etc/private-vm/policy.safe.toml"
 	productionScannerToolchainPath  = "/etc/private-vm/scanner-toolchain.json"
 	productionScannerQuarantine     = "/mnt/quarantine"
 	productionScannerDevice         = "/dev/disk/by-id/virtio-quarantine"
 	productionScannerSandbox        = "/run/private-vm/scanner-sandbox"
 	productionScannerClamdSocket    = "/run/clamav/clamd.ctl"
+	productionScannerOfflineUnit    = "private-vm-scanner-stage-offline.service"
 	maximumScannerMetadataBytes     = 256 << 10
 )
 
@@ -40,6 +42,7 @@ var clamVersionPattern = regexp.MustCompile(`^ClamAV ([A-Za-z0-9._+-]{1,128})/([
 type ProductionScannerConfig struct {
 	StateDirectory string
 	PhasePath      string
+	BootModePath   string
 	PolicyPath     string
 	ToolchainPath  string
 	QuarantineRoot string
@@ -103,7 +106,8 @@ func (output *boundedScannerOutput) Write(value []byte) (int, error) {
 func DefaultProductionScannerConfig() ProductionScannerConfig {
 	return ProductionScannerConfig{
 		StateDirectory: productionScannerStateDirectory,
-		PhasePath:      productionScannerPhasePath, PolicyPath: productionScannerPolicyPath,
+		PhasePath:      productionScannerPhasePath, BootModePath: productionScannerBootModePath,
+		PolicyPath:    productionScannerPolicyPath,
 		ToolchainPath: productionScannerToolchainPath, QuarantineRoot: productionScannerQuarantine,
 		QuarantineDev: productionScannerDevice, SandboxRoot: productionScannerSandbox,
 		ClamdSocket: productionScannerClamdSocket,
@@ -151,7 +155,8 @@ func NewProductionScannerService(identity Identity, reportKey *Token, configurat
 	}
 	clamd := scan.ClamdClient{Dial: dialer, MaxInputBytes: selectedPolicy.Limits().MaxSingleFileBytes()}
 	probe := &productionScannerBootProbe{
-		phasePath: configuration.PhasePath, stateDirectory: configuration.StateDirectory,
+		phasePath: configuration.PhasePath, bootModePath: configuration.BootModePath,
+		stateDirectory: configuration.StateDirectory,
 		quarantineRoot: configuration.QuarantineRoot, quarantineDevice: configuration.QuarantineDev,
 	}
 	definitions := CoreScannerDefinitions{
@@ -163,6 +168,9 @@ func NewProductionScannerService(identity Identity, reportKey *Token, configurat
 			Now: configuration.Now, MaximumAge: scan.DefaultMaximumDefinitionAge,
 		},
 		Probe: probe, Store: productionReceiptStore{directory: configuration.StateDirectory},
+		Stager: productionScannerOfflineBootStager{
+			command: configuration.Command, systemctl: configuration.Systemctl,
+		},
 	}
 	documentProbe, err := scan.NewCommandDocumentProbe(configuration.PDFInfo, versions["poppler-utils"])
 	if err != nil {
@@ -217,6 +225,9 @@ func normalizeProductionScannerConfig(configuration ProductionScannerConfig) Pro
 	if configuration.PhasePath == "" {
 		configuration.PhasePath = defaults.PhasePath
 	}
+	if configuration.BootModePath == "" {
+		configuration.BootModePath = defaults.BootModePath
+	}
 	if configuration.PolicyPath == "" {
 		configuration.PolicyPath = defaults.PolicyPath
 	}
@@ -256,7 +267,8 @@ func normalizeProductionScannerConfig(configuration ProductionScannerConfig) Pro
 
 func validateProductionScannerConfig(configuration ProductionScannerConfig) error {
 	paths := []string{
-		configuration.StateDirectory, configuration.PhasePath, configuration.PolicyPath, configuration.ToolchainPath,
+		configuration.StateDirectory, configuration.PhasePath, configuration.BootModePath,
+		configuration.PolicyPath, configuration.ToolchainPath,
 		configuration.QuarantineRoot, configuration.QuarantineDev, configuration.SandboxRoot, configuration.ClamdSocket,
 		configuration.Systemctl, configuration.Clamscan, configuration.File, configuration.PDFInfo,
 		configuration.Ghostscript, configuration.LibreOffice, configuration.FFmpeg, configuration.FFprobe,
@@ -323,6 +335,39 @@ type productionDefinitionUpdater struct {
 	clamscan          string
 	databaseDirectory string
 	now               func() time.Time
+}
+
+// productionScannerOfflineBootStager exposes exactly one image-owned action:
+// make the immutable scan-offline Nix specialisation the next boot target.
+// The RPC caller cannot supply a unit, command, path or argument.
+type productionScannerOfflineBootStager struct {
+	command   ScannerCommandRunner
+	systemctl string
+}
+
+func (stager productionScannerOfflineBootStager) Stage(ctx context.Context) error {
+	if ctx == nil || stager.command == nil || stager.systemctl == "" {
+		return scannerAdapterUnavailable("offline boot stager")
+	}
+	if _, err := stager.command.Run(ctx, stager.systemctl, []string{"start", productionScannerOfflineUnit}, 4096); err != nil {
+		cleanupContext, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		_, cleanupErr := stager.command.Run(cleanupContext, stager.systemctl, []string{"stop", productionScannerOfflineUnit}, 4096)
+		cancel()
+		if cleanupErr != nil {
+			return &scan.Error{
+				Code: "SCANNER_OFFLINE_BOOT_STAGE_CLEANUP_INCOMPLETE", Message: "The failed offline boot selection could not be stopped completely.",
+				Remediation: "Destroy the scanner so its VM cleanup owner removes the retained overlay.",
+			}
+		}
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return err
+		}
+		return &scan.Error{
+			Code: "SCANNER_OFFLINE_BOOT_STAGE_FAILED", Message: "The scanner offline specialisation could not be selected for the next boot.",
+			Remediation: "Destroy the scanner and repeat its online update boot with the verified scanner image.",
+		}
+	}
+	return nil
 }
 
 func (updater productionDefinitionUpdater) Update(ctx context.Context) (scan.DefinitionEvidence, error) {
@@ -471,6 +516,7 @@ type scannerPhaseDocument struct {
 
 type productionScannerBootProbe struct {
 	phasePath        string
+	bootModePath     string
 	stateDirectory   string
 	quarantineRoot   string
 	quarantineDevice string
@@ -489,6 +535,13 @@ func (probe *productionScannerBootProbe) Evidence(ctx context.Context) (scan.Boo
 	phase, err := loadScannerPhase(probe.phasePath)
 	if err != nil {
 		return scan.BootEvidence{}, err
+	}
+	bootMode, err := loadScannerBootMode(probe.bootModePath)
+	if err != nil || bootMode != phase.Phase {
+		return scan.BootEvidence{}, &scan.Error{
+			Code: "SCANNER_BOOT_MODE_MISMATCH", Message: "The scanner boot selection does not match the immutable guest phase.",
+			Remediation: "Destroy the scanner and relaunch the verified scanner phase through the private-vm daemon.",
+		}
 	}
 	interfaces, err := net.Interfaces()
 	if err != nil || len(interfaces) == 0 {
@@ -547,6 +600,25 @@ func loadScannerPhase(path string) (scannerPhaseDocument, error) {
 		return scannerPhaseDocument{}, scannerAdapterUnavailable("scanner boot phase")
 	}
 	return document, nil
+}
+
+func loadScannerBootMode(path string) (string, error) {
+	data, err := readBoundedPseudoFile(path, 32)
+	if err != nil {
+		return "", err
+	}
+	defer clear(data)
+	// QEMU string-backed fw_cfg entries may include their single terminating
+	// NUL. Accept that representation only; whitespace and additional bytes
+	// remain invalid.
+	if data[len(data)-1] == 0 {
+		data = data[:len(data)-1]
+	}
+	mode := string(data)
+	if mode != "definitions-update" && mode != "scan-offline" {
+		return "", errors.New("invalid scanner boot mode")
+	}
+	return mode, nil
 }
 
 func scannerOverlayIdentity(directory string, create bool) (string, error) {

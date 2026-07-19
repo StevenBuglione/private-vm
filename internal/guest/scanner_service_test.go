@@ -29,6 +29,7 @@ func TestScannerRPCUpdateRebootOfflineScanReconstructReportAndExport(t *testing.
 	baseTime := time.Date(2026, 7, 19, 12, 0, 0, 0, time.UTC)
 	manager := scan.DefinitionManager{Now: func() time.Time { return baseTime.Add(time.Hour) }}
 	store := &memoryScannerReceiptStore{}
+	offlineBootStaged := false
 	updateDefinitions := CoreScannerDefinitions{
 		Manager: manager,
 		Probe: bootProbeFunc(func(context.Context) (scan.BootEvidence, error) {
@@ -37,7 +38,15 @@ func TestScannerRPCUpdateRebootOfflineScanReconstructReportAndExport(t *testing.
 				Interfaces: []scan.InterfaceEvidence{{Name: "eth0"}},
 			}, nil
 		}),
-		Store: store,
+		Store: store, Stager: offlineBootStagerFunc(func(context.Context) error {
+			store.mu.Lock()
+			defer store.mu.Unlock()
+			if !store.written {
+				return errors.New("offline boot staged before receipt commit")
+			}
+			offlineBootStaged = true
+			return nil
+		}),
 	}
 	updateDefinitions.Manager.Updater = definitionUpdaterFunc(func(context.Context) (scan.DefinitionEvidence, error) {
 		return scan.DefinitionEvidence{
@@ -60,6 +69,9 @@ func TestScannerRPCUpdateRebootOfflineScanReconstructReportAndExport(t *testing.
 	}
 	if !updated.GetCurrent() || updated.GetDatabaseVersion() != "official-1234" || updated.GetUpdatedUnixSeconds() != baseTime.Unix() {
 		t.Fatalf("definition status = %#v", updated)
+	}
+	if !offlineBootStaged {
+		t.Fatal("offline boot was not staged after the receipt commit")
 	}
 	if _, err := updateClient.GetDefinitionsStatus(t.Context(), scannerRequest("")); err != nil {
 		t.Fatalf("GetDefinitionsStatus() = %v", err)
@@ -204,7 +216,8 @@ func TestScannerRPCRejectsOutOfOrderPolicyChangeAndRedactsAdapterErrors(t *testi
 	marker := "private-secret-file-name"
 	definitions := CoreScannerDefinitions{
 		Manager: scan.DefinitionManager{}, Store: &memoryScannerReceiptStore{},
-		Probe: bootProbeFunc(func(context.Context) (scan.BootEvidence, error) { return scan.BootEvidence{}, errors.New(marker) }),
+		Probe:  bootProbeFunc(func(context.Context) (scan.BootEvidence, error) { return scan.BootEvidence{}, errors.New(marker) }),
+		Stager: offlineBootStagerFunc(func(context.Context) error { return nil }),
 	}
 	service := newScannerServiceForTest(t, token, scannerTestAdapters{
 		definitions: definitions, isolation: unavailableScannerAdapters{}, inventory: unavailableScannerAdapters{},
@@ -442,6 +455,12 @@ func (store *memoryScannerReceiptStore) Load(ctx context.Context) (scan.UpdateRe
 type bootProbeFunc func(context.Context) (scan.BootEvidence, error)
 
 func (function bootProbeFunc) Evidence(ctx context.Context) (scan.BootEvidence, error) {
+	return function(ctx)
+}
+
+type offlineBootStagerFunc func(context.Context) error
+
+func (function offlineBootStagerFunc) Stage(ctx context.Context) error {
 	return function(ctx)
 }
 

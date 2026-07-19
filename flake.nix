@@ -839,7 +839,10 @@
             virtualisation.memorySize = 2048;
             virtualisation.cores = 2;
             virtualisation.vlans = [ 1 ];
-            virtualisation.qemu.options = tcgQEMUOptionsFor system;
+            virtualisation.qemu.options = tcgQEMUOptionsFor system ++ [
+              "-fw_cfg"
+              "name=opt/private-vm/scanner-boot-mode,string=definitions-update"
+            ];
           };
           testScript = ''
             import json
@@ -859,6 +862,9 @@
             machine.succeed("! systemctl list-unit-files --no-legend clamav-freshclam.timer | grep -F clamav-freshclam.timer")
             machine.succeed("systemctl is-disabled private-vm-scanner-definitions-update.service")
             machine.succeed("! systemctl is-active private-vm-scanner-definitions-update.service")
+            machine.succeed("test $(systemctl is-enabled private-vm-scanner-stage-offline.service) = static")
+            machine.succeed("! systemctl is-active private-vm-scanner-stage-offline.service")
+            machine.succeed("test -x /run/current-system/specialisation/scan-offline/bin/switch-to-configuration")
             machine.succeed("systemctl is-active NetworkManager.service")
             machine.succeed("test $(find /sys/class/net -mindepth 1 -maxdepth 1 ! -name lo | wc -l) -ge 1")
             machine.succeed("jq -e '.phase == \"definitions-update\" and .network_device_policy == \"proton-only\" and .quarantine_device_policy == \"forbidden\"' /etc/private-vm/scanner-phase.json")
@@ -944,6 +950,8 @@
             # a later `-nic none`, which cannot remove an already-declared NIC.
             virtualisation.qemu.networkingOptions = lib.mkForce [ "-nic none" ];
             virtualisation.qemu.options = tcgQEMUOptionsFor system ++ [
+              "-fw_cfg"
+              "name=opt/private-vm/scanner-boot-mode,string=scan-offline"
               "-drive"
               "file=${quarantineFixture},if=none,format=raw,readonly=on,id=quarantine"
               "-device"
@@ -963,6 +971,7 @@
             machine.succeed("! systemctl list-unit-files --no-legend clamav-freshclam.service | grep -F clamav-freshclam.service")
             machine.succeed("! systemctl list-unit-files --no-legend clamav-freshclam.timer | grep -F clamav-freshclam.timer")
             machine.succeed("! systemctl list-unit-files --no-legend private-vm-scanner-definitions-update.service | grep -F private-vm-scanner-definitions-update.service")
+            machine.succeed("! systemctl list-unit-files --no-legend private-vm-scanner-stage-offline.service | grep -F private-vm-scanner-stage-offline.service")
             machine.succeed("jq -e '.phase == \"scan-offline\" and .network_device_policy == \"forbidden\" and .quarantine_device_policy == \"required-read-only\" and .quarantine_mount_options == [\"nodev\", \"noexec\", \"nosuid\", \"ro\"] and .definitions_update == \"disabled\"' /etc/private-vm/scanner-phase.json")
             machine.succeed("test -x /run/current-system/sw/bin/startxfce4")
             machine.succeed("test -x /run/current-system/sw/bin/clamscan")
