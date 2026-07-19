@@ -79,6 +79,41 @@ func TestProductionDefinitionUpdaterUsesOnlyFixedUnitsAndCompleteOfficialEvidenc
 	}
 }
 
+func TestProductionDefinitionUpdaterUsesOldestRequiredDatabaseTimestamp(t *testing.T) {
+	directory := t.TempDir()
+	now := time.Date(2026, 7, 19, 20, 0, 0, 0, time.UTC)
+	ages := map[string]time.Duration{
+		"main.cvd":     -time.Hour,
+		"daily.cld":    -48 * time.Hour,
+		"bytecode.cvd": -time.Minute,
+	}
+	for name, age := range ages {
+		path := filepath.Join(directory, name)
+		if err := os.WriteFile(path, []byte("verified-definition-fixture"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Chtimes(path, now.Add(age), now.Add(age)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	updater := productionDefinitionUpdater{
+		command:   &recordingScannerCommand{output: []byte("ClamAV 1.4.3/27660/Sun Jul 19 00:00:00 2026\n")},
+		systemctl: "/fixed/systemctl", clamscan: "/fixed/clamscan",
+		databaseDirectory: directory, now: func() time.Time { return now },
+	}
+	evidence, err := updater.Update(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := now.Add(-48 * time.Hour); !evidence.UpdatedAt.Equal(want) {
+		t.Fatalf("required definition timestamp = %s, want %s", evidence.UpdatedAt, want)
+	}
+	manager := scan.DefinitionManager{Now: func() time.Time { return now }}
+	if code := scan.ErrorCode(manager.ValidateCurrent(evidence)); code != "SCANNER_DEFINITIONS_STALE" {
+		t.Fatalf("stale required daily database was not blocking: %s", code)
+	}
+}
+
 func TestProductionDefinitionUpdaterStopsFixedUnitAfterFailureCancellationAndTimeout(t *testing.T) {
 	for _, test := range []struct {
 		name  string

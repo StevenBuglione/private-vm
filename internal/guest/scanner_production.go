@@ -370,29 +370,35 @@ func (updater productionDefinitionUpdater) evidence(ctx context.Context) (scan.D
 	if len(match) != 3 {
 		return scan.DefinitionEvidence{}, scannerAdapterUnavailable("ClamAV definition identity")
 	}
-	newest := time.Time{}
+	now := updater.now().UTC()
+	oldest := time.Time{}
 	for _, base := range []string{"main", "daily", "bytecode"} {
-		var found bool
+		selected := time.Time{}
 		for _, extension := range []string{"cvd", "cld"} {
 			path := filepath.Join(updater.databaseDirectory, base+"."+extension)
 			info, statErr := os.Stat(path)
 			if statErr == nil && info.Mode().IsRegular() && info.Size() > 0 {
-				found = true
-				if info.ModTime().After(newest) {
-					newest = info.ModTime().UTC()
+				modified := info.ModTime().UTC()
+				if modified.After(selected) {
+					selected = modified
 				}
 			}
 		}
-		if !found {
+		if selected.IsZero() {
 			return scan.DefinitionEvidence{}, scannerAdapterUnavailable("official ClamAV databases")
 		}
+		if selected.After(now.Add(5 * time.Minute)) {
+			return scan.DefinitionEvidence{}, scannerAdapterUnavailable("ClamAV database timestamp")
+		}
+		if oldest.IsZero() || selected.Before(oldest) {
+			oldest = selected
+		}
 	}
-	now := updater.now().UTC()
-	if newest.IsZero() || newest.After(now.Add(5*time.Minute)) {
+	if oldest.IsZero() {
 		return scan.DefinitionEvidence{}, scannerAdapterUnavailable("ClamAV database timestamp")
 	}
 	return scan.DefinitionEvidence{
-		EngineVersion: string(match[1]), DatabaseVersion: string(match[2]), UpdatedAt: newest,
+		EngineVersion: string(match[1]), DatabaseVersion: string(match[2]), UpdatedAt: oldest,
 		Official: true, Compatible: true, Complete: true,
 	}, nil
 }

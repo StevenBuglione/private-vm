@@ -17,7 +17,9 @@ Required checks:
 - Proton verified
 - `freshclam` successful
 - official databases present
-- database timestamps within policy age
+- every required `main`, `daily`, and `bytecode` database timestamp within
+  policy age; the oldest required timestamp is authoritative, so a newer
+  bytecode database cannot mask stale daily signatures
 - engine/database compatibility
 - no update error or rate-limit ambiguity
 
