@@ -13,10 +13,12 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"slices"
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/StevenBuglione/private-vm/internal/policy"
 	"github.com/StevenBuglione/private-vm/internal/scan"
@@ -37,7 +39,25 @@ const (
 	maximumScannerMetadataBytes     = 256 << 10
 )
 
-var clamVersionPattern = regexp.MustCompile(`^ClamAV ([A-Za-z0-9._+-]{1,128})/([0-9]{1,20})/`)
+var (
+	clamVersionPattern          = regexp.MustCompile(`^ClamAV ([A-Za-z0-9._+-]{1,128})/([0-9]{1,20})/`)
+	scannerToolIDPattern        = regexp.MustCompile(`^[a-z0-9][a-z0-9+._-]*$`)
+	scannerToolPackagePattern   = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9+._-]*$`)
+	scannerToolCommandPattern   = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9+._-]*$`)
+	scannerSourceCommitPattern  = regexp.MustCompile(`^(unknown|[0-9a-f]{40}(-dirty)?)$`)
+	scannerFlakeLockHashPattern = regexp.MustCompile(`^[0-9a-f]{64}$`)
+	productionScannerTools      = []struct {
+		id       string
+		commands []string
+	}{
+		{id: "clamav", commands: []string{"clamd", "clamscan", "freshclam"}},
+		{id: "file", commands: []string{"file"}},
+		{id: "poppler-utils", commands: []string{"pdfinfo"}},
+		{id: "ghostscript", commands: []string{"gs"}},
+		{id: "libreoffice", commands: []string{"libreoffice"}},
+		{id: "ffmpeg", commands: []string{"ffmpeg", "ffprobe"}},
+	}
+)
 
 type ProductionScannerConfig struct {
 	StateDirectory string
@@ -137,7 +157,7 @@ func NewProductionScannerService(identity Identity, reportKey *Token, configurat
 			return nil, err
 		}
 	}
-	versions, err := loadScannerToolVersions(configuration.ToolchainPath)
+	toolchain, err := loadScannerToolchain(configuration.ToolchainPath)
 	if err != nil {
 		return nil, err
 	}
@@ -172,23 +192,23 @@ func NewProductionScannerService(identity Identity, reportKey *Token, configurat
 			command: configuration.Command, systemctl: configuration.Systemctl,
 		},
 	}
-	documentProbe, err := scan.NewCommandDocumentProbe(configuration.PDFInfo, versions["poppler-utils"])
+	documentProbe, err := scan.NewCommandDocumentProbe(configuration.PDFInfo, toolchain.versions["poppler-utils"])
 	if err != nil {
 		return nil, err
 	}
-	mediaProbe, err := scan.NewCommandMediaProbe(configuration.FFprobe, versions["ffmpeg"])
+	mediaProbe, err := scan.NewCommandMediaProbe(configuration.FFprobe, toolchain.versions["ffmpeg"])
 	if err != nil {
 		return nil, err
 	}
-	pdf, err := scan.PDFRasterTransformer(configuration.Ghostscript, versions["ghostscript"])
+	pdf, err := scan.PDFRasterTransformer(configuration.Ghostscript, toolchain.versions["ghostscript"])
 	if err != nil {
 		return nil, err
 	}
-	media, err := scan.MediaReencodeTransformer(configuration.FFmpeg, versions["ffmpeg"])
+	media, err := scan.MediaReencodeTransformer(configuration.FFmpeg, toolchain.versions["ffmpeg"])
 	if err != nil {
 		return nil, err
 	}
-	office, err := scan.NewLibreOfficeTransformer(configuration.LibreOffice, versions["libreoffice"], configuration.SandboxRoot)
+	office, err := scan.NewLibreOfficeTransformer(configuration.LibreOffice, toolchain.versions["libreoffice"], configuration.SandboxRoot)
 	if err != nil {
 		return nil, err
 	}
@@ -199,7 +219,11 @@ func NewProductionScannerService(identity Identity, reportKey *Token, configurat
 	reconstruction := &productionScannerReconstruction{
 		root: configuration.QuarantineRoot, sandbox: sandbox, classifier: classifier, scanner: clamd,
 		pdf: pdf, office: office, media: media, documentProbe: documentProbe, mediaProbe: mediaProbe,
-		outputs: make(map[string]*scan.ReconstructedOutput),
+		toolchain: toolchain, outputs: make(map[string]*scan.ReconstructedOutput),
+	}
+	baseTools, err := toolchain.evidence("clamav", "file")
+	if err != nil {
+		return nil, err
 	}
 	return NewScannerService(ScannerServiceConfig{
 		Identity: identity, Definitions: definitions,
@@ -213,7 +237,7 @@ func NewProductionScannerService(identity Identity, reportKey *Token, configurat
 			}
 			return selectedPolicy, nil
 		}),
-		Now: configuration.Now, ControlTimeout: 5 * time.Minute,
+		Tools: baseTools, Now: configuration.Now, ControlTimeout: 5 * time.Minute,
 	}, reportKey)
 }
 
@@ -285,48 +309,130 @@ func validateProductionScannerConfig(configuration ProductionScannerConfig) erro
 }
 
 type scannerToolchainDocument struct {
-	SchemaVersion            int    `json:"schema_version"`
-	Project                  string `json:"project"`
-	Role                     string `json:"role"`
-	Architecture             string `json:"architecture"`
-	SourceCommit             string `json:"source_commit"`
-	FlakeLockSHA256          string `json:"flake_lock_sha256"`
-	ArchiveExecutionContract string `json:"archive_execution_contract"`
-	Tools                    []struct {
-		ID       string   `json:"id"`
-		Package  string   `json:"package"`
-		Version  string   `json:"version"`
-		Commands []string `json:"commands"`
-		Purpose  string   `json:"purpose"`
-	} `json:"tools"`
+	SchemaVersion            int                    `json:"schema_version"`
+	Project                  string                 `json:"project"`
+	Role                     string                 `json:"role"`
+	Architecture             string                 `json:"architecture"`
+	SourceCommit             string                 `json:"source_commit"`
+	FlakeLockSHA256          string                 `json:"flake_lock_sha256"`
+	ArchiveExecutionContract string                 `json:"archive_execution_contract"`
+	Tools                    []scannerToolchainTool `json:"tools"`
 }
 
-func loadScannerToolVersions(path string) (map[string]string, error) {
+type scannerToolchainTool struct {
+	ID       string   `json:"id"`
+	Package  string   `json:"package"`
+	Version  string   `json:"version"`
+	Commands []string `json:"commands"`
+	Purpose  string   `json:"purpose"`
+}
+
+type productionScannerToolchain struct{ versions map[string]string }
+
+func loadScannerToolchain(path string) (productionScannerToolchain, error) {
 	data, err := readFixedRegular(path, maximumScannerMetadataBytes)
 	if err != nil {
-		return nil, scannerAdapterUnavailable("scanner tool manifest")
+		return productionScannerToolchain{}, scannerAdapterUnavailable("scanner tool manifest")
 	}
 	defer clear(data)
 	decoder := json.NewDecoder(bytes.NewReader(data))
 	decoder.DisallowUnknownFields()
 	var document scannerToolchainDocument
 	if err := decoder.Decode(&document); err != nil || decoder.Decode(&struct{}{}) != io.EOF || document.SchemaVersion != 1 || document.Project != "private-vm" ||
-		document.Role != "scanner" || document.ArchiveExecutionContract != "guestd-bounded-unprivileged-private-namespace" || len(document.Tools) == 0 || len(document.Tools) > 256 {
-		return nil, scannerAdapterUnavailable("scanner tool manifest")
+		document.Role != "scanner" || document.Architecture != scannerManifestArchitecture() || !scannerSourceCommitPattern.MatchString(document.SourceCommit) ||
+		!scannerFlakeLockHashPattern.MatchString(document.FlakeLockSHA256) || document.ArchiveExecutionContract != "guestd-bounded-unprivileged-private-namespace" ||
+		len(document.Tools) == 0 || len(document.Tools) > 64 {
+		return productionScannerToolchain{}, scannerAdapterUnavailable("scanner tool manifest")
 	}
 	versions := make(map[string]string, len(document.Tools))
 	for _, tool := range document.Tools {
-		if tool.ID == "" || tool.Version == "" || len(tool.ID) > 64 || len(tool.Version) > 128 || strings.ContainsAny(tool.ID+tool.Version, "\x00\r\n") || versions[tool.ID] != "" {
-			return nil, scannerAdapterUnavailable("scanner tool manifest")
+		if !validScannerToolRecord(tool) || versions[tool.ID] != "" {
+			return productionScannerToolchain{}, scannerAdapterUnavailable("scanner tool manifest")
 		}
 		versions[tool.ID] = tool.Version
 	}
-	for _, required := range []string{"poppler-utils", "ffmpeg", "ghostscript", "libreoffice"} {
-		if versions[required] == "" {
-			return nil, scannerAdapterUnavailable("scanner tool manifest")
+	for _, required := range productionScannerTools {
+		if versions[required.id] == "" {
+			return productionScannerToolchain{}, scannerAdapterUnavailable("scanner tool manifest")
+		}
+		commands := scannerToolCommands(document.Tools, required.id)
+		for _, command := range required.commands {
+			if !slices.Contains(commands, command) {
+				return productionScannerToolchain{}, scannerAdapterUnavailable("scanner tool manifest")
+			}
 		}
 	}
-	return versions, nil
+	return productionScannerToolchain{versions: versions}, nil
+}
+
+func validScannerToolRecord(tool scannerToolchainTool) bool {
+	if len(tool.ID) == 0 || len(tool.ID) > 64 || !scannerToolIDPattern.MatchString(tool.ID) ||
+		len(tool.Package) == 0 || len(tool.Package) > 128 || !scannerToolPackagePattern.MatchString(tool.Package) ||
+		len(tool.Version) == 0 || len(tool.Version) > 128 || !validScannerManifestText(tool.Version, 128) ||
+		len(tool.Purpose) == 0 || len(tool.Purpose) > 256 || !validScannerManifestText(tool.Purpose, 256) ||
+		len(tool.Commands) == 0 || len(tool.Commands) > 32 {
+		return false
+	}
+	seen := make(map[string]struct{}, len(tool.Commands))
+	for _, command := range tool.Commands {
+		if len(command) > 64 || !scannerToolCommandPattern.MatchString(command) {
+			return false
+		}
+		if _, duplicate := seen[command]; duplicate {
+			return false
+		}
+		seen[command] = struct{}{}
+	}
+	return true
+}
+
+func validScannerManifestText(value string, maximum int) bool {
+	if len(value) == 0 || len(value) > maximum || !utf8.ValidString(value) {
+		return false
+	}
+	for _, character := range value {
+		if character < 0x20 || character == 0x7f {
+			return false
+		}
+	}
+	return true
+}
+
+func scannerManifestArchitecture() string {
+	switch runtime.GOARCH {
+	case "amd64":
+		return "x86_64"
+	case "arm64":
+		return "aarch64"
+	default:
+		return "unsupported"
+	}
+}
+
+func scannerToolCommands(tools []scannerToolchainTool, id string) []string {
+	for _, tool := range tools {
+		if tool.ID == id {
+			return tool.Commands
+		}
+	}
+	return nil
+}
+
+func (toolchain productionScannerToolchain) evidence(ids ...string) ([]scan.ToolEvidence, error) {
+	evidence := make([]scan.ToolEvidence, 0, len(ids))
+	seen := make(map[string]struct{}, len(ids))
+	for _, id := range ids {
+		version := toolchain.versions[id]
+		if version == "" {
+			return nil, scannerAdapterUnavailable("scanner tool manifest")
+		}
+		if _, duplicate := seen[id]; duplicate {
+			return nil, scannerAdapterUnavailable("scanner tool manifest")
+		}
+		seen[id] = struct{}{}
+		evidence = append(evidence, scan.ToolEvidence{Name: id, Version: version})
+	}
+	return evidence, nil
 }
 
 type productionDefinitionUpdater struct {
@@ -843,6 +949,7 @@ type productionScannerReconstruction struct {
 	media         scan.Transformer
 	documentProbe scan.DocumentProbe
 	mediaProbe    scan.MediaProbe
+	toolchain     productionScannerToolchain
 	outputs       map[string]*scan.ReconstructedOutput
 	closed        bool
 }
@@ -911,6 +1018,49 @@ func (adapter *productionScannerReconstruction) Reconstruct(ctx context.Context,
 	return result, nil
 }
 
+func (toolchain productionScannerToolchain) reconstructionEvidence(transformation string, observed []scan.ToolEvidence) ([]scan.ToolEvidence, error) {
+	var expected []scan.ToolEvidence
+	var manifestIDs []string
+	version := func(id string) string { return toolchain.versions[id] }
+	switch transformation {
+	case "pdf-raster-rebuild-v1":
+		expected = []scan.ToolEvidence{
+			{Name: "poppler-pdfinfo", Version: version("poppler-utils")},
+			{Name: "ghostscript-pdfimage24", Version: version("ghostscript")},
+			{Name: "poppler-pdfinfo", Version: version("poppler-utils")},
+		}
+		manifestIDs = []string{"poppler-utils", "ghostscript"}
+	case "office-render-pdf-raster-rebuild-v1":
+		expected = []scan.ToolEvidence{
+			{Name: "libreoffice-headless-pdf", Version: version("libreoffice")},
+			{Name: "poppler-pdfinfo", Version: version("poppler-utils")},
+			{Name: "ghostscript-pdfimage24", Version: version("ghostscript")},
+			{Name: "poppler-pdfinfo", Version: version("poppler-utils")},
+		}
+		manifestIDs = []string{"libreoffice", "poppler-utils", "ghostscript"}
+	case "media-full-decode-aac-v1", "media-full-decode-h264-aac-v1":
+		expected = []scan.ToolEvidence{
+			{Name: "ffprobe-json", Version: version("ffmpeg")},
+			{Name: "ffmpeg-h264-aac", Version: version("ffmpeg")},
+			{Name: "ffprobe-json", Version: version("ffmpeg")},
+		}
+		manifestIDs = []string{"ffmpeg"}
+	case "image-decode-strip-reencode-png-v1":
+		expected = []scan.ToolEvidence{{Name: "go-image-png", Version: "go1.26"}}
+	case "text-utf8-line-normalize-v1":
+		expected = []scan.ToolEvidence{{Name: "private-vm-text-normalizer", Version: "1"}}
+	default:
+		return nil, scannerAdapterUnavailable("reconstruction tool evidence")
+	}
+	if !slices.Equal(observed, expected) {
+		return nil, scannerAdapterUnavailable("reconstruction tool evidence")
+	}
+	if len(manifestIDs) == 0 {
+		return slices.Clone(observed), nil
+	}
+	return toolchain.evidence(manifestIDs...)
+}
+
 func (run *productionReconstructionRun) processEntry(ctx context.Context, root string, entry scan.InventoryEntry, reportPath string, depth uint32) error {
 	if err := ctx.Err(); err != nil {
 		return err
@@ -977,7 +1127,12 @@ func (run *productionReconstructionRun) processEntry(ctx context.Context, root s
 		SourceSHA256: entry.SHA256, SizeBytes: output.SizeBytes, SHA256: output.SHA256,
 		DetectedMIME: output.DetectedMIME, Transformation: output.Transformation, RescanVerdict: "CLAMAV_CLEAN",
 	})
-	run.result.Tools = append(run.result.Tools, output.Tools...)
+	toolEvidence, err := run.adapter.toolchain.reconstructionEvidence(output.Transformation, output.Tools)
+	if err != nil {
+		_ = output.Cleanup()
+		return err
+	}
+	run.result.Tools = append(run.result.Tools, toolEvidence...)
 	return nil
 }
 

@@ -2,6 +2,7 @@ package scan
 
 import (
 	"bytes"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -86,6 +87,36 @@ func TestIncompleteRejectedAndInvalidReportsCannotApprove(t *testing.T) {
 	}
 }
 
+func TestReportRequiresUniqueManifestIDsForEveryInvokedExternalTool(t *testing.T) {
+	key := reportTestKey(t, 0x46)
+	tests := []struct {
+		name   string
+		mutate func(*ScanReport)
+	}{
+		{name: "missing-file", mutate: func(report *ScanReport) { report.Tools = report.Tools[0:1] }},
+		{name: "duplicate-id", mutate: func(report *ScanReport) {
+			report.Tools = append(report.Tools, ToolEvidence{Name: "file", Version: "different"})
+			slices.SortFunc(report.Tools, func(left, right ToolEvidence) int {
+				if compared := strings.Compare(left.Name, right.Name); compared != 0 {
+					return compared
+				}
+				return strings.Compare(left.Version, right.Version)
+			})
+		}},
+		{name: "missing-poppler", mutate: func(report *ScanReport) { report.Tools = report.Tools[:3] }},
+		{name: "unknown-transformation", mutate: func(report *ScanReport) { report.SanitizedOutputs[0].Transformation = "caller-selected" }},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			report := validApprovedReport()
+			test.mutate(&report)
+			if _, err := SignReport(report, key); ErrorCode(err) != "REPORT_INCOMPLETE" {
+				t.Fatalf("SignReport() error = %v", err)
+			}
+		})
+	}
+}
+
 func TestDestroyedReportKeyFailsClosed(t *testing.T) {
 	key := reportTestKey(t, 0x45)
 	key.Destroy()
@@ -126,7 +157,12 @@ func validApprovedReport() ScanReport {
 			OutputID: "scan-out-22222222222222222222222222222222", LogicalName: "input.safe.pdf", SourceSHA256: strings.Repeat("a", 64),
 			SizeBytes: 20, SHA256: strings.Repeat("c", 64), DetectedMIME: "application/pdf", Transformation: "pdf-raster-rebuild-v1", RescanVerdict: "CLAMAV_CLEAN",
 		}},
-		Tools:  []ToolEvidence{{Name: "clamav", Version: "1.5.1"}, {Name: "ghostscript-pdfimage24", Version: "10.05.1"}},
+		Tools: []ToolEvidence{
+			{Name: "clamav", Version: "1.5.1"},
+			{Name: "file", Version: "5.46"},
+			{Name: "ghostscript", Version: "10.05.1"},
+			{Name: "poppler-utils", Version: "25.06.0"},
+		},
 		Result: "approved", Complete: true,
 	}
 }

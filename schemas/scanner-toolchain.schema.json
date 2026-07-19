@@ -38,7 +38,33 @@
     "archive_execution_contract",
     "tools"
   ],
+  "allOf": [
+    { "$ref": "#/$defs/requiresClamav" },
+    { "$ref": "#/$defs/requiresFile" },
+    { "$ref": "#/$defs/requiresPoppler" },
+    { "$ref": "#/$defs/requiresGhostscript" },
+    { "$ref": "#/$defs/requiresLibreOffice" },
+    { "$ref": "#/$defs/requiresFFmpeg" }
+  ],
   "$defs": {
+    "requiresClamav": {
+      "properties": { "tools": { "contains": { "properties": { "id": { "const": "clamav" }, "commands": { "allOf": [{ "contains": { "const": "clamd" } }, { "contains": { "const": "clamscan" } }, { "contains": { "const": "freshclam" } }] } }, "required": ["id", "commands"] }, "minContains": 1, "maxContains": 1 } }
+    },
+    "requiresFile": {
+      "properties": { "tools": { "contains": { "properties": { "id": { "const": "file" }, "commands": { "contains": { "const": "file" } } }, "required": ["id", "commands"] }, "minContains": 1, "maxContains": 1 } }
+    },
+    "requiresPoppler": {
+      "properties": { "tools": { "contains": { "properties": { "id": { "const": "poppler-utils" }, "commands": { "contains": { "const": "pdfinfo" } } }, "required": ["id", "commands"] }, "minContains": 1, "maxContains": 1 } }
+    },
+    "requiresGhostscript": {
+      "properties": { "tools": { "contains": { "properties": { "id": { "const": "ghostscript" }, "commands": { "contains": { "const": "gs" } } }, "required": ["id", "commands"] }, "minContains": 1, "maxContains": 1 } }
+    },
+    "requiresLibreOffice": {
+      "properties": { "tools": { "contains": { "properties": { "id": { "const": "libreoffice" }, "commands": { "contains": { "const": "libreoffice" } } }, "required": ["id", "commands"] }, "minContains": 1, "maxContains": 1 } }
+    },
+    "requiresFFmpeg": {
+      "properties": { "tools": { "contains": { "properties": { "id": { "const": "ffmpeg" }, "commands": { "allOf": [{ "contains": { "const": "ffmpeg" } }, { "contains": { "const": "ffprobe" } }] } }, "required": ["id", "commands"] }, "minContains": 1, "maxContains": 1 } }
+    },
     "tool": {
       "type": "object",
       "additionalProperties": false,

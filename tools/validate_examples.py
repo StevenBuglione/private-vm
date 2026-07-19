@@ -262,6 +262,25 @@ unknown_scanner_tool_field["tools"][0]["credential"] = "forbidden"
 negative_cases.append(
     ("unknown scanner tool field", scanner_toolchain_schema, unknown_scanner_tool_field)
 )
+missing_scanner_manifest_id = deepcopy(scanner_toolchain)
+missing_scanner_manifest_id["tools"] = [
+    tool for tool in missing_scanner_manifest_id["tools"] if tool["id"] != "ffmpeg"
+]
+negative_cases.append(
+    ("missing required scanner manifest id", scanner_toolchain_schema, missing_scanner_manifest_id)
+)
+duplicate_scanner_manifest_id = deepcopy(scanner_toolchain)
+duplicate_file_tool = deepcopy(duplicate_scanner_manifest_id["tools"][1])
+duplicate_file_tool["version"] = "different"
+duplicate_scanner_manifest_id["tools"].append(duplicate_file_tool)
+negative_cases.append(
+    ("duplicate scanner manifest id", scanner_toolchain_schema, duplicate_scanner_manifest_id)
+)
+missing_scanner_command = deepcopy(scanner_toolchain)
+missing_scanner_command["tools"][0]["commands"].remove("freshclam")
+negative_cases.append(
+    ("missing required scanner command", scanner_toolchain_schema, missing_scanner_command)
+)
 update_with_quarantine_options = deepcopy(scanner_update_phase)
 update_with_quarantine_options["quarantine_mount_options"] = ["nodev", "noexec", "nosuid", "ro"]
 negative_cases.append(
@@ -371,6 +390,16 @@ negative_cases.append(("USB receipt raw hash", usb_export_receipt_schema, usb_ra
 usb_hash_mismatch = deepcopy(usb_export_receipt)
 usb_hash_mismatch["relay_exporter_hash_equal"] = False
 negative_cases.append(("USB receipt hash mismatch", usb_export_receipt_schema, usb_hash_mismatch))
+missing_report_tool = deepcopy(scan_report)
+missing_report_tool["tools"] = [
+    tool for tool in missing_report_tool["tools"] if tool["name"] != "poppler-utils"
+]
+negative_cases.append(("missing invoked scan report tool", scan_report_schema, missing_report_tool))
+duplicate_report_tool = deepcopy(scan_report)
+duplicate_file_evidence = deepcopy(duplicate_report_tool["tools"][1])
+duplicate_file_evidence["version"] = "different"
+duplicate_report_tool["tools"].append(duplicate_file_evidence)
+negative_cases.append(("duplicate scan report tool", scan_report_schema, duplicate_report_tool))
 
 for label, schema, value in negative_cases:
     if Draft202012Validator(schema).is_valid(value):

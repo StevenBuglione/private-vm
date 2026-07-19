@@ -228,8 +228,10 @@ Focused production guest-adapter tests prove the fixed FreshClam/clamscan/clamd
 unit order, complete official receipt evidence, per-overlay identity retention,
 the scoped VPN context gate, receipt-before-offline-staging order, fixed-unit
 staging failure/cancellation/timeout cleanup, QEMU-mode/Nix-phase agreement,
-bounded one-output text reconstruction and idempotent volatile cleanup.
-Archive fixtures prove a valid nested ZIP is
+strict manifest identity/command parsing, exact conditional report-tool
+composition, bounded one-output text reconstruction and idempotent volatile
+cleanup. Missing required IDs, duplicate IDs or commands, malformed metadata,
+operation aliases and version conflicts all fail closed. Archive fixtures prove a valid nested ZIP is
 extracted, reinventoried, scanned, recursively reconstructed and promoted only
 as its sanitized leaf. Traversal, encryption, expansion-ratio bombs, depth
 exhaustion and member extension/type mismatch become blocking findings; member

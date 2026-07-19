@@ -19,7 +19,9 @@ func NewFailClosedScannerService(identity Identity, reportKey *Token) (*ScannerS
 	return NewScannerService(ScannerServiceConfig{
 		Identity: identity, Definitions: unavailable, Isolation: unavailable,
 		Inventory: unavailable, Malware: unavailable, Reconstruction: unavailable,
-		Policies: unavailable, CleanupTimeout: defaultScannerCleanupTimeout,
+		Policies:       unavailable,
+		Tools:          []scan.ToolEvidence{{Name: "private-vm-guestd", Version: identity.GuestdVersion}},
+		CleanupTimeout: defaultScannerCleanupTimeout,
 	}, reportKey)
 }
 

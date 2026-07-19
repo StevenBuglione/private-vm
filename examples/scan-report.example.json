@@ -65,7 +65,9 @@
   ],
   "tools": [
     { "name": "clamav", "version": "1.5.1" },
-    { "name": "ghostscript-pdfimage24", "version": "10.05.1" }
+    { "name": "file", "version": "5.46" },
+    { "name": "ghostscript", "version": "10.05.1" },
+    { "name": "poppler-utils", "version": "25.06.0" }
   ],
   "result": "approved",
   "complete": true

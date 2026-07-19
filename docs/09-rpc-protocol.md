@@ -460,6 +460,14 @@ HMAC again, accepts only an output ID present in the approved report, rehashes
 the identity-pinned volatile output while streaming chunks of at most 1 MiB,
 and omits the end frame on any size, read or hash mismatch.
 
+The authenticated report uses exact scanner-manifest IDs rather than
+executable aliases. `clamav` and `file` are mandatory; PDF requires
+`poppler-utils` and `ghostscript`, Office additionally requires `libreoffice`,
+and media requires `ffmpeg`. Image/text paths use their fixed Go-native tool
+identities. Each name appears once, with the manifest version copied by the
+production composition; missing, conflicting or malformed evidence blocks the
+report.
+
 The host scanner adapter relays those calls only through an authenticated VSOCK
 client that has passed `Hello`. It verifies the volatile report MAC before
 publishing an aggregate result. A rejected scanner may be powered off while the

@@ -183,8 +183,15 @@ original.
 
 See `schemas/scan-report.schema.json`.
 
-The report includes each tool version and exact decision reason. It remains
-volatile unless the user explicitly exports it.
+The report always includes exact manifest IDs and Nix package versions for
+`clamav` and `file`. It conditionally includes `poppler-utils`, `ghostscript`,
+`libreoffice` and `ffmpeg` when the corresponding PDF, Office or media path
+actually executes. Image and text reconstruction record their reviewed
+Go-native algorithm identities. ZIP and TAR inspection is Go-native in v1, so
+it does not claim that an installed archive executable ran. Tool names are
+unique and sorted; missing, duplicate, malformed or transformation-incomplete
+evidence blocks report authentication. The report remains volatile unless the
+user explicitly exports it.
 
 ## Host orchestration
 
@@ -220,6 +227,11 @@ versions in `/etc/private-vm/scanner-toolchain.json` and repeats those identitie
 in `/etc/private-vm/scanner-sbom.spdx.json`. A missing, empty or mismatched entry
 is an image-build failure; the scanner workflow must copy the verified versions
 into the eventual scan report rather than probing an untracked host tool.
+Production composition additionally requires exactly one manifest record for
+each of `clamav`, `file`, `poppler-utils`, `ghostscript`, `libreoffice` and
+`ffmpeg`, including every command actually invoked by guestd. Architecture,
+source, flake-lock, package, purpose, command and version fields are decoded
+strictly before any scanner service is composed.
 
 ## Source implementation contract
 

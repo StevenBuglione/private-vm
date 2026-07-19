@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	privatevmv1 "github.com/StevenBuglione/private-vm/gen/privatevm/v1"
 	"github.com/StevenBuglione/private-vm/internal/policy"
@@ -105,6 +106,7 @@ type ScannerServiceConfig struct {
 	Malware        ScannerMalwareAdapter
 	Reconstruction ScannerReconstructionAdapter
 	Policies       ScannerPolicyResolver
+	Tools          []scan.ToolEvidence
 	Now            func() time.Time
 	CleanupTimeout time.Duration
 	ControlTimeout time.Duration
@@ -126,6 +128,7 @@ type ScannerService struct {
 	malwareTool    ScannerMalwareAdapter
 	reconstruction ScannerReconstructionAdapter
 	policies       ScannerPolicyResolver
+	tools          []scan.ToolEvidence
 	now            func() time.Time
 	cleanupTimeout time.Duration
 	controlTimeout time.Duration
@@ -158,6 +161,10 @@ func NewScannerService(config ScannerServiceConfig, reportKey *Token) (*ScannerS
 	if config.Definitions == nil || config.Isolation == nil || config.Inventory == nil ||
 		config.Malware == nil || config.Reconstruction == nil || config.Policies == nil {
 		return nil, errors.New("scanner service requires every typed phase adapter")
+	}
+	tools, err := validateConfiguredScannerTools(config.Tools)
+	if err != nil {
+		return nil, err
 	}
 	cleanupTimeout := config.CleanupTimeout
 	if cleanupTimeout == 0 {
@@ -196,7 +203,8 @@ func NewScannerService(config ScannerServiceConfig, reportKey *Token) (*ScannerS
 		definitions: config.Definitions, isolation: config.Isolation,
 		inventoryTool: config.Inventory, malwareTool: config.Malware,
 		reconstruction: config.Reconstruction, policies: config.Policies,
-		now: now, cleanupTimeout: cleanupTimeout, controlTimeout: controlTimeout,
+		tools: tools,
+		now:   now, cleanupTimeout: cleanupTimeout, controlTimeout: controlTimeout,
 		exportTimeout: exportTimeout, maxExportBytes: maxExportBytes,
 		state: scannerStateBoot,
 	}, nil
@@ -674,9 +682,7 @@ func (service *ScannerService) buildReport(sessionID string, selected policy.Pol
 	})
 	outputs := append([]scan.ReportSanitizedOutput(nil), service.reconstructed.Outputs...)
 	sort.Slice(outputs, func(left, right int) bool { return outputs[left].OutputID < outputs[right].OutputID })
-	tools := canonicalTools(append(append([]scan.ToolEvidence(nil), service.reconstructed.Tools...), scan.ToolEvidence{
-		Name: "clamav-engine", Version: service.receipt.Definitions.EngineVersion,
-	}))
+	tools := canonicalTools(append(append([]scan.ToolEvidence(nil), service.tools...), service.reconstructed.Tools...))
 	completedAt := service.now().UTC()
 	result := "approved"
 	if hasBlockingFinding(findings) {
@@ -792,6 +798,35 @@ func canonicalTools(values []scan.ToolEvidence) []scan.ToolEvidence {
 		}
 	}
 	return compacted
+}
+
+func validateConfiguredScannerTools(values []scan.ToolEvidence) ([]scan.ToolEvidence, error) {
+	if len(values) == 0 || len(values) > 256 {
+		return nil, errors.New("scanner service requires bounded tool evidence")
+	}
+	result := canonicalTools(values)
+	if len(result) != len(values) {
+		return nil, errors.New("scanner service tool evidence contains duplicates")
+	}
+	for index, value := range result {
+		if !validScannerToolIdentity(value.Name) || !validScannerToolIdentity(value.Version) ||
+			(index > 0 && result[index-1].Name == value.Name) {
+			return nil, errors.New("scanner service tool evidence is invalid")
+		}
+	}
+	return result, nil
+}
+
+func validScannerToolIdentity(value string) bool {
+	if len(value) == 0 || len(value) > 256 || !utf8.ValidString(value) {
+		return false
+	}
+	for _, character := range value {
+		if character < 0x20 || character == 0x7f {
+			return false
+		}
+	}
+	return true
 }
 
 func hasBlockingFinding(findings []scan.Finding) bool {
