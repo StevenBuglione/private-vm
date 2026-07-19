@@ -69,6 +69,14 @@ immediately before launch.
 
 No generic `--usb` raw argument exists.
 
+The daemon's host claim is a registered exporter-session resource. Exact
+enrollment resolution and the USBGuard-backed acquisition run inside the one
+session actor; successful, failed and canceled allocations all retain one
+idempotent cleanup and absence-audit owner. Explicit release may run before
+session destruction, but the actor repeats the idempotent release/audit during
+final cleanup. Claim and release accept only opaque IDs—not paths, bus/address,
+mount flags or arbitrary USBGuard policy text.
+
 ## Export formats
 
 ### Default: `luks2-ext4`

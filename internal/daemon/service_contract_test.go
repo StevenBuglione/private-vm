@@ -362,13 +362,13 @@ func TestStreamInputsRequireValidContextBeforeUnimplementedBoundary(t *testing.T
 	assertRPCError(t, service.ExportWorkspaceFile(&privatevmv1.ExportWorkspaceRequest{}, &exportFixtureStream{ctx: t.Context()}), codes.FailedPrecondition, "PROTOCOL_VERSION_MISMATCH")
 }
 
-func TestClaimUSBDoesNotPromptBeforeImplementedDestructiveTransition(t *testing.T) {
+func TestClaimUSBUnavailableDoesNotPromptForDestructiveAuthorization(t *testing.T) {
 	polkit := &recordingPolkit{}
 	service := &Service{Polkit: polkit}
 	_, err := service.ClaimUSB(t.Context(), &privatevmv1.ClaimUSBRequest{Context: validRequestContext("pvm-00000000000000000000000000000000")})
-	assertRPCError(t, err, codes.Unimplemented, "NOT_IMPLEMENTED")
+	assertRPCError(t, err, codes.Unavailable, "USB_INTEGRATION_UNAVAILABLE")
 	if polkit.called {
-		t.Fatal("unimplemented USB claim prompted for destructive authorization")
+		t.Fatal("USB claim prompted for destructive preparation authorization")
 	}
 }
 

@@ -183,6 +183,42 @@ func (m *ClaimManager) CleanupSession(ctx context.Context, sessionID string, own
 	return nil
 }
 
+// AuditAbsent proves that one exact claim is no longer owned by the manager.
+// Physical-device absence is already checked by DeviceClaim.AuditAbsent before
+// Release removes the claim from these indexes.
+func (m *ClaimManager) AuditAbsent(ctx context.Context, claimID, sessionID string, ownerUID uint32) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	claim := m.claims[claimID]
+	if claim == nil {
+		return nil
+	}
+	if claim.SessionID != sessionID || claim.OwnerUID != ownerUID {
+		return newError(CodeIdentityMismatch, "The USB claim is owned by a different session.", "Use the claim returned for this exporter session.", nil)
+	}
+	return newError(CodeCleanupIncomplete, "The USB claim is still present.", "Retry session cleanup before disconnecting the device.", nil)
+}
+
+// AuditSessionAbsent proves no retained partial or complete claim remains for
+// the session. It is used by the session actor after a failed allocation whose
+// adapter may have acquired the device before returning an error.
+func (m *ClaimManager) AuditSessionAbsent(ctx context.Context, sessionID string, ownerUID uint32) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for _, claim := range m.claims {
+		if claim.SessionID == sessionID && claim.OwnerUID == ownerUID {
+			return newError(CodeCleanupIncomplete, "A USB claim is still present for the exporter session.", "Retry session cleanup before disconnecting the device.", nil)
+		}
+	}
+	return nil
+}
+
 func (m *ClaimManager) getOwned(claimID, sessionID string, ownerUID uint32) (*Claim, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()

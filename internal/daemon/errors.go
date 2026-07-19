@@ -7,6 +7,7 @@ import (
 	privatevmv1 "github.com/StevenBuglione/private-vm/gen/privatevm/v1"
 	"github.com/StevenBuglione/private-vm/internal/apperror"
 	"github.com/StevenBuglione/private-vm/internal/session"
+	"github.com/StevenBuglione/private-vm/internal/usb"
 	"github.com/StevenBuglione/private-vm/internal/vpn"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -50,6 +51,34 @@ func vpnRPCError(err error) error {
 		return rpcError(grpcCode, application.Code, application.Message, application.Remediation, false)
 	}
 	return sessionError(err)
+}
+
+func usbRPCError(err error) error {
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) ||
+		status.Code(err) == codes.Canceled || status.Code(err) == codes.DeadlineExceeded {
+		return sessionError(err)
+	}
+	if errors.Is(err, session.ErrCleanupIncomplete) {
+		return sessionError(err)
+	}
+	var application *usb.Error
+	if !errors.As(err, &application) {
+		return sessionError(err)
+	}
+	grpcCode := codes.FailedPrecondition
+	switch application.Code {
+	case usb.CodeNotEnrolled:
+		grpcCode = codes.NotFound
+	case usb.CodeClaimConflict:
+		grpcCode = codes.Aborted
+	case usb.CodeDiscoveryFailed:
+		grpcCode = codes.Unavailable
+	case usb.CodeConfirmation:
+		grpcCode = codes.InvalidArgument
+	case usb.CodeCleanupIncomplete:
+		grpcCode = codes.FailedPrecondition
+	}
+	return rpcError(grpcCode, string(application.Code), application.Message, application.Remediation, false)
 }
 
 func sessionError(err error) error {
