@@ -1,4 +1,4 @@
-# ADR 0022: Immutable whole-release transaction
+# ADR 0026: Immutable whole-release transaction
 
 ## Status
 
