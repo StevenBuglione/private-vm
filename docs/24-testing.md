@@ -239,6 +239,15 @@ still requires daemon-startup composition with the concrete QEMU, cgroup,
 network, storage, VSOCK and USB inventories, a daemon `SIGKILL` acceptance, and
 one controlled maintenance-window reboot.
 
+The production startup path is now source-tested with the concrete Linux
+filesystem/outer-storage adapter. Private temporary roots prove early-record
+cleanup, exact ciphertext deletion after volatile-key-loss evidence, identity
+replacement rejection, unknown-key retention, cancellation, immutable-base
+drift, closed report publication and refusal to admit the daemon for incomplete,
+timed-out or canceled recovery. These tests run no recovery command against the
+real host. Process/cgroup, network, VSOCK and USB recovery remains fail-closed,
+not simulated as successful production evidence.
+
 The bounded fuzz smoke is reproducible with:
 
 ```bash

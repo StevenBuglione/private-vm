@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/StevenBuglione/private-vm/internal/recovery"
 )
 
 func TestStartupFailureMessageIsStableAndRedacted(t *testing.T) {
@@ -16,6 +18,66 @@ func TestStartupFailureMessageIsStableAndRedacted(t *testing.T) {
 		if strings.Contains(daemonStartupFailureMessage, forbidden) {
 			t.Fatalf("startup failure message contains unsafe fragment %q", forbidden)
 		}
+	}
+}
+
+func TestStartupRecoveryGatesAdmissionAndAlwaysPublishesReport(t *testing.T) {
+	complete := recovery.Report{SchemaVersion: 1, Code: "RECOVERY_COMPLETED", Status: recovery.StatusComplete, BaseImagesVerified: true, Failures: []recovery.Failure{}}
+	writes := 0
+	if err := runStartupRecovery(t.Context(), func(context.Context) (recovery.Report, error) {
+		return complete, nil
+	}, func(got recovery.Report) error {
+		writes++
+		if got.Status != recovery.StatusComplete {
+			t.Fatalf("published wrong report: %+v", got)
+		}
+		return nil
+	}); err != nil {
+		t.Fatalf("complete recovery blocked startup: %v", err)
+	}
+	if writes != 1 {
+		t.Fatalf("report writes = %d, want 1", writes)
+	}
+
+	incomplete := complete
+	incomplete.Code = "ORPHAN_CLEANUP_FAILED"
+	incomplete.Status = recovery.StatusIncomplete
+	incomplete.BaseImagesVerified = false
+	backendFailure := errors.New("sensitive injected backend detail")
+	writes = 0
+	err := runStartupRecovery(t.Context(), func(context.Context) (recovery.Report, error) {
+		return incomplete, backendFailure
+	}, func(got recovery.Report) error {
+		writes++
+		if got.Status != recovery.StatusIncomplete {
+			t.Fatalf("published wrong failure report: %+v", got)
+		}
+		return nil
+	})
+	if err == nil || writes != 1 || !errors.Is(err, backendFailure) {
+		t.Fatalf("incomplete recovery was admitted or not reported: writes=%d err=%v", writes, err)
+	}
+}
+
+func TestStartupRecoveryRefusesCancellationTimeoutAndReportFailure(t *testing.T) {
+	incomplete := recovery.Report{SchemaVersion: 1, Code: "ORPHAN_CLEANUP_FAILED", Status: recovery.StatusIncomplete, Failures: []recovery.Failure{}}
+	for _, cause := range []error{context.Canceled, context.DeadlineExceeded} {
+		cause := cause
+		t.Run(cause.Error(), func(t *testing.T) {
+			err := runStartupRecovery(t.Context(), func(context.Context) (recovery.Report, error) {
+				return incomplete, cause
+			}, func(recovery.Report) error { return nil })
+			if !errors.Is(err, cause) || !errors.Is(err, recovery.ErrIncomplete) {
+				t.Fatalf("startup recovery error = %v", err)
+			}
+		})
+	}
+	reportFailure := errors.New("injected report write failure")
+	err := runStartupRecovery(t.Context(), func(context.Context) (recovery.Report, error) {
+		return recovery.Report{SchemaVersion: 1, Code: "RECOVERY_COMPLETED", Status: recovery.StatusComplete, BaseImagesVerified: true, Failures: []recovery.Failure{}}, nil
+	}, func(recovery.Report) error { return reportFailure })
+	if !errors.Is(err, reportFailure) {
+		t.Fatalf("report publication failure did not block startup: %v", err)
 	}
 }
 

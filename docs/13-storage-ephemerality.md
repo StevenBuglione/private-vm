@@ -234,4 +234,27 @@ timeouts leave the report incomplete and never turn an unaudited absence into
 success. Ordinary session admission stays closed until startup recovery returns
 complete.
 
+The production startup composition writes the closed report atomically to
+`/run/private-vm-recovery-private-vm.json` for the default runtime root before
+opening the control socket. The report is mode `0600`, remains volatile, and is
+replaced on each startup. Failure to publish it is itself a startup failure.
+
+The current concrete Linux adapter can independently recover exactly pinned
+runtime records, QMP/SPICE sockets, outer ext4 mounts, device-mapper mappings,
+loop devices and scratch ciphertext. Runtime records in `CREATED`,
+`PREFLIGHTED`, `IMAGES_VERIFIED`, or already audited `DESTROYED` may be removed
+after revalidation. A ciphertext whose volatile record disappeared at reboot
+may be removed only after the outer mount, mapper and backing loop are proven
+absent or have been closed in dependency order, and the fresh daemon proves no
+ordinary key file survived.
+
+An advanced volatile record (`STORAGE_READY` through `DESTROYING`) currently
+blocks startup before any mutation. Those records do not yet contain the exact
+pidfd/start-time/cgroup, network, VSOCK and USB ownership identities needed for
+safe daemon-restart cleanup. The adapter does not infer ownership from a name,
+PID or pathname and does not downgrade this gap to an empty inventory. The
+remaining D-005 work is to retain those redacted exact identities under
+`/run`, add the corresponding typed Linux adapters, and pass the daemon
+`SIGKILL` and maintenance-window reboot acceptance gates.
+
 Never delete a path based only on a filename supplied by a user.
