@@ -52,6 +52,9 @@ func (s *Store) Save(enrollment Enrollment) error {
 			_ = os.Remove(temporaryName)
 		}
 	}()
+	if err := temporary.Chown(int(s.ownerUID), -1); err != nil {
+		return errors.New("set USB enrollment owner")
+	}
 	if err := temporary.Chmod(0o600); err != nil {
 		return errors.New("set USB enrollment permissions")
 	}
@@ -118,7 +121,7 @@ func validateRegularOwner(path string, ownerUID uint32, mode fs.FileMode) error 
 		return err
 	}
 	stat, ok := info.Sys().(*syscall.Stat_t)
-	if !ok || !info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 || stat.Uid != ownerUID || info.Mode().Perm() != mode {
+	if !ok || !info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 || stat.Uid != ownerUID || stat.Nlink != 1 || info.Mode().Perm() != mode {
 		return fmt.Errorf("USB enrollment file has unsafe identity or permissions")
 	}
 	return nil

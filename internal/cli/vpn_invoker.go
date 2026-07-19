@@ -80,6 +80,8 @@ func (invoker *ProductionInvoker) Invoke(ctx context.Context, id CommandID, inte
 		}
 		response, err := invoker.profileOperation(ctx, id, request.ProfileName)
 		return vpnResult(response, err)
+	case CommandUSBList, CommandUSBInspect, CommandUSBEnroll, CommandUSBVerify, CommandUSBForget:
+		return invoker.invokeUSB(ctx, id, intent)
 	default:
 		return failClosedInvoker{}.Invoke(ctx, id, intent)
 	}
@@ -328,6 +330,9 @@ func daemonDetailExitCode(code string) int {
 	default:
 		if len(code) >= len("TORRENT_") && code[:len("TORRENT_")] == "TORRENT_" || len(code) >= len("QUARANTINE_") && code[:len("QUARANTINE_")] == "QUARANTINE_" {
 			return exitcode.Torrent
+		}
+		if len(code) >= len("USB_") && code[:len("USB_")] == "USB_" {
+			return exitcode.USBExport
 		}
 		return exitcode.Network
 	}

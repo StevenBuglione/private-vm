@@ -43,6 +43,12 @@ const (
 	PrivateVMDaemonService_StreamEvents_FullMethodName          = "/privatevm.v1.PrivateVMDaemonService/StreamEvents"
 	PrivateVMDaemonService_ImportWorkspaceFile_FullMethodName   = "/privatevm.v1.PrivateVMDaemonService/ImportWorkspaceFile"
 	PrivateVMDaemonService_ExportWorkspaceFile_FullMethodName   = "/privatevm.v1.PrivateVMDaemonService/ExportWorkspaceFile"
+	PrivateVMDaemonService_ListUSBDevices_FullMethodName        = "/privatevm.v1.PrivateVMDaemonService/ListUSBDevices"
+	PrivateVMDaemonService_InspectUSBDevice_FullMethodName      = "/privatevm.v1.PrivateVMDaemonService/InspectUSBDevice"
+	PrivateVMDaemonService_EnrollUSBDevice_FullMethodName       = "/privatevm.v1.PrivateVMDaemonService/EnrollUSBDevice"
+	PrivateVMDaemonService_GetUSBEnrollment_FullMethodName      = "/privatevm.v1.PrivateVMDaemonService/GetUSBEnrollment"
+	PrivateVMDaemonService_VerifyUSBEnrollment_FullMethodName   = "/privatevm.v1.PrivateVMDaemonService/VerifyUSBEnrollment"
+	PrivateVMDaemonService_ForgetUSBEnrollment_FullMethodName   = "/privatevm.v1.PrivateVMDaemonService/ForgetUSBEnrollment"
 	PrivateVMDaemonService_ClaimUSB_FullMethodName              = "/privatevm.v1.PrivateVMDaemonService/ClaimUSB"
 	PrivateVMDaemonService_PlanUSBPreparation_FullMethodName    = "/privatevm.v1.PrivateVMDaemonService/PlanUSBPreparation"
 	PrivateVMDaemonService_PrepareUSB_FullMethodName            = "/privatevm.v1.PrivateVMDaemonService/PrepareUSB"
@@ -78,6 +84,12 @@ type PrivateVMDaemonServiceClient interface {
 	StreamEvents(ctx context.Context, in *GetSessionRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[SessionEvent], error)
 	ImportWorkspaceFile(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[TransferFrame, TransferReceipt], error)
 	ExportWorkspaceFile(ctx context.Context, in *ExportWorkspaceRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[TransferFrame], error)
+	ListUSBDevices(ctx context.Context, in *ListUSBDevicesRequest, opts ...grpc.CallOption) (*ListUSBDevicesResponse, error)
+	InspectUSBDevice(ctx context.Context, in *InspectUSBDeviceRequest, opts ...grpc.CallOption) (*USBDeviceStatus, error)
+	EnrollUSBDevice(ctx context.Context, in *EnrollUSBDeviceRequest, opts ...grpc.CallOption) (*USBEnrollmentStatus, error)
+	GetUSBEnrollment(ctx context.Context, in *GetUSBEnrollmentRequest, opts ...grpc.CallOption) (*USBEnrollmentStatus, error)
+	VerifyUSBEnrollment(ctx context.Context, in *VerifyUSBEnrollmentRequest, opts ...grpc.CallOption) (*USBEnrollmentStatus, error)
+	ForgetUSBEnrollment(ctx context.Context, in *ForgetUSBEnrollmentRequest, opts ...grpc.CallOption) (*Empty, error)
 	ClaimUSB(ctx context.Context, in *ClaimUSBRequest, opts ...grpc.CallOption) (*USBClaim, error)
 	PlanUSBPreparation(ctx context.Context, in *PlanUSBPreparationRequest, opts ...grpc.CallOption) (*USBPreparePlan, error)
 	PrepareUSB(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[HostUSBPrepareFrame, USBPrepareReceipt], error)
@@ -369,6 +381,66 @@ func (c *privateVMDaemonServiceClient) ExportWorkspaceFile(ctx context.Context, 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type PrivateVMDaemonService_ExportWorkspaceFileClient = grpc.ServerStreamingClient[TransferFrame]
 
+func (c *privateVMDaemonServiceClient) ListUSBDevices(ctx context.Context, in *ListUSBDevicesRequest, opts ...grpc.CallOption) (*ListUSBDevicesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListUSBDevicesResponse)
+	err := c.cc.Invoke(ctx, PrivateVMDaemonService_ListUSBDevices_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *privateVMDaemonServiceClient) InspectUSBDevice(ctx context.Context, in *InspectUSBDeviceRequest, opts ...grpc.CallOption) (*USBDeviceStatus, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(USBDeviceStatus)
+	err := c.cc.Invoke(ctx, PrivateVMDaemonService_InspectUSBDevice_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *privateVMDaemonServiceClient) EnrollUSBDevice(ctx context.Context, in *EnrollUSBDeviceRequest, opts ...grpc.CallOption) (*USBEnrollmentStatus, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(USBEnrollmentStatus)
+	err := c.cc.Invoke(ctx, PrivateVMDaemonService_EnrollUSBDevice_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *privateVMDaemonServiceClient) GetUSBEnrollment(ctx context.Context, in *GetUSBEnrollmentRequest, opts ...grpc.CallOption) (*USBEnrollmentStatus, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(USBEnrollmentStatus)
+	err := c.cc.Invoke(ctx, PrivateVMDaemonService_GetUSBEnrollment_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *privateVMDaemonServiceClient) VerifyUSBEnrollment(ctx context.Context, in *VerifyUSBEnrollmentRequest, opts ...grpc.CallOption) (*USBEnrollmentStatus, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(USBEnrollmentStatus)
+	err := c.cc.Invoke(ctx, PrivateVMDaemonService_VerifyUSBEnrollment_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *privateVMDaemonServiceClient) ForgetUSBEnrollment(ctx context.Context, in *ForgetUSBEnrollmentRequest, opts ...grpc.CallOption) (*Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Empty)
+	err := c.cc.Invoke(ctx, PrivateVMDaemonService_ForgetUSBEnrollment_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *privateVMDaemonServiceClient) ClaimUSB(ctx context.Context, in *ClaimUSBRequest, opts ...grpc.CallOption) (*USBClaim, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(USBClaim)
@@ -450,6 +522,12 @@ type PrivateVMDaemonServiceServer interface {
 	StreamEvents(*GetSessionRequest, grpc.ServerStreamingServer[SessionEvent]) error
 	ImportWorkspaceFile(grpc.ClientStreamingServer[TransferFrame, TransferReceipt]) error
 	ExportWorkspaceFile(*ExportWorkspaceRequest, grpc.ServerStreamingServer[TransferFrame]) error
+	ListUSBDevices(context.Context, *ListUSBDevicesRequest) (*ListUSBDevicesResponse, error)
+	InspectUSBDevice(context.Context, *InspectUSBDeviceRequest) (*USBDeviceStatus, error)
+	EnrollUSBDevice(context.Context, *EnrollUSBDeviceRequest) (*USBEnrollmentStatus, error)
+	GetUSBEnrollment(context.Context, *GetUSBEnrollmentRequest) (*USBEnrollmentStatus, error)
+	VerifyUSBEnrollment(context.Context, *VerifyUSBEnrollmentRequest) (*USBEnrollmentStatus, error)
+	ForgetUSBEnrollment(context.Context, *ForgetUSBEnrollmentRequest) (*Empty, error)
 	ClaimUSB(context.Context, *ClaimUSBRequest) (*USBClaim, error)
 	PlanUSBPreparation(context.Context, *PlanUSBPreparationRequest) (*USBPreparePlan, error)
 	PrepareUSB(grpc.ClientStreamingServer[HostUSBPrepareFrame, USBPrepareReceipt]) error
@@ -536,6 +614,24 @@ func (UnimplementedPrivateVMDaemonServiceServer) ImportWorkspaceFile(grpc.Client
 }
 func (UnimplementedPrivateVMDaemonServiceServer) ExportWorkspaceFile(*ExportWorkspaceRequest, grpc.ServerStreamingServer[TransferFrame]) error {
 	return status.Error(codes.Unimplemented, "method ExportWorkspaceFile not implemented")
+}
+func (UnimplementedPrivateVMDaemonServiceServer) ListUSBDevices(context.Context, *ListUSBDevicesRequest) (*ListUSBDevicesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListUSBDevices not implemented")
+}
+func (UnimplementedPrivateVMDaemonServiceServer) InspectUSBDevice(context.Context, *InspectUSBDeviceRequest) (*USBDeviceStatus, error) {
+	return nil, status.Error(codes.Unimplemented, "method InspectUSBDevice not implemented")
+}
+func (UnimplementedPrivateVMDaemonServiceServer) EnrollUSBDevice(context.Context, *EnrollUSBDeviceRequest) (*USBEnrollmentStatus, error) {
+	return nil, status.Error(codes.Unimplemented, "method EnrollUSBDevice not implemented")
+}
+func (UnimplementedPrivateVMDaemonServiceServer) GetUSBEnrollment(context.Context, *GetUSBEnrollmentRequest) (*USBEnrollmentStatus, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetUSBEnrollment not implemented")
+}
+func (UnimplementedPrivateVMDaemonServiceServer) VerifyUSBEnrollment(context.Context, *VerifyUSBEnrollmentRequest) (*USBEnrollmentStatus, error) {
+	return nil, status.Error(codes.Unimplemented, "method VerifyUSBEnrollment not implemented")
+}
+func (UnimplementedPrivateVMDaemonServiceServer) ForgetUSBEnrollment(context.Context, *ForgetUSBEnrollmentRequest) (*Empty, error) {
+	return nil, status.Error(codes.Unimplemented, "method ForgetUSBEnrollment not implemented")
 }
 func (UnimplementedPrivateVMDaemonServiceServer) ClaimUSB(context.Context, *ClaimUSBRequest) (*USBClaim, error) {
 	return nil, status.Error(codes.Unimplemented, "method ClaimUSB not implemented")
@@ -952,6 +1048,114 @@ func _PrivateVMDaemonService_ExportWorkspaceFile_Handler(srv interface{}, stream
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type PrivateVMDaemonService_ExportWorkspaceFileServer = grpc.ServerStreamingServer[TransferFrame]
 
+func _PrivateVMDaemonService_ListUSBDevices_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListUSBDevicesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PrivateVMDaemonServiceServer).ListUSBDevices(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PrivateVMDaemonService_ListUSBDevices_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PrivateVMDaemonServiceServer).ListUSBDevices(ctx, req.(*ListUSBDevicesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PrivateVMDaemonService_InspectUSBDevice_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(InspectUSBDeviceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PrivateVMDaemonServiceServer).InspectUSBDevice(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PrivateVMDaemonService_InspectUSBDevice_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PrivateVMDaemonServiceServer).InspectUSBDevice(ctx, req.(*InspectUSBDeviceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PrivateVMDaemonService_EnrollUSBDevice_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(EnrollUSBDeviceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PrivateVMDaemonServiceServer).EnrollUSBDevice(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PrivateVMDaemonService_EnrollUSBDevice_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PrivateVMDaemonServiceServer).EnrollUSBDevice(ctx, req.(*EnrollUSBDeviceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PrivateVMDaemonService_GetUSBEnrollment_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetUSBEnrollmentRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PrivateVMDaemonServiceServer).GetUSBEnrollment(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PrivateVMDaemonService_GetUSBEnrollment_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PrivateVMDaemonServiceServer).GetUSBEnrollment(ctx, req.(*GetUSBEnrollmentRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PrivateVMDaemonService_VerifyUSBEnrollment_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(VerifyUSBEnrollmentRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PrivateVMDaemonServiceServer).VerifyUSBEnrollment(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PrivateVMDaemonService_VerifyUSBEnrollment_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PrivateVMDaemonServiceServer).VerifyUSBEnrollment(ctx, req.(*VerifyUSBEnrollmentRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PrivateVMDaemonService_ForgetUSBEnrollment_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ForgetUSBEnrollmentRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PrivateVMDaemonServiceServer).ForgetUSBEnrollment(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PrivateVMDaemonService_ForgetUSBEnrollment_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PrivateVMDaemonServiceServer).ForgetUSBEnrollment(ctx, req.(*ForgetUSBEnrollmentRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _PrivateVMDaemonService_ClaimUSB_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ClaimUSBRequest)
 	if err := dec(in); err != nil {
@@ -1109,6 +1313,30 @@ var PrivateVMDaemonService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "CleanupSession",
 			Handler:    _PrivateVMDaemonService_CleanupSession_Handler,
+		},
+		{
+			MethodName: "ListUSBDevices",
+			Handler:    _PrivateVMDaemonService_ListUSBDevices_Handler,
+		},
+		{
+			MethodName: "InspectUSBDevice",
+			Handler:    _PrivateVMDaemonService_InspectUSBDevice_Handler,
+		},
+		{
+			MethodName: "EnrollUSBDevice",
+			Handler:    _PrivateVMDaemonService_EnrollUSBDevice_Handler,
+		},
+		{
+			MethodName: "GetUSBEnrollment",
+			Handler:    _PrivateVMDaemonService_GetUSBEnrollment_Handler,
+		},
+		{
+			MethodName: "VerifyUSBEnrollment",
+			Handler:    _PrivateVMDaemonService_VerifyUSBEnrollment_Handler,
+		},
+		{
+			MethodName: "ForgetUSBEnrollment",
+			Handler:    _PrivateVMDaemonService_ForgetUSBEnrollment_Handler,
 		},
 		{
 			MethodName: "ClaimUSB",

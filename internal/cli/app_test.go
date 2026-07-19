@@ -331,7 +331,7 @@ func TestValidatedParametersReachSemanticInvoker(t *testing.T) {
 		{name: "torrent selection", args: []string{"torrent", "select", "--files", "1,2,4"}, want: TorrentSelectionIntent{Files: []uint32{1, 2, 4}}},
 		{name: "scanner approval", args: []string{"scan", "approve", "--session", session, "--to", "usb"}, want: ScanApprovalIntent{SessionID: session, To: "usb"}},
 		{name: "vpn import", args: []string{"vpn", "import", "--from-file", "/tmp/profile.conf"}, want: VPNImportIntent{ProfileName: "proton-p2p", FromFile: "/tmp/profile.conf"}},
-		{name: "usb device", args: []string{"usb", "enroll", "--device", "usb-1"}, want: USBDeviceIntent{DeviceID: "usb-1"}},
+		{name: "usb device", args: []string{"usb", "enroll", "--device", "usbdev-0123456789abcdef"}, want: USBDeviceIntent{DeviceID: "usbdev-0123456789abcdef", Label: "PRIVATE_VM_TRANSFER"}},
 		{name: "usb prepare", args: []string{"usb", "prepare", "--format", "luks2-ext4"}, want: USBPrepareIntent{Format: "luks2-ext4"}},
 		{name: "image selection", args: []string{"images", "sync", "--role", "workstation", "--bundle", "basic"}, want: ImageSelectionIntent{Role: "workstation", Bundle: "basic"}},
 		{name: "image test", args: []string{"images", "test", "ghcr.io/example/image@sha256:abc", "--backend", "qemu"}, want: ImageTestIntent{Reference: "ghcr.io/example/image@sha256:abc", Backend: "qemu"}},

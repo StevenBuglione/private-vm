@@ -2,17 +2,23 @@
 
 ## Enrollment
 
-`private-vm usb enroll` shows:
+`private-vm usb enroll` internally verifies:
 
-- kernel device path
 - vendor/product ID
-- serial
+- serial presence and the exact retained serial
 - USBGuard hash
 - physical port
 - interface classes
 - capacity
 - current mount state
 - model string
+
+The CLI's bounded typed review shows the transient kernel path, VID/PID, model,
+serial, USBGuard hash, physical port, interfaces, capacity, eligibility and the
+complete enrollment fingerprint. Raw USBGuard command output and transient
+bus/address remain inside the daemon. The kernel path is never persisted or
+accepted as authorization; every later operation resolves the stored complete
+identity again.
 
 It refuses:
 
@@ -35,6 +41,12 @@ normalized identity, so editing any identity field invalidates the record.
 A serial-bearing device is still pinned to its observed physical port so a move
 is visible. A device without a serial can be enrolled only after the user
 separately accepts physical-port binding; moving it invalidates the enrollment.
+
+The installed root is `/var/lib/private-vm/enrollments`, mode `0700` and owned
+by the daemon. It contains only numeric-UID directories, each mode `0700` and
+owned by that authenticated user; `usb-enrollment.json` is a one-link mode
+`0600` regular file owned by the same user. Request data cannot select this
+path.
 Every later claim enumerates a fresh snapshot and requires exactly one complete
 match. `/dev/sdX` names, bus numbers and addresses are observations only and
 never authorize a claim.
@@ -50,6 +62,12 @@ with-interface equals { 08:*:* }
 
 Existing keyboard/mouse policies must be preserved. Installation must not
 blindly replace USBGuard rules.
+
+The production claim adapter re-lists USBGuard and compares the complete
+VID/PID/serial/hash/port/interface identity immediately before authorizing the
+record. Only USBGuard's numeric record ID enters the fixed `allow-device` and
+`block-device` argv. Release blocks that exact unchanged record and then audits
+it as blocked or absent; an ID reused for a different identity fails closed.
 
 The source core emits an exact suggested rule containing VID/PID, optional
 serial, USBGuard hash, physical port and

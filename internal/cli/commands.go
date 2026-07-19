@@ -357,11 +357,24 @@ func (factory commandFactory) usb() *cobra.Command {
 	requiredDevice := func(use string, id CommandID) *cobra.Command {
 		var device string
 		command := factory.operation(use, "Operate on an exact USB identity", id, noArgs, func(*cobra.Command) error {
-			return validateOpaqueID(device, "device", true)
+			return validateUSBDeviceID(device)
 		}, func([]string) Intent { return USBDeviceIntent{DeviceID: device} })
 		command.Flags().StringVar(&device, "device", "", "exact enrolled device identifier")
 		return command
 	}
+	var enrollmentDevice, enrollmentLabel string
+	var acceptPortBinding bool
+	enroll := factory.operation("enroll", "Enroll one exact mass-storage-only USB identity", CommandUSBEnroll, noArgs, func(*cobra.Command) error {
+		if err := validateUSBDeviceID(enrollmentDevice); err != nil {
+			return err
+		}
+		return validateUSBLabel(enrollmentLabel)
+	}, func([]string) Intent {
+		return USBDeviceIntent{DeviceID: enrollmentDevice, Label: enrollmentLabel, AcceptPortBinding: acceptPortBinding}
+	})
+	enroll.Flags().StringVar(&enrollmentDevice, "device", "", "exact discovery identifier")
+	enroll.Flags().StringVar(&enrollmentLabel, "label", "PRIVATE_VM_TRANSFER", "safe enrollment label")
+	enroll.Flags().BoolVar(&acceptPortBinding, "accept-port-binding", false, "accept exact physical-port binding when no serial exists")
 	var format string
 	prepare := factory.operation("prepare", "Prepare an enrolled USB device", "usb.prepare", noArgs, func(*cobra.Command) error {
 		if err := enum(format, "USB format", "luks2-ext4"); err != nil {
@@ -374,12 +387,12 @@ func (factory commandFactory) usb() *cobra.Command {
 	}, func([]string) Intent { return USBPrepareIntent{Format: format} })
 	prepare.Flags().StringVar(&format, "format", "", "required format: luks2-ext4")
 	return factory.group("usb", "Inspect, enroll and prepare exact USB devices",
-		factory.simple("list", "usb.list"),
-		requiredDevice("inspect", "usb.inspect"),
-		requiredDevice("enroll", "usb.enroll"),
+		factory.simple("list", CommandUSBList),
+		requiredDevice("inspect", CommandUSBInspect),
+		enroll,
 		prepare,
-		factory.simple("verify", "usb.verify"),
-		factory.simple("forget", "usb.forget"),
+		factory.simple("verify", CommandUSBVerify),
+		factory.simple("forget", CommandUSBForget),
 	)
 }
 

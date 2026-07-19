@@ -32,6 +32,12 @@ service PrivateVMDaemonService {
   rpc StreamEvents(GetSessionRequest) returns (stream SessionEvent);
   rpc ImportWorkspaceFile(stream TransferFrame) returns (TransferReceipt);
   rpc ExportWorkspaceFile(ExportWorkspaceRequest) returns (stream TransferFrame);
+  rpc ListUSBDevices(ListUSBDevicesRequest) returns (ListUSBDevicesResponse);
+  rpc InspectUSBDevice(InspectUSBDeviceRequest) returns (USBDeviceStatus);
+  rpc EnrollUSBDevice(EnrollUSBDeviceRequest) returns (USBEnrollmentStatus);
+  rpc GetUSBEnrollment(GetUSBEnrollmentRequest) returns (USBEnrollmentStatus);
+  rpc VerifyUSBEnrollment(VerifyUSBEnrollmentRequest) returns (USBEnrollmentStatus);
+  rpc ForgetUSBEnrollment(ForgetUSBEnrollmentRequest) returns (Empty);
   rpc ClaimUSB(ClaimUSBRequest) returns (USBClaim);
   rpc PlanUSBPreparation(PlanUSBPreparationRequest) returns (USBPreparePlan);
   rpc PrepareUSB(stream HostUSBPrepareFrame) returns (USBPrepareReceipt);
@@ -195,6 +201,68 @@ message SessionEvent {
 message ExportWorkspaceRequest {
   RequestContext context = 1;
   string output_id = 2;
+}
+
+message ListUSBDevicesRequest { RequestContext context = 1; }
+
+message InspectUSBDeviceRequest {
+  RequestContext context = 1;
+  string device_id = 2;
+}
+
+message EnrollUSBDeviceRequest {
+  RequestContext context = 1;
+  string device_id = 2;
+  string label = 3;
+  bool accept_port_binding = 4;
+}
+
+message GetUSBEnrollmentRequest { RequestContext context = 1; }
+message VerifyUSBEnrollmentRequest { RequestContext context = 1; }
+message ForgetUSBEnrollmentRequest { RequestContext context = 1; }
+
+message USBDeviceStatus {
+  uint32 schema_version = 1;
+  string device_id = 2;
+  string vendor_id = 3;
+  string product_id = 4;
+  string model = 5;
+  string serial = 6;
+  string port_path = 7;
+  repeated string interfaces = 8;
+  uint64 capacity_bytes = 9;
+  bool mounted = 10;
+  bool read_only = 11;
+  bool host_filesystem = 12;
+  bool selectable = 13;
+  string identity_fingerprint = 14;
+  string code = 15;
+  string remediation = 16;
+  string usbguard_hash = 17;
+  string block_path = 18;
+}
+
+message ListUSBDevicesResponse { repeated USBDeviceStatus devices = 1; }
+
+message USBEnrollmentStatus {
+  uint32 schema_version = 1;
+  string enrollment_id = 2;
+  string label = 3;
+  string filesystem = 4;
+  string vendor_id = 5;
+  string product_id = 6;
+  string model = 7;
+  string serial = 8;
+  string port_path = 9;
+  bool port_bound = 10;
+  repeated string interfaces = 11;
+  uint64 capacity_bytes = 12;
+  string identity_fingerprint = 13;
+  bool verified = 14;
+  string code = 15;
+  string remediation = 16;
+  string usbguard_hash = 17;
+  string block_path = 18;
 }
 
 message ClaimUSBRequest {

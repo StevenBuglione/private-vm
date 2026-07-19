@@ -37,6 +37,7 @@ type Service struct {
 	Profiles              *vpn.MemoryStore
 	VPNResolver           *vpn.EndpointResolver
 	USBEnrollments        USBEnrollmentStore
+	USBRegistry           USBRegistry
 	USBClaims             USBClaimCoordinator
 	USBWorkflows          USBWorkflowOrchestrator
 	Roles                 RoleOrchestrator
@@ -51,6 +52,16 @@ type Service struct {
 // arbitrary device path, mount request, USBGuard rule or command argument.
 type USBEnrollmentStore interface {
 	Load() (usb.Enrollment, error)
+}
+
+type USBRegistry interface {
+	List(context.Context, uint32) ([]usb.DeviceStatus, error)
+	Inspect(context.Context, uint32, string) (usb.DeviceStatus, error)
+	Enroll(context.Context, uint32, string, string, bool) (usb.EnrollmentStatus, error)
+	Get(context.Context, uint32) (usb.EnrollmentStatus, error)
+	Verify(context.Context, uint32) (usb.EnrollmentStatus, error)
+	Forget(context.Context, uint32) error
+	Load(uint32) (usb.Enrollment, error)
 }
 
 type USBClaimCoordinator interface {
@@ -515,7 +526,7 @@ func (s *Service) ClaimUSB(ctx context.Context, request *privatevmv1.ClaimUSBReq
 	if err := validateRequestContext(request.GetContext(), true); err != nil {
 		return nil, err
 	}
-	if s.USBEnrollments == nil || s.USBClaims == nil {
+	if s.USBEnrollments == nil && s.USBRegistry == nil || s.USBClaims == nil {
 		return nil, rpcError(codes.Unavailable, "USB_INTEGRATION_UNAVAILABLE", "The exact USB claim integration is unavailable.", "Install and configure the USBGuard-backed exporter integration before retrying.", false)
 	}
 	identity, err := identityFromContext(ctx)
@@ -534,7 +545,12 @@ func (s *Service) ClaimUSB(ctx context.Context, request *privatevmv1.ClaimUSBReq
 	if snapshot.Role != session.RoleExporter || snapshot.Phase != session.PhaseCreated {
 		return nil, rpcError(codes.FailedPrecondition, "USB_EXPORTER_SESSION_REQUIRED", "USB claims are permitted only for a newly created exporter session.", "Create a dedicated exporter session and claim the enrolled device before starting its guest.", false)
 	}
-	enrollment, err := s.USBEnrollments.Load()
+	var enrollment usb.Enrollment
+	if s.USBRegistry != nil {
+		enrollment, err = s.USBRegistry.Load(identity.UID)
+	} else {
+		enrollment, err = s.USBEnrollments.Load()
+	}
 	if err != nil {
 		return nil, usbRPCError(err)
 	}
@@ -721,6 +737,12 @@ var unarySessionRequirement = map[string]bool{
 	privatevmv1.PrivateVMDaemonService_InspectVPNProfile_FullMethodName:     false,
 	privatevmv1.PrivateVMDaemonService_TestVPNProfile_FullMethodName:        false,
 	privatevmv1.PrivateVMDaemonService_RemoveVPNProfile_FullMethodName:      false,
+	privatevmv1.PrivateVMDaemonService_ListUSBDevices_FullMethodName:        false,
+	privatevmv1.PrivateVMDaemonService_InspectUSBDevice_FullMethodName:      false,
+	privatevmv1.PrivateVMDaemonService_EnrollUSBDevice_FullMethodName:       false,
+	privatevmv1.PrivateVMDaemonService_GetUSBEnrollment_FullMethodName:      false,
+	privatevmv1.PrivateVMDaemonService_VerifyUSBEnrollment_FullMethodName:   false,
+	privatevmv1.PrivateVMDaemonService_ForgetUSBEnrollment_FullMethodName:   false,
 	privatevmv1.PrivateVMDaemonService_GetTorrentMetadata_FullMethodName:    true,
 	privatevmv1.PrivateVMDaemonService_SelectTorrentFiles_FullMethodName:    true,
 	privatevmv1.PrivateVMDaemonService_PauseTorrentDownload_FullMethodName:  true,

@@ -95,7 +95,8 @@ Every other unary request must carry a supported API version and an opaque
 8-128 character request ID. Session-scoped methods additionally require a valid
 internal `pvm-...` session ID; pre-session methods such as `Doctor`,
 `PlanSession`, `CreateSession`, `ListSessions`, `InspectVPNProfile`,
-`TestVPNProfile`, and `RemoveVPNProfile` do not. Planning and creation
+`TestVPNProfile`, `RemoveVPNProfile`, and the USB discovery/enrollment methods
+do not. Planning and creation
 validate the selected role, image bundle, policy name, and bounded resources
 before use. The unary interceptor rejects any method that violates this method
 to context contract before its handler runs.
@@ -220,6 +221,12 @@ Core methods:
 - `StreamEvents`
 - `ImportWorkspaceFile`
 - `ExportWorkspaceFile`
+- `ListUSBDevices`
+- `InspectUSBDevice`
+- `EnrollUSBDevice`
+- `GetUSBEnrollment`
+- `VerifyUSBEnrollment`
+- `ForgetUSBEnrollment`
 - `ClaimUSB`
 - `PlanUSBPreparation`
 - `PrepareUSB`
@@ -227,6 +234,17 @@ Core methods:
 - `ReleaseUSB`
 
 No arbitrary command execution method is permitted.
+
+USB discovery/enrollment methods are pre-session but kernel-owner-bound. They
+return bounded typed identity views for explicit review, including the
+transient block path, serial and USBGuard hash required by the enrollment
+contract; raw USBGuard output and bus/address remain inside the daemon. Enrollment storage
+is resolved exclusively from the authenticated numeric UID, never a request
+path or claimed UID. `EnrollUSBDevice` freshly resolves its opaque observation
+ID and rejects host filesystems, mounts, read-only media, ambiguous observations
+and every non-mass-storage interface before committing the owner-only record.
+`VerifyUSBEnrollment` repeats complete identity resolution; `ForgetUSBEnrollment`
+only removes the current owner's record.
 
 `ClaimUSB` is accepted only for a newly created exporter session and an exact
 opaque enrollment ID loaded from the reviewed enrollment store. The daemon
