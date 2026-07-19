@@ -153,6 +153,11 @@ minimal common guest and verifies locked accounts, disabled SSH and sudo,
 tmpfs-backed writable logs/temporary paths, volatile journald, an exact embedded
 role identity, a matching compiled guestd identity, no TCP/UDP listeners, and a
 VSOCK listener on port 4050. The role-specific image tests extend this baseline.
+Pure Nix sandboxes do not expose `/dev/vhost-vsock`, so these gates use the
+kernel VSOCK loopback transport at CID 1. Their test-only client preserves the
+production gRPC authentication and bounds. Canonical images and the production
+QEMU specification are unchanged: they require `vhost-vsock-pci` and an
+allocated guest CID of at least 3.
 
 The `workstation-desktop`, `workstation-office-desktop`, and
 `workstation-development-desktop` tests force TCG, supply a SPICE vdagent

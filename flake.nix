@@ -199,6 +199,21 @@
         "name=opt/private-vm/session-capability,file=${testTokenFor system}"
       ];
 
+      # Nix build sandboxes do not expose the host's /dev/vhost-vsock.  Boot
+      # tests therefore exercise the same AF_VSOCK listener and authenticated
+      # gRPC handshake through the kernel loopback transport.  The production
+      # QEMU specification still requires vhost-vsock-pci and is covered by the
+      # typed device-model tests; this keeps the reproducible image gates free
+      # of impure host-device dependencies.
+      loopbackVSOCKTestModule =
+        { lib, ... }:
+        {
+          boot.kernelModules = lib.mkForce [
+            "qemu_fw_cfg"
+            "vsock_loopback"
+          ];
+        };
+
       commonGuestTestFor =
         system:
         let
@@ -209,7 +224,10 @@
           requiredFeatures.kvm = false;
           node.specialArgs = guestArgsFor system "workstation" "test";
           nodes.machine = { lib, ... }: {
-            imports = [ ./nix/guests/image-base.nix ];
+            imports = [
+              ./nix/guests/image-base.nix
+              loopbackVSOCKTestModule
+            ];
             networking.hostName = "workstation";
             users.users.root.hashedPasswordFile = lib.mkForce null;
             users.users.private = {
@@ -219,10 +237,7 @@
             virtualisation.memorySize = 1024;
             virtualisation.cores = 2;
             virtualisation.vlans = [ ];
-            virtualisation.qemu.options = tcgQEMUOptionsFor system ++ [
-              "-device"
-              "vhost-vsock-pci,guest-cid=4203"
-            ];
+            virtualisation.qemu.options = tcgQEMUOptionsFor system;
           };
           testScript = ''
             machine.wait_for_unit("multi-user.target")
@@ -270,6 +285,7 @@
             imports = [
               ./nix/guests/image-base.nix
               module
+              loopbackVSOCKTestModule
             ];
             users.users.root.hashedPasswordFile = lib.mkForce null;
             virtualisation.memorySize = 2048;
@@ -334,16 +350,14 @@
             imports = [
               ./nix/guests/image-base.nix
               ./nix/guests/downloader.nix
+              loopbackVSOCKTestModule
             ];
             users.users.root.hashedPasswordFile = lib.mkForce null;
             environment.systemPackages = [ (guestSmokeFor system "downloader") ];
             virtualisation.memorySize = 2048;
             virtualisation.cores = 2;
             virtualisation.vlans = [ ];
-            virtualisation.qemu.options = tcgQEMUOptionsFor system ++ [
-              "-device"
-              "vhost-vsock-pci,guest-cid=4204"
-            ];
+            virtualisation.qemu.options = tcgQEMUOptionsFor system;
           };
           testScript = ''
             import json
@@ -462,6 +476,7 @@
             imports = [
               ./nix/guests/image-base.nix
               ./nix/guests/exporter.nix
+              loopbackVSOCKTestModule
             ];
             users.users.root.hashedPasswordFile = lib.mkForce null;
             virtualisation.memorySize = 1024;
@@ -785,16 +800,14 @@
             imports = [
               ./nix/guests/image-base.nix
               ./nix/guests/scanner.nix
+              loopbackVSOCKTestModule
             ];
             users.users.root.hashedPasswordFile = lib.mkForce null;
             environment.systemPackages = [ (guestSmokeFor system "scanner") ];
             virtualisation.memorySize = 2048;
             virtualisation.cores = 2;
             virtualisation.vlans = [ 1 ];
-            virtualisation.qemu.options = tcgQEMUOptionsFor system ++ [
-              "-device"
-              "vhost-vsock-pci,guest-cid=4205"
-            ];
+            virtualisation.qemu.options = tcgQEMUOptionsFor system;
           };
           testScript = ''
             import json
@@ -884,6 +897,7 @@
               ./nix/guests/image-base.nix
               ./nix/guests/scanner.nix
               ./nix/guests/scanner-offline.nix
+              loopbackVSOCKTestModule
             ];
             users.users.root.hashedPasswordFile = lib.mkForce null;
             environment.systemPackages = [ (guestSmokeFor system "scanner") ];
@@ -894,8 +908,6 @@
             # a later `-nic none`, which cannot remove an already-declared NIC.
             virtualisation.qemu.networkingOptions = lib.mkForce [ "-nic none" ];
             virtualisation.qemu.options = tcgQEMUOptionsFor system ++ [
-              "-device"
-              "vhost-vsock-pci,guest-cid=4206"
               "-drive"
               "file=${quarantineFixture},if=none,format=raw,readonly=on,id=quarantine"
               "-device"

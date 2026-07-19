@@ -233,6 +233,16 @@ not use a production capability or any VPN credential. NixOS test
 instrumentation may add its own control channel; that channel is not present in
 the canonical image derivations.
 
+Pure Nix build sandboxes do not expose the host `/dev/vhost-vsock` device. VM
+gates therefore load the kernel `vsock_loopback` transport and exercise the
+real guestd AF_VSOCK listener at CID 1. The test-only client is compiled only
+for Linux, refuses every CID except 1, and retains the production transport
+credentials, message/header bounds and token interceptors. Production QEMU
+continues to require `vhost-vsock-pci` with an allocated CID of at least 3; its
+typed device model and host-to-guest behavior are verified separately. This
+split makes the TCG boot gate reproducible without weakening the production
+CID policy or adding an impure device to CI.
+
 The downloader and both scanner phase gates use a test-only client that first
 proves an incorrect capability is rejected and then authenticates `Hello` with
 that synthetic capability. The client is added only to VM-test configurations,
