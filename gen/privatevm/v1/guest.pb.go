@@ -433,17 +433,184 @@ func (x *ShutdownRequest) GetPoweroff() bool {
 	return false
 }
 
+// GuestUnderlay is the private point-to-point addressing selected by the host
+// network owner. Addresses are canonical 4-byte/16-byte values rather than
+// strings so neither parsing nor logging can accidentally expose them.
+type GuestUnderlay struct {
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	Ipv4Address      []byte                 `protobuf:"bytes,1,opt,name=ipv4_address,json=ipv4Address,proto3" json:"ipv4_address,omitempty"`
+	Ipv4PrefixLength uint32                 `protobuf:"varint,2,opt,name=ipv4_prefix_length,json=ipv4PrefixLength,proto3" json:"ipv4_prefix_length,omitempty"`
+	Ipv4Gateway      []byte                 `protobuf:"bytes,3,opt,name=ipv4_gateway,json=ipv4Gateway,proto3" json:"ipv4_gateway,omitempty"`
+	Ipv6Address      []byte                 `protobuf:"bytes,4,opt,name=ipv6_address,json=ipv6Address,proto3" json:"ipv6_address,omitempty"`
+	Ipv6PrefixLength uint32                 `protobuf:"varint,5,opt,name=ipv6_prefix_length,json=ipv6PrefixLength,proto3" json:"ipv6_prefix_length,omitempty"`
+	Ipv6Gateway      []byte                 `protobuf:"bytes,6,opt,name=ipv6_gateway,json=ipv6Gateway,proto3" json:"ipv6_gateway,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *GuestUnderlay) Reset() {
+	*x = GuestUnderlay{}
+	mi := &file_privatevm_v1_guest_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GuestUnderlay) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GuestUnderlay) ProtoMessage() {}
+
+func (x *GuestUnderlay) ProtoReflect() protoreflect.Message {
+	mi := &file_privatevm_v1_guest_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GuestUnderlay.ProtoReflect.Descriptor instead.
+func (*GuestUnderlay) Descriptor() ([]byte, []int) {
+	return file_privatevm_v1_guest_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *GuestUnderlay) GetIpv4Address() []byte {
+	if x != nil {
+		return x.Ipv4Address
+	}
+	return nil
+}
+
+func (x *GuestUnderlay) GetIpv4PrefixLength() uint32 {
+	if x != nil {
+		return x.Ipv4PrefixLength
+	}
+	return 0
+}
+
+func (x *GuestUnderlay) GetIpv4Gateway() []byte {
+	if x != nil {
+		return x.Ipv4Gateway
+	}
+	return nil
+}
+
+func (x *GuestUnderlay) GetIpv6Address() []byte {
+	if x != nil {
+		return x.Ipv6Address
+	}
+	return nil
+}
+
+func (x *GuestUnderlay) GetIpv6PrefixLength() uint32 {
+	if x != nil {
+		return x.Ipv6PrefixLength
+	}
+	return 0
+}
+
+func (x *GuestUnderlay) GetIpv6Gateway() []byte {
+	if x != nil {
+		return x.Ipv6Gateway
+	}
+	return nil
+}
+
+// VPNProbeTargets are operator-controlled verification fixtures. They are
+// transported only to the authenticated guest and never returned in status.
+type VPNProbeTargets struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	DnsName       string                 `protobuf:"bytes,1,opt,name=dns_name,json=dnsName,proto3" json:"dns_name,omitempty"`
+	Ipv4Address   []byte                 `protobuf:"bytes,2,opt,name=ipv4_address,json=ipv4Address,proto3" json:"ipv4_address,omitempty"`
+	Ipv4Port      uint32                 `protobuf:"varint,3,opt,name=ipv4_port,json=ipv4Port,proto3" json:"ipv4_port,omitempty"`
+	Ipv6Address   []byte                 `protobuf:"bytes,4,opt,name=ipv6_address,json=ipv6Address,proto3" json:"ipv6_address,omitempty"`
+	Ipv6Port      uint32                 `protobuf:"varint,5,opt,name=ipv6_port,json=ipv6Port,proto3" json:"ipv6_port,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *VPNProbeTargets) Reset() {
+	*x = VPNProbeTargets{}
+	mi := &file_privatevm_v1_guest_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *VPNProbeTargets) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*VPNProbeTargets) ProtoMessage() {}
+
+func (x *VPNProbeTargets) ProtoReflect() protoreflect.Message {
+	mi := &file_privatevm_v1_guest_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use VPNProbeTargets.ProtoReflect.Descriptor instead.
+func (*VPNProbeTargets) Descriptor() ([]byte, []int) {
+	return file_privatevm_v1_guest_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *VPNProbeTargets) GetDnsName() string {
+	if x != nil {
+		return x.DnsName
+	}
+	return ""
+}
+
+func (x *VPNProbeTargets) GetIpv4Address() []byte {
+	if x != nil {
+		return x.Ipv4Address
+	}
+	return nil
+}
+
+func (x *VPNProbeTargets) GetIpv4Port() uint32 {
+	if x != nil {
+		return x.Ipv4Port
+	}
+	return 0
+}
+
+func (x *VPNProbeTargets) GetIpv6Address() []byte {
+	if x != nil {
+		return x.Ipv6Address
+	}
+	return nil
+}
+
+func (x *VPNProbeTargets) GetIpv6Port() uint32 {
+	if x != nil {
+		return x.Ipv6Port
+	}
+	return 0
+}
+
 type ConfigureWireGuardRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Context       *GuestContext          `protobuf:"bytes,1,opt,name=context,proto3" json:"context,omitempty"`
 	Profile       []byte                 `protobuf:"bytes,2,opt,name=profile,proto3" json:"profile,omitempty"`
+	Underlay      *GuestUnderlay         `protobuf:"bytes,3,opt,name=underlay,proto3" json:"underlay,omitempty"`
+	ProbeTargets  *VPNProbeTargets       `protobuf:"bytes,4,opt,name=probe_targets,json=probeTargets,proto3" json:"probe_targets,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *ConfigureWireGuardRequest) Reset() {
 	*x = ConfigureWireGuardRequest{}
-	mi := &file_privatevm_v1_guest_proto_msgTypes[7]
+	mi := &file_privatevm_v1_guest_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -455,7 +622,7 @@ func (x *ConfigureWireGuardRequest) String() string {
 func (*ConfigureWireGuardRequest) ProtoMessage() {}
 
 func (x *ConfigureWireGuardRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_privatevm_v1_guest_proto_msgTypes[7]
+	mi := &file_privatevm_v1_guest_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -468,7 +635,7 @@ func (x *ConfigureWireGuardRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ConfigureWireGuardRequest.ProtoReflect.Descriptor instead.
 func (*ConfigureWireGuardRequest) Descriptor() ([]byte, []int) {
-	return file_privatevm_v1_guest_proto_rawDescGZIP(), []int{7}
+	return file_privatevm_v1_guest_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *ConfigureWireGuardRequest) GetContext() *GuestContext {
@@ -485,6 +652,20 @@ func (x *ConfigureWireGuardRequest) GetProfile() []byte {
 	return nil
 }
 
+func (x *ConfigureWireGuardRequest) GetUnderlay() *GuestUnderlay {
+	if x != nil {
+		return x.Underlay
+	}
+	return nil
+}
+
+func (x *ConfigureWireGuardRequest) GetProbeTargets() *VPNProbeTargets {
+	if x != nil {
+		return x.ProbeTargets
+	}
+	return nil
+}
+
 type VerifyVPNRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Context       *GuestContext          `protobuf:"bytes,1,opt,name=context,proto3" json:"context,omitempty"`
@@ -494,7 +675,7 @@ type VerifyVPNRequest struct {
 
 func (x *VerifyVPNRequest) Reset() {
 	*x = VerifyVPNRequest{}
-	mi := &file_privatevm_v1_guest_proto_msgTypes[8]
+	mi := &file_privatevm_v1_guest_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -506,7 +687,7 @@ func (x *VerifyVPNRequest) String() string {
 func (*VerifyVPNRequest) ProtoMessage() {}
 
 func (x *VerifyVPNRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_privatevm_v1_guest_proto_msgTypes[8]
+	mi := &file_privatevm_v1_guest_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -519,7 +700,7 @@ func (x *VerifyVPNRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VerifyVPNRequest.ProtoReflect.Descriptor instead.
 func (*VerifyVPNRequest) Descriptor() ([]byte, []int) {
-	return file_privatevm_v1_guest_proto_rawDescGZIP(), []int{8}
+	return file_privatevm_v1_guest_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *VerifyVPNRequest) GetContext() *GuestContext {
@@ -547,7 +728,7 @@ type VPNStatus struct {
 
 func (x *VPNStatus) Reset() {
 	*x = VPNStatus{}
-	mi := &file_privatevm_v1_guest_proto_msgTypes[9]
+	mi := &file_privatevm_v1_guest_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -559,7 +740,7 @@ func (x *VPNStatus) String() string {
 func (*VPNStatus) ProtoMessage() {}
 
 func (x *VPNStatus) ProtoReflect() protoreflect.Message {
-	mi := &file_privatevm_v1_guest_proto_msgTypes[9]
+	mi := &file_privatevm_v1_guest_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -572,7 +753,7 @@ func (x *VPNStatus) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VPNStatus.ProtoReflect.Descriptor instead.
 func (*VPNStatus) Descriptor() ([]byte, []int) {
-	return file_privatevm_v1_guest_proto_rawDescGZIP(), []int{9}
+	return file_privatevm_v1_guest_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *VPNStatus) GetConfigured() bool {
@@ -660,7 +841,7 @@ type TorrentInputFrame struct {
 
 func (x *TorrentInputFrame) Reset() {
 	*x = TorrentInputFrame{}
-	mi := &file_privatevm_v1_guest_proto_msgTypes[10]
+	mi := &file_privatevm_v1_guest_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -672,7 +853,7 @@ func (x *TorrentInputFrame) String() string {
 func (*TorrentInputFrame) ProtoMessage() {}
 
 func (x *TorrentInputFrame) ProtoReflect() protoreflect.Message {
-	mi := &file_privatevm_v1_guest_proto_msgTypes[10]
+	mi := &file_privatevm_v1_guest_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -685,7 +866,7 @@ func (x *TorrentInputFrame) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TorrentInputFrame.ProtoReflect.Descriptor instead.
 func (*TorrentInputFrame) Descriptor() ([]byte, []int) {
-	return file_privatevm_v1_guest_proto_rawDescGZIP(), []int{10}
+	return file_privatevm_v1_guest_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *TorrentInputFrame) GetContext() *GuestContext {
@@ -752,7 +933,7 @@ type TorrentRequest struct {
 
 func (x *TorrentRequest) Reset() {
 	*x = TorrentRequest{}
-	mi := &file_privatevm_v1_guest_proto_msgTypes[11]
+	mi := &file_privatevm_v1_guest_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -764,7 +945,7 @@ func (x *TorrentRequest) String() string {
 func (*TorrentRequest) ProtoMessage() {}
 
 func (x *TorrentRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_privatevm_v1_guest_proto_msgTypes[11]
+	mi := &file_privatevm_v1_guest_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -777,7 +958,7 @@ func (x *TorrentRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TorrentRequest.ProtoReflect.Descriptor instead.
 func (*TorrentRequest) Descriptor() ([]byte, []int) {
-	return file_privatevm_v1_guest_proto_rawDescGZIP(), []int{11}
+	return file_privatevm_v1_guest_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *TorrentRequest) GetContext() *GuestContext {
@@ -800,7 +981,7 @@ type TorrentFile struct {
 
 func (x *TorrentFile) Reset() {
 	*x = TorrentFile{}
-	mi := &file_privatevm_v1_guest_proto_msgTypes[12]
+	mi := &file_privatevm_v1_guest_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -812,7 +993,7 @@ func (x *TorrentFile) String() string {
 func (*TorrentFile) ProtoMessage() {}
 
 func (x *TorrentFile) ProtoReflect() protoreflect.Message {
-	mi := &file_privatevm_v1_guest_proto_msgTypes[12]
+	mi := &file_privatevm_v1_guest_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -825,7 +1006,7 @@ func (x *TorrentFile) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TorrentFile.ProtoReflect.Descriptor instead.
 func (*TorrentFile) Descriptor() ([]byte, []int) {
-	return file_privatevm_v1_guest_proto_rawDescGZIP(), []int{12}
+	return file_privatevm_v1_guest_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *TorrentFile) GetIndex() uint32 {
@@ -875,7 +1056,7 @@ type TorrentMetadata struct {
 
 func (x *TorrentMetadata) Reset() {
 	*x = TorrentMetadata{}
-	mi := &file_privatevm_v1_guest_proto_msgTypes[13]
+	mi := &file_privatevm_v1_guest_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -887,7 +1068,7 @@ func (x *TorrentMetadata) String() string {
 func (*TorrentMetadata) ProtoMessage() {}
 
 func (x *TorrentMetadata) ProtoReflect() protoreflect.Message {
-	mi := &file_privatevm_v1_guest_proto_msgTypes[13]
+	mi := &file_privatevm_v1_guest_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -900,7 +1081,7 @@ func (x *TorrentMetadata) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TorrentMetadata.ProtoReflect.Descriptor instead.
 func (*TorrentMetadata) Descriptor() ([]byte, []int) {
-	return file_privatevm_v1_guest_proto_rawDescGZIP(), []int{13}
+	return file_privatevm_v1_guest_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *TorrentMetadata) GetDisplayName() string {
@@ -941,7 +1122,7 @@ type SelectTorrentFilesRequest struct {
 
 func (x *SelectTorrentFilesRequest) Reset() {
 	*x = SelectTorrentFilesRequest{}
-	mi := &file_privatevm_v1_guest_proto_msgTypes[14]
+	mi := &file_privatevm_v1_guest_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -953,7 +1134,7 @@ func (x *SelectTorrentFilesRequest) String() string {
 func (*SelectTorrentFilesRequest) ProtoMessage() {}
 
 func (x *SelectTorrentFilesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_privatevm_v1_guest_proto_msgTypes[14]
+	mi := &file_privatevm_v1_guest_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -966,7 +1147,7 @@ func (x *SelectTorrentFilesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SelectTorrentFilesRequest.ProtoReflect.Descriptor instead.
 func (*SelectTorrentFilesRequest) Descriptor() ([]byte, []int) {
-	return file_privatevm_v1_guest_proto_rawDescGZIP(), []int{14}
+	return file_privatevm_v1_guest_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *SelectTorrentFilesRequest) GetContext() *GuestContext {
@@ -994,7 +1175,7 @@ type TorrentEvent struct {
 
 func (x *TorrentEvent) Reset() {
 	*x = TorrentEvent{}
-	mi := &file_privatevm_v1_guest_proto_msgTypes[15]
+	mi := &file_privatevm_v1_guest_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1006,7 +1187,7 @@ func (x *TorrentEvent) String() string {
 func (*TorrentEvent) ProtoMessage() {}
 
 func (x *TorrentEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_privatevm_v1_guest_proto_msgTypes[15]
+	mi := &file_privatevm_v1_guest_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1019,7 +1200,7 @@ func (x *TorrentEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TorrentEvent.ProtoReflect.Descriptor instead.
 func (*TorrentEvent) Descriptor() ([]byte, []int) {
-	return file_privatevm_v1_guest_proto_rawDescGZIP(), []int{15}
+	return file_privatevm_v1_guest_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *TorrentEvent) GetProgress() *Progress {
@@ -1054,7 +1235,7 @@ type TorrentStatus struct {
 
 func (x *TorrentStatus) Reset() {
 	*x = TorrentStatus{}
-	mi := &file_privatevm_v1_guest_proto_msgTypes[16]
+	mi := &file_privatevm_v1_guest_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1066,7 +1247,7 @@ func (x *TorrentStatus) String() string {
 func (*TorrentStatus) ProtoMessage() {}
 
 func (x *TorrentStatus) ProtoReflect() protoreflect.Message {
-	mi := &file_privatevm_v1_guest_proto_msgTypes[16]
+	mi := &file_privatevm_v1_guest_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1079,7 +1260,7 @@ func (x *TorrentStatus) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TorrentStatus.ProtoReflect.Descriptor instead.
 func (*TorrentStatus) Descriptor() ([]byte, []int) {
-	return file_privatevm_v1_guest_proto_rawDescGZIP(), []int{16}
+	return file_privatevm_v1_guest_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *TorrentStatus) GetState() string {
@@ -1113,7 +1294,7 @@ type ScannerRequest struct {
 
 func (x *ScannerRequest) Reset() {
 	*x = ScannerRequest{}
-	mi := &file_privatevm_v1_guest_proto_msgTypes[17]
+	mi := &file_privatevm_v1_guest_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1125,7 +1306,7 @@ func (x *ScannerRequest) String() string {
 func (*ScannerRequest) ProtoMessage() {}
 
 func (x *ScannerRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_privatevm_v1_guest_proto_msgTypes[17]
+	mi := &file_privatevm_v1_guest_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1138,7 +1319,7 @@ func (x *ScannerRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ScannerRequest.ProtoReflect.Descriptor instead.
 func (*ScannerRequest) Descriptor() ([]byte, []int) {
-	return file_privatevm_v1_guest_proto_rawDescGZIP(), []int{17}
+	return file_privatevm_v1_guest_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *ScannerRequest) GetContext() *GuestContext {
@@ -1167,7 +1348,7 @@ type DefinitionsStatus struct {
 
 func (x *DefinitionsStatus) Reset() {
 	*x = DefinitionsStatus{}
-	mi := &file_privatevm_v1_guest_proto_msgTypes[18]
+	mi := &file_privatevm_v1_guest_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1179,7 +1360,7 @@ func (x *DefinitionsStatus) String() string {
 func (*DefinitionsStatus) ProtoMessage() {}
 
 func (x *DefinitionsStatus) ProtoReflect() protoreflect.Message {
-	mi := &file_privatevm_v1_guest_proto_msgTypes[18]
+	mi := &file_privatevm_v1_guest_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1192,7 +1373,7 @@ func (x *DefinitionsStatus) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DefinitionsStatus.ProtoReflect.Descriptor instead.
 func (*DefinitionsStatus) Descriptor() ([]byte, []int) {
-	return file_privatevm_v1_guest_proto_rawDescGZIP(), []int{18}
+	return file_privatevm_v1_guest_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *DefinitionsStatus) GetCurrent() bool {
@@ -1234,7 +1415,7 @@ type OfflineStatus struct {
 
 func (x *OfflineStatus) Reset() {
 	*x = OfflineStatus{}
-	mi := &file_privatevm_v1_guest_proto_msgTypes[19]
+	mi := &file_privatevm_v1_guest_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1246,7 +1427,7 @@ func (x *OfflineStatus) String() string {
 func (*OfflineStatus) ProtoMessage() {}
 
 func (x *OfflineStatus) ProtoReflect() protoreflect.Message {
-	mi := &file_privatevm_v1_guest_proto_msgTypes[19]
+	mi := &file_privatevm_v1_guest_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1259,7 +1440,7 @@ func (x *OfflineStatus) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OfflineStatus.ProtoReflect.Descriptor instead.
 func (*OfflineStatus) Descriptor() ([]byte, []int) {
-	return file_privatevm_v1_guest_proto_rawDescGZIP(), []int{19}
+	return file_privatevm_v1_guest_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *OfflineStatus) GetNoNetwork() bool {
@@ -1295,7 +1476,7 @@ type ScanEvent struct {
 
 func (x *ScanEvent) Reset() {
 	*x = ScanEvent{}
-	mi := &file_privatevm_v1_guest_proto_msgTypes[20]
+	mi := &file_privatevm_v1_guest_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1307,7 +1488,7 @@ func (x *ScanEvent) String() string {
 func (*ScanEvent) ProtoMessage() {}
 
 func (x *ScanEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_privatevm_v1_guest_proto_msgTypes[20]
+	mi := &file_privatevm_v1_guest_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1320,7 +1501,7 @@ func (x *ScanEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ScanEvent.ProtoReflect.Descriptor instead.
 func (*ScanEvent) Descriptor() ([]byte, []int) {
-	return file_privatevm_v1_guest_proto_rawDescGZIP(), []int{20}
+	return file_privatevm_v1_guest_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *ScanEvent) GetProgress() *Progress {
@@ -1362,7 +1543,7 @@ type ScanReportEnvelope struct {
 
 func (x *ScanReportEnvelope) Reset() {
 	*x = ScanReportEnvelope{}
-	mi := &file_privatevm_v1_guest_proto_msgTypes[21]
+	mi := &file_privatevm_v1_guest_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1374,7 +1555,7 @@ func (x *ScanReportEnvelope) String() string {
 func (*ScanReportEnvelope) ProtoMessage() {}
 
 func (x *ScanReportEnvelope) ProtoReflect() protoreflect.Message {
-	mi := &file_privatevm_v1_guest_proto_msgTypes[21]
+	mi := &file_privatevm_v1_guest_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1387,7 +1568,7 @@ func (x *ScanReportEnvelope) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ScanReportEnvelope.ProtoReflect.Descriptor instead.
 func (*ScanReportEnvelope) Descriptor() ([]byte, []int) {
-	return file_privatevm_v1_guest_proto_rawDescGZIP(), []int{21}
+	return file_privatevm_v1_guest_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *ScanReportEnvelope) GetCanonicalJson() []byte {
@@ -1421,7 +1602,7 @@ type ExportApprovedFileRequest struct {
 
 func (x *ExportApprovedFileRequest) Reset() {
 	*x = ExportApprovedFileRequest{}
-	mi := &file_privatevm_v1_guest_proto_msgTypes[22]
+	mi := &file_privatevm_v1_guest_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1433,7 +1614,7 @@ func (x *ExportApprovedFileRequest) String() string {
 func (*ExportApprovedFileRequest) ProtoMessage() {}
 
 func (x *ExportApprovedFileRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_privatevm_v1_guest_proto_msgTypes[22]
+	mi := &file_privatevm_v1_guest_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1446,7 +1627,7 @@ func (x *ExportApprovedFileRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ExportApprovedFileRequest.ProtoReflect.Descriptor instead.
 func (*ExportApprovedFileRequest) Descriptor() ([]byte, []int) {
-	return file_privatevm_v1_guest_proto_rawDescGZIP(), []int{22}
+	return file_privatevm_v1_guest_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *ExportApprovedFileRequest) GetContext() *GuestContext {
@@ -1472,7 +1653,7 @@ type WorkspaceStateRequest struct {
 
 func (x *WorkspaceStateRequest) Reset() {
 	*x = WorkspaceStateRequest{}
-	mi := &file_privatevm_v1_guest_proto_msgTypes[23]
+	mi := &file_privatevm_v1_guest_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1484,7 +1665,7 @@ func (x *WorkspaceStateRequest) String() string {
 func (*WorkspaceStateRequest) ProtoMessage() {}
 
 func (x *WorkspaceStateRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_privatevm_v1_guest_proto_msgTypes[23]
+	mi := &file_privatevm_v1_guest_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1497,7 +1678,7 @@ func (x *WorkspaceStateRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WorkspaceStateRequest.ProtoReflect.Descriptor instead.
 func (*WorkspaceStateRequest) Descriptor() ([]byte, []int) {
-	return file_privatevm_v1_guest_proto_rawDescGZIP(), []int{23}
+	return file_privatevm_v1_guest_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *WorkspaceStateRequest) GetContext() *GuestContext {
@@ -1519,7 +1700,7 @@ type WorkspaceEntry struct {
 
 func (x *WorkspaceEntry) Reset() {
 	*x = WorkspaceEntry{}
-	mi := &file_privatevm_v1_guest_proto_msgTypes[24]
+	mi := &file_privatevm_v1_guest_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1531,7 +1712,7 @@ func (x *WorkspaceEntry) String() string {
 func (*WorkspaceEntry) ProtoMessage() {}
 
 func (x *WorkspaceEntry) ProtoReflect() protoreflect.Message {
-	mi := &file_privatevm_v1_guest_proto_msgTypes[24]
+	mi := &file_privatevm_v1_guest_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1544,7 +1725,7 @@ func (x *WorkspaceEntry) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WorkspaceEntry.ProtoReflect.Descriptor instead.
 func (*WorkspaceEntry) Descriptor() ([]byte, []int) {
-	return file_privatevm_v1_guest_proto_rawDescGZIP(), []int{24}
+	return file_privatevm_v1_guest_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *WorkspaceEntry) GetOutputId() string {
@@ -1585,7 +1766,7 @@ type WorkspaceState struct {
 
 func (x *WorkspaceState) Reset() {
 	*x = WorkspaceState{}
-	mi := &file_privatevm_v1_guest_proto_msgTypes[25]
+	mi := &file_privatevm_v1_guest_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1597,7 +1778,7 @@ func (x *WorkspaceState) String() string {
 func (*WorkspaceState) ProtoMessage() {}
 
 func (x *WorkspaceState) ProtoReflect() protoreflect.Message {
-	mi := &file_privatevm_v1_guest_proto_msgTypes[25]
+	mi := &file_privatevm_v1_guest_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1610,7 +1791,7 @@ func (x *WorkspaceState) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WorkspaceState.ProtoReflect.Descriptor instead.
 func (*WorkspaceState) Descriptor() ([]byte, []int) {
-	return file_privatevm_v1_guest_proto_rawDescGZIP(), []int{25}
+	return file_privatevm_v1_guest_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *WorkspaceState) GetState() string {
@@ -1637,7 +1818,7 @@ type GuestExportFileRequest struct {
 
 func (x *GuestExportFileRequest) Reset() {
 	*x = GuestExportFileRequest{}
-	mi := &file_privatevm_v1_guest_proto_msgTypes[26]
+	mi := &file_privatevm_v1_guest_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1649,7 +1830,7 @@ func (x *GuestExportFileRequest) String() string {
 func (*GuestExportFileRequest) ProtoMessage() {}
 
 func (x *GuestExportFileRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_privatevm_v1_guest_proto_msgTypes[26]
+	mi := &file_privatevm_v1_guest_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1662,7 +1843,7 @@ func (x *GuestExportFileRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GuestExportFileRequest.ProtoReflect.Descriptor instead.
 func (*GuestExportFileRequest) Descriptor() ([]byte, []int) {
-	return file_privatevm_v1_guest_proto_rawDescGZIP(), []int{26}
+	return file_privatevm_v1_guest_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *GuestExportFileRequest) GetContext() *GuestContext {
@@ -1690,7 +1871,7 @@ type MarkExportVerifiedRequest struct {
 
 func (x *MarkExportVerifiedRequest) Reset() {
 	*x = MarkExportVerifiedRequest{}
-	mi := &file_privatevm_v1_guest_proto_msgTypes[27]
+	mi := &file_privatevm_v1_guest_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1702,7 +1883,7 @@ func (x *MarkExportVerifiedRequest) String() string {
 func (*MarkExportVerifiedRequest) ProtoMessage() {}
 
 func (x *MarkExportVerifiedRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_privatevm_v1_guest_proto_msgTypes[27]
+	mi := &file_privatevm_v1_guest_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1715,7 +1896,7 @@ func (x *MarkExportVerifiedRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MarkExportVerifiedRequest.ProtoReflect.Descriptor instead.
 func (*MarkExportVerifiedRequest) Descriptor() ([]byte, []int) {
-	return file_privatevm_v1_guest_proto_rawDescGZIP(), []int{27}
+	return file_privatevm_v1_guest_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *MarkExportVerifiedRequest) GetContext() *GuestContext {
@@ -1749,7 +1930,7 @@ type NetworkWarningRequest struct {
 
 func (x *NetworkWarningRequest) Reset() {
 	*x = NetworkWarningRequest{}
-	mi := &file_privatevm_v1_guest_proto_msgTypes[28]
+	mi := &file_privatevm_v1_guest_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1761,7 +1942,7 @@ func (x *NetworkWarningRequest) String() string {
 func (*NetworkWarningRequest) ProtoMessage() {}
 
 func (x *NetworkWarningRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_privatevm_v1_guest_proto_msgTypes[28]
+	mi := &file_privatevm_v1_guest_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1774,7 +1955,7 @@ func (x *NetworkWarningRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use NetworkWarningRequest.ProtoReflect.Descriptor instead.
 func (*NetworkWarningRequest) Descriptor() ([]byte, []int) {
-	return file_privatevm_v1_guest_proto_rawDescGZIP(), []int{28}
+	return file_privatevm_v1_guest_proto_rawDescGZIP(), []int{30}
 }
 
 func (x *NetworkWarningRequest) GetContext() *GuestContext {
@@ -1800,7 +1981,7 @@ type ExporterRequest struct {
 
 func (x *ExporterRequest) Reset() {
 	*x = ExporterRequest{}
-	mi := &file_privatevm_v1_guest_proto_msgTypes[29]
+	mi := &file_privatevm_v1_guest_proto_msgTypes[31]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1812,7 +1993,7 @@ func (x *ExporterRequest) String() string {
 func (*ExporterRequest) ProtoMessage() {}
 
 func (x *ExporterRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_privatevm_v1_guest_proto_msgTypes[29]
+	mi := &file_privatevm_v1_guest_proto_msgTypes[31]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1825,7 +2006,7 @@ func (x *ExporterRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ExporterRequest.ProtoReflect.Descriptor instead.
 func (*ExporterRequest) Descriptor() ([]byte, []int) {
-	return file_privatevm_v1_guest_proto_rawDescGZIP(), []int{29}
+	return file_privatevm_v1_guest_proto_rawDescGZIP(), []int{31}
 }
 
 func (x *ExporterRequest) GetContext() *GuestContext {
@@ -1845,7 +2026,7 @@ type PrepareUSBRequest struct {
 
 func (x *PrepareUSBRequest) Reset() {
 	*x = PrepareUSBRequest{}
-	mi := &file_privatevm_v1_guest_proto_msgTypes[30]
+	mi := &file_privatevm_v1_guest_proto_msgTypes[32]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1857,7 +2038,7 @@ func (x *PrepareUSBRequest) String() string {
 func (*PrepareUSBRequest) ProtoMessage() {}
 
 func (x *PrepareUSBRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_privatevm_v1_guest_proto_msgTypes[30]
+	mi := &file_privatevm_v1_guest_proto_msgTypes[32]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1870,7 +2051,7 @@ func (x *PrepareUSBRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PrepareUSBRequest.ProtoReflect.Descriptor instead.
 func (*PrepareUSBRequest) Descriptor() ([]byte, []int) {
-	return file_privatevm_v1_guest_proto_rawDescGZIP(), []int{30}
+	return file_privatevm_v1_guest_proto_rawDescGZIP(), []int{32}
 }
 
 func (x *PrepareUSBRequest) GetContext() *GuestContext {
@@ -1897,7 +2078,7 @@ type VerifyExportRequest struct {
 
 func (x *VerifyExportRequest) Reset() {
 	*x = VerifyExportRequest{}
-	mi := &file_privatevm_v1_guest_proto_msgTypes[31]
+	mi := &file_privatevm_v1_guest_proto_msgTypes[33]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1909,7 +2090,7 @@ func (x *VerifyExportRequest) String() string {
 func (*VerifyExportRequest) ProtoMessage() {}
 
 func (x *VerifyExportRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_privatevm_v1_guest_proto_msgTypes[31]
+	mi := &file_privatevm_v1_guest_proto_msgTypes[33]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1922,7 +2103,7 @@ func (x *VerifyExportRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VerifyExportRequest.ProtoReflect.Descriptor instead.
 func (*VerifyExportRequest) Descriptor() ([]byte, []int) {
-	return file_privatevm_v1_guest_proto_rawDescGZIP(), []int{31}
+	return file_privatevm_v1_guest_proto_rawDescGZIP(), []int{33}
 }
 
 func (x *VerifyExportRequest) GetContext() *GuestContext {
@@ -1952,7 +2133,7 @@ type USBStatus struct {
 
 func (x *USBStatus) Reset() {
 	*x = USBStatus{}
-	mi := &file_privatevm_v1_guest_proto_msgTypes[32]
+	mi := &file_privatevm_v1_guest_proto_msgTypes[34]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1964,7 +2145,7 @@ func (x *USBStatus) String() string {
 func (*USBStatus) ProtoMessage() {}
 
 func (x *USBStatus) ProtoReflect() protoreflect.Message {
-	mi := &file_privatevm_v1_guest_proto_msgTypes[32]
+	mi := &file_privatevm_v1_guest_proto_msgTypes[34]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1977,7 +2158,7 @@ func (x *USBStatus) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use USBStatus.ProtoReflect.Descriptor instead.
 func (*USBStatus) Descriptor() ([]byte, []int) {
-	return file_privatevm_v1_guest_proto_rawDescGZIP(), []int{32}
+	return file_privatevm_v1_guest_proto_rawDescGZIP(), []int{34}
 }
 
 func (x *USBStatus) GetNoNetwork() bool {
@@ -2052,10 +2233,25 @@ const file_privatevm_v1_guest_proto_rawDesc = "" +
 	"diagnostic\"c\n" +
 	"\x0fShutdownRequest\x124\n" +
 	"\acontext\x18\x01 \x01(\v2\x1a.privatevm.v1.GuestContextR\acontext\x12\x1a\n" +
-	"\bpoweroff\x18\x02 \x01(\bR\bpoweroff\"k\n" +
+	"\bpoweroff\x18\x02 \x01(\bR\bpoweroff\"\xf7\x01\n" +
+	"\rGuestUnderlay\x12!\n" +
+	"\fipv4_address\x18\x01 \x01(\fR\vipv4Address\x12,\n" +
+	"\x12ipv4_prefix_length\x18\x02 \x01(\rR\x10ipv4PrefixLength\x12!\n" +
+	"\fipv4_gateway\x18\x03 \x01(\fR\vipv4Gateway\x12!\n" +
+	"\fipv6_address\x18\x04 \x01(\fR\vipv6Address\x12,\n" +
+	"\x12ipv6_prefix_length\x18\x05 \x01(\rR\x10ipv6PrefixLength\x12!\n" +
+	"\fipv6_gateway\x18\x06 \x01(\fR\vipv6Gateway\"\xac\x01\n" +
+	"\x0fVPNProbeTargets\x12\x19\n" +
+	"\bdns_name\x18\x01 \x01(\tR\adnsName\x12!\n" +
+	"\fipv4_address\x18\x02 \x01(\fR\vipv4Address\x12\x1b\n" +
+	"\tipv4_port\x18\x03 \x01(\rR\bipv4Port\x12!\n" +
+	"\fipv6_address\x18\x04 \x01(\fR\vipv6Address\x12\x1b\n" +
+	"\tipv6_port\x18\x05 \x01(\rR\bipv6Port\"\xe8\x01\n" +
 	"\x19ConfigureWireGuardRequest\x124\n" +
 	"\acontext\x18\x01 \x01(\v2\x1a.privatevm.v1.GuestContextR\acontext\x12\x18\n" +
-	"\aprofile\x18\x02 \x01(\fR\aprofile\"H\n" +
+	"\aprofile\x18\x02 \x01(\fR\aprofile\x127\n" +
+	"\bunderlay\x18\x03 \x01(\v2\x1b.privatevm.v1.GuestUnderlayR\bunderlay\x12B\n" +
+	"\rprobe_targets\x18\x04 \x01(\v2\x1d.privatevm.v1.VPNProbeTargetsR\fprobeTargets\"H\n" +
 	"\x10VerifyVPNRequest\x124\n" +
 	"\acontext\x18\x01 \x01(\v2\x1a.privatevm.v1.GuestContextR\acontext\"\xc6\x03\n" +
 	"\tVPNStatus\x12\x1e\n" +
@@ -2224,7 +2420,7 @@ func file_privatevm_v1_guest_proto_rawDescGZIP() []byte {
 	return file_privatevm_v1_guest_proto_rawDescData
 }
 
-var file_privatevm_v1_guest_proto_msgTypes = make([]protoimpl.MessageInfo, 33)
+var file_privatevm_v1_guest_proto_msgTypes = make([]protoimpl.MessageInfo, 35)
 var file_privatevm_v1_guest_proto_goTypes = []any{
 	(*GuestContext)(nil),              // 0: privatevm.v1.GuestContext
 	(*GuestHelloRequest)(nil),         // 1: privatevm.v1.GuestHelloRequest
@@ -2233,149 +2429,153 @@ var file_privatevm_v1_guest_proto_goTypes = []any{
 	(*GuestStatus)(nil),               // 4: privatevm.v1.GuestStatus
 	(*GuestEvent)(nil),                // 5: privatevm.v1.GuestEvent
 	(*ShutdownRequest)(nil),           // 6: privatevm.v1.ShutdownRequest
-	(*ConfigureWireGuardRequest)(nil), // 7: privatevm.v1.ConfigureWireGuardRequest
-	(*VerifyVPNRequest)(nil),          // 8: privatevm.v1.VerifyVPNRequest
-	(*VPNStatus)(nil),                 // 9: privatevm.v1.VPNStatus
-	(*TorrentInputFrame)(nil),         // 10: privatevm.v1.TorrentInputFrame
-	(*TorrentRequest)(nil),            // 11: privatevm.v1.TorrentRequest
-	(*TorrentFile)(nil),               // 12: privatevm.v1.TorrentFile
-	(*TorrentMetadata)(nil),           // 13: privatevm.v1.TorrentMetadata
-	(*SelectTorrentFilesRequest)(nil), // 14: privatevm.v1.SelectTorrentFilesRequest
-	(*TorrentEvent)(nil),              // 15: privatevm.v1.TorrentEvent
-	(*TorrentStatus)(nil),             // 16: privatevm.v1.TorrentStatus
-	(*ScannerRequest)(nil),            // 17: privatevm.v1.ScannerRequest
-	(*DefinitionsStatus)(nil),         // 18: privatevm.v1.DefinitionsStatus
-	(*OfflineStatus)(nil),             // 19: privatevm.v1.OfflineStatus
-	(*ScanEvent)(nil),                 // 20: privatevm.v1.ScanEvent
-	(*ScanReportEnvelope)(nil),        // 21: privatevm.v1.ScanReportEnvelope
-	(*ExportApprovedFileRequest)(nil), // 22: privatevm.v1.ExportApprovedFileRequest
-	(*WorkspaceStateRequest)(nil),     // 23: privatevm.v1.WorkspaceStateRequest
-	(*WorkspaceEntry)(nil),            // 24: privatevm.v1.WorkspaceEntry
-	(*WorkspaceState)(nil),            // 25: privatevm.v1.WorkspaceState
-	(*GuestExportFileRequest)(nil),    // 26: privatevm.v1.GuestExportFileRequest
-	(*MarkExportVerifiedRequest)(nil), // 27: privatevm.v1.MarkExportVerifiedRequest
-	(*NetworkWarningRequest)(nil),     // 28: privatevm.v1.NetworkWarningRequest
-	(*ExporterRequest)(nil),           // 29: privatevm.v1.ExporterRequest
-	(*PrepareUSBRequest)(nil),         // 30: privatevm.v1.PrepareUSBRequest
-	(*VerifyExportRequest)(nil),       // 31: privatevm.v1.VerifyExportRequest
-	(*USBStatus)(nil),                 // 32: privatevm.v1.USBStatus
-	(*RequestContext)(nil),            // 33: privatevm.v1.RequestContext
-	(GuestRole)(0),                    // 34: privatevm.v1.GuestRole
-	(*ApiVersion)(nil),                // 35: privatevm.v1.ApiVersion
-	(*Diagnostic)(nil),                // 36: privatevm.v1.Diagnostic
-	(*Progress)(nil),                  // 37: privatevm.v1.Progress
-	(*Hash)(nil),                      // 38: privatevm.v1.Hash
-	(*TransferFrame)(nil),             // 39: privatevm.v1.TransferFrame
-	(*Empty)(nil),                     // 40: privatevm.v1.Empty
-	(*TransferReceipt)(nil),           // 41: privatevm.v1.TransferReceipt
+	(*GuestUnderlay)(nil),             // 7: privatevm.v1.GuestUnderlay
+	(*VPNProbeTargets)(nil),           // 8: privatevm.v1.VPNProbeTargets
+	(*ConfigureWireGuardRequest)(nil), // 9: privatevm.v1.ConfigureWireGuardRequest
+	(*VerifyVPNRequest)(nil),          // 10: privatevm.v1.VerifyVPNRequest
+	(*VPNStatus)(nil),                 // 11: privatevm.v1.VPNStatus
+	(*TorrentInputFrame)(nil),         // 12: privatevm.v1.TorrentInputFrame
+	(*TorrentRequest)(nil),            // 13: privatevm.v1.TorrentRequest
+	(*TorrentFile)(nil),               // 14: privatevm.v1.TorrentFile
+	(*TorrentMetadata)(nil),           // 15: privatevm.v1.TorrentMetadata
+	(*SelectTorrentFilesRequest)(nil), // 16: privatevm.v1.SelectTorrentFilesRequest
+	(*TorrentEvent)(nil),              // 17: privatevm.v1.TorrentEvent
+	(*TorrentStatus)(nil),             // 18: privatevm.v1.TorrentStatus
+	(*ScannerRequest)(nil),            // 19: privatevm.v1.ScannerRequest
+	(*DefinitionsStatus)(nil),         // 20: privatevm.v1.DefinitionsStatus
+	(*OfflineStatus)(nil),             // 21: privatevm.v1.OfflineStatus
+	(*ScanEvent)(nil),                 // 22: privatevm.v1.ScanEvent
+	(*ScanReportEnvelope)(nil),        // 23: privatevm.v1.ScanReportEnvelope
+	(*ExportApprovedFileRequest)(nil), // 24: privatevm.v1.ExportApprovedFileRequest
+	(*WorkspaceStateRequest)(nil),     // 25: privatevm.v1.WorkspaceStateRequest
+	(*WorkspaceEntry)(nil),            // 26: privatevm.v1.WorkspaceEntry
+	(*WorkspaceState)(nil),            // 27: privatevm.v1.WorkspaceState
+	(*GuestExportFileRequest)(nil),    // 28: privatevm.v1.GuestExportFileRequest
+	(*MarkExportVerifiedRequest)(nil), // 29: privatevm.v1.MarkExportVerifiedRequest
+	(*NetworkWarningRequest)(nil),     // 30: privatevm.v1.NetworkWarningRequest
+	(*ExporterRequest)(nil),           // 31: privatevm.v1.ExporterRequest
+	(*PrepareUSBRequest)(nil),         // 32: privatevm.v1.PrepareUSBRequest
+	(*VerifyExportRequest)(nil),       // 33: privatevm.v1.VerifyExportRequest
+	(*USBStatus)(nil),                 // 34: privatevm.v1.USBStatus
+	(*RequestContext)(nil),            // 35: privatevm.v1.RequestContext
+	(GuestRole)(0),                    // 36: privatevm.v1.GuestRole
+	(*ApiVersion)(nil),                // 37: privatevm.v1.ApiVersion
+	(*Diagnostic)(nil),                // 38: privatevm.v1.Diagnostic
+	(*Progress)(nil),                  // 39: privatevm.v1.Progress
+	(*Hash)(nil),                      // 40: privatevm.v1.Hash
+	(*TransferFrame)(nil),             // 41: privatevm.v1.TransferFrame
+	(*Empty)(nil),                     // 42: privatevm.v1.Empty
+	(*TransferReceipt)(nil),           // 43: privatevm.v1.TransferReceipt
 }
 var file_privatevm_v1_guest_proto_depIdxs = []int32{
-	33, // 0: privatevm.v1.GuestContext.context:type_name -> privatevm.v1.RequestContext
-	34, // 1: privatevm.v1.GuestContext.expected_role:type_name -> privatevm.v1.GuestRole
+	35, // 0: privatevm.v1.GuestContext.context:type_name -> privatevm.v1.RequestContext
+	36, // 1: privatevm.v1.GuestContext.expected_role:type_name -> privatevm.v1.GuestRole
 	0,  // 2: privatevm.v1.GuestHelloRequest.context:type_name -> privatevm.v1.GuestContext
-	35, // 3: privatevm.v1.GuestHelloResponse.api_version:type_name -> privatevm.v1.ApiVersion
-	34, // 4: privatevm.v1.GuestHelloResponse.role:type_name -> privatevm.v1.GuestRole
+	37, // 3: privatevm.v1.GuestHelloResponse.api_version:type_name -> privatevm.v1.ApiVersion
+	36, // 4: privatevm.v1.GuestHelloResponse.role:type_name -> privatevm.v1.GuestRole
 	0,  // 5: privatevm.v1.GuestStatusRequest.context:type_name -> privatevm.v1.GuestContext
-	36, // 6: privatevm.v1.GuestStatus.diagnostics:type_name -> privatevm.v1.Diagnostic
-	37, // 7: privatevm.v1.GuestEvent.progress:type_name -> privatevm.v1.Progress
-	36, // 8: privatevm.v1.GuestEvent.diagnostic:type_name -> privatevm.v1.Diagnostic
+	38, // 6: privatevm.v1.GuestStatus.diagnostics:type_name -> privatevm.v1.Diagnostic
+	39, // 7: privatevm.v1.GuestEvent.progress:type_name -> privatevm.v1.Progress
+	38, // 8: privatevm.v1.GuestEvent.diagnostic:type_name -> privatevm.v1.Diagnostic
 	0,  // 9: privatevm.v1.ShutdownRequest.context:type_name -> privatevm.v1.GuestContext
 	0,  // 10: privatevm.v1.ConfigureWireGuardRequest.context:type_name -> privatevm.v1.GuestContext
-	0,  // 11: privatevm.v1.VerifyVPNRequest.context:type_name -> privatevm.v1.GuestContext
-	36, // 12: privatevm.v1.VPNStatus.diagnostics:type_name -> privatevm.v1.Diagnostic
-	0,  // 13: privatevm.v1.TorrentInputFrame.context:type_name -> privatevm.v1.GuestContext
-	0,  // 14: privatevm.v1.TorrentRequest.context:type_name -> privatevm.v1.GuestContext
-	12, // 15: privatevm.v1.TorrentMetadata.files:type_name -> privatevm.v1.TorrentFile
-	0,  // 16: privatevm.v1.SelectTorrentFilesRequest.context:type_name -> privatevm.v1.GuestContext
-	37, // 17: privatevm.v1.TorrentEvent.progress:type_name -> privatevm.v1.Progress
-	36, // 18: privatevm.v1.TorrentEvent.diagnostic:type_name -> privatevm.v1.Diagnostic
-	37, // 19: privatevm.v1.TorrentStatus.progress:type_name -> privatevm.v1.Progress
-	36, // 20: privatevm.v1.TorrentStatus.diagnostics:type_name -> privatevm.v1.Diagnostic
-	0,  // 21: privatevm.v1.ScannerRequest.context:type_name -> privatevm.v1.GuestContext
-	36, // 22: privatevm.v1.DefinitionsStatus.diagnostics:type_name -> privatevm.v1.Diagnostic
-	36, // 23: privatevm.v1.OfflineStatus.diagnostics:type_name -> privatevm.v1.Diagnostic
-	37, // 24: privatevm.v1.ScanEvent.progress:type_name -> privatevm.v1.Progress
-	36, // 25: privatevm.v1.ScanEvent.finding:type_name -> privatevm.v1.Diagnostic
-	0,  // 26: privatevm.v1.ExportApprovedFileRequest.context:type_name -> privatevm.v1.GuestContext
-	0,  // 27: privatevm.v1.WorkspaceStateRequest.context:type_name -> privatevm.v1.GuestContext
-	24, // 28: privatevm.v1.WorkspaceState.entries:type_name -> privatevm.v1.WorkspaceEntry
-	0,  // 29: privatevm.v1.GuestExportFileRequest.context:type_name -> privatevm.v1.GuestContext
-	0,  // 30: privatevm.v1.MarkExportVerifiedRequest.context:type_name -> privatevm.v1.GuestContext
-	38, // 31: privatevm.v1.MarkExportVerifiedRequest.digest:type_name -> privatevm.v1.Hash
-	0,  // 32: privatevm.v1.NetworkWarningRequest.context:type_name -> privatevm.v1.GuestContext
-	0,  // 33: privatevm.v1.ExporterRequest.context:type_name -> privatevm.v1.GuestContext
-	0,  // 34: privatevm.v1.PrepareUSBRequest.context:type_name -> privatevm.v1.GuestContext
-	0,  // 35: privatevm.v1.VerifyExportRequest.context:type_name -> privatevm.v1.GuestContext
-	36, // 36: privatevm.v1.USBStatus.diagnostics:type_name -> privatevm.v1.Diagnostic
-	1,  // 37: privatevm.v1.GuestCommonService.Hello:input_type -> privatevm.v1.GuestHelloRequest
-	3,  // 38: privatevm.v1.GuestCommonService.GetStatus:input_type -> privatevm.v1.GuestStatusRequest
-	3,  // 39: privatevm.v1.GuestCommonService.StreamEvents:input_type -> privatevm.v1.GuestStatusRequest
-	6,  // 40: privatevm.v1.GuestCommonService.Shutdown:input_type -> privatevm.v1.ShutdownRequest
-	23, // 41: privatevm.v1.WorkstationGuestService.GetWorkspaceState:input_type -> privatevm.v1.WorkspaceStateRequest
-	39, // 42: privatevm.v1.WorkstationGuestService.ImportFile:input_type -> privatevm.v1.TransferFrame
-	23, // 43: privatevm.v1.WorkstationGuestService.ListExportFiles:input_type -> privatevm.v1.WorkspaceStateRequest
-	26, // 44: privatevm.v1.WorkstationGuestService.ExportFile:input_type -> privatevm.v1.GuestExportFileRequest
-	27, // 45: privatevm.v1.WorkstationGuestService.MarkExportVerified:input_type -> privatevm.v1.MarkExportVerifiedRequest
-	28, // 46: privatevm.v1.WorkstationGuestService.ShowNetworkWarning:input_type -> privatevm.v1.NetworkWarningRequest
-	7,  // 47: privatevm.v1.DownloaderGuestService.ConfigureWireGuard:input_type -> privatevm.v1.ConfigureWireGuardRequest
-	8,  // 48: privatevm.v1.DownloaderGuestService.VerifyVPN:input_type -> privatevm.v1.VerifyVPNRequest
-	10, // 49: privatevm.v1.DownloaderGuestService.AddTorrent:input_type -> privatevm.v1.TorrentInputFrame
-	11, // 50: privatevm.v1.DownloaderGuestService.GetTorrentMetadata:input_type -> privatevm.v1.TorrentRequest
-	14, // 51: privatevm.v1.DownloaderGuestService.SelectTorrentFiles:input_type -> privatevm.v1.SelectTorrentFilesRequest
-	11, // 52: privatevm.v1.DownloaderGuestService.StartDownload:input_type -> privatevm.v1.TorrentRequest
-	11, // 53: privatevm.v1.DownloaderGuestService.PauseDownload:input_type -> privatevm.v1.TorrentRequest
-	11, // 54: privatevm.v1.DownloaderGuestService.GetDownloadStatus:input_type -> privatevm.v1.TorrentRequest
-	11, // 55: privatevm.v1.DownloaderGuestService.SealQuarantine:input_type -> privatevm.v1.TorrentRequest
-	17, // 56: privatevm.v1.ScannerGuestService.UpdateDefinitions:input_type -> privatevm.v1.ScannerRequest
-	17, // 57: privatevm.v1.ScannerGuestService.GetDefinitionsStatus:input_type -> privatevm.v1.ScannerRequest
-	17, // 58: privatevm.v1.ScannerGuestService.VerifyOfflineMode:input_type -> privatevm.v1.ScannerRequest
-	17, // 59: privatevm.v1.ScannerGuestService.Inventory:input_type -> privatevm.v1.ScannerRequest
-	17, // 60: privatevm.v1.ScannerGuestService.Scan:input_type -> privatevm.v1.ScannerRequest
-	17, // 61: privatevm.v1.ScannerGuestService.Reconstruct:input_type -> privatevm.v1.ScannerRequest
-	17, // 62: privatevm.v1.ScannerGuestService.GetScanReport:input_type -> privatevm.v1.ScannerRequest
-	22, // 63: privatevm.v1.ScannerGuestService.ExportApprovedFile:input_type -> privatevm.v1.ExportApprovedFileRequest
-	29, // 64: privatevm.v1.ExporterGuestService.InspectUSB:input_type -> privatevm.v1.ExporterRequest
-	30, // 65: privatevm.v1.ExporterGuestService.PrepareUSB:input_type -> privatevm.v1.PrepareUSBRequest
-	39, // 66: privatevm.v1.ExporterGuestService.WriteFile:input_type -> privatevm.v1.TransferFrame
-	31, // 67: privatevm.v1.ExporterGuestService.VerifyFile:input_type -> privatevm.v1.VerifyExportRequest
-	29, // 68: privatevm.v1.ExporterGuestService.FinalizeUSB:input_type -> privatevm.v1.ExporterRequest
-	2,  // 69: privatevm.v1.GuestCommonService.Hello:output_type -> privatevm.v1.GuestHelloResponse
-	4,  // 70: privatevm.v1.GuestCommonService.GetStatus:output_type -> privatevm.v1.GuestStatus
-	5,  // 71: privatevm.v1.GuestCommonService.StreamEvents:output_type -> privatevm.v1.GuestEvent
-	40, // 72: privatevm.v1.GuestCommonService.Shutdown:output_type -> privatevm.v1.Empty
-	25, // 73: privatevm.v1.WorkstationGuestService.GetWorkspaceState:output_type -> privatevm.v1.WorkspaceState
-	41, // 74: privatevm.v1.WorkstationGuestService.ImportFile:output_type -> privatevm.v1.TransferReceipt
-	25, // 75: privatevm.v1.WorkstationGuestService.ListExportFiles:output_type -> privatevm.v1.WorkspaceState
-	39, // 76: privatevm.v1.WorkstationGuestService.ExportFile:output_type -> privatevm.v1.TransferFrame
-	25, // 77: privatevm.v1.WorkstationGuestService.MarkExportVerified:output_type -> privatevm.v1.WorkspaceState
-	40, // 78: privatevm.v1.WorkstationGuestService.ShowNetworkWarning:output_type -> privatevm.v1.Empty
-	9,  // 79: privatevm.v1.DownloaderGuestService.ConfigureWireGuard:output_type -> privatevm.v1.VPNStatus
-	9,  // 80: privatevm.v1.DownloaderGuestService.VerifyVPN:output_type -> privatevm.v1.VPNStatus
-	13, // 81: privatevm.v1.DownloaderGuestService.AddTorrent:output_type -> privatevm.v1.TorrentMetadata
-	13, // 82: privatevm.v1.DownloaderGuestService.GetTorrentMetadata:output_type -> privatevm.v1.TorrentMetadata
-	13, // 83: privatevm.v1.DownloaderGuestService.SelectTorrentFiles:output_type -> privatevm.v1.TorrentMetadata
-	15, // 84: privatevm.v1.DownloaderGuestService.StartDownload:output_type -> privatevm.v1.TorrentEvent
-	16, // 85: privatevm.v1.DownloaderGuestService.PauseDownload:output_type -> privatevm.v1.TorrentStatus
-	16, // 86: privatevm.v1.DownloaderGuestService.GetDownloadStatus:output_type -> privatevm.v1.TorrentStatus
-	40, // 87: privatevm.v1.DownloaderGuestService.SealQuarantine:output_type -> privatevm.v1.Empty
-	18, // 88: privatevm.v1.ScannerGuestService.UpdateDefinitions:output_type -> privatevm.v1.DefinitionsStatus
-	18, // 89: privatevm.v1.ScannerGuestService.GetDefinitionsStatus:output_type -> privatevm.v1.DefinitionsStatus
-	19, // 90: privatevm.v1.ScannerGuestService.VerifyOfflineMode:output_type -> privatevm.v1.OfflineStatus
-	20, // 91: privatevm.v1.ScannerGuestService.Inventory:output_type -> privatevm.v1.ScanEvent
-	20, // 92: privatevm.v1.ScannerGuestService.Scan:output_type -> privatevm.v1.ScanEvent
-	20, // 93: privatevm.v1.ScannerGuestService.Reconstruct:output_type -> privatevm.v1.ScanEvent
-	21, // 94: privatevm.v1.ScannerGuestService.GetScanReport:output_type -> privatevm.v1.ScanReportEnvelope
-	39, // 95: privatevm.v1.ScannerGuestService.ExportApprovedFile:output_type -> privatevm.v1.TransferFrame
-	32, // 96: privatevm.v1.ExporterGuestService.InspectUSB:output_type -> privatevm.v1.USBStatus
-	32, // 97: privatevm.v1.ExporterGuestService.PrepareUSB:output_type -> privatevm.v1.USBStatus
-	41, // 98: privatevm.v1.ExporterGuestService.WriteFile:output_type -> privatevm.v1.TransferReceipt
-	41, // 99: privatevm.v1.ExporterGuestService.VerifyFile:output_type -> privatevm.v1.TransferReceipt
-	32, // 100: privatevm.v1.ExporterGuestService.FinalizeUSB:output_type -> privatevm.v1.USBStatus
-	69, // [69:101] is the sub-list for method output_type
-	37, // [37:69] is the sub-list for method input_type
-	37, // [37:37] is the sub-list for extension type_name
-	37, // [37:37] is the sub-list for extension extendee
-	0,  // [0:37] is the sub-list for field type_name
+	7,  // 11: privatevm.v1.ConfigureWireGuardRequest.underlay:type_name -> privatevm.v1.GuestUnderlay
+	8,  // 12: privatevm.v1.ConfigureWireGuardRequest.probe_targets:type_name -> privatevm.v1.VPNProbeTargets
+	0,  // 13: privatevm.v1.VerifyVPNRequest.context:type_name -> privatevm.v1.GuestContext
+	38, // 14: privatevm.v1.VPNStatus.diagnostics:type_name -> privatevm.v1.Diagnostic
+	0,  // 15: privatevm.v1.TorrentInputFrame.context:type_name -> privatevm.v1.GuestContext
+	0,  // 16: privatevm.v1.TorrentRequest.context:type_name -> privatevm.v1.GuestContext
+	14, // 17: privatevm.v1.TorrentMetadata.files:type_name -> privatevm.v1.TorrentFile
+	0,  // 18: privatevm.v1.SelectTorrentFilesRequest.context:type_name -> privatevm.v1.GuestContext
+	39, // 19: privatevm.v1.TorrentEvent.progress:type_name -> privatevm.v1.Progress
+	38, // 20: privatevm.v1.TorrentEvent.diagnostic:type_name -> privatevm.v1.Diagnostic
+	39, // 21: privatevm.v1.TorrentStatus.progress:type_name -> privatevm.v1.Progress
+	38, // 22: privatevm.v1.TorrentStatus.diagnostics:type_name -> privatevm.v1.Diagnostic
+	0,  // 23: privatevm.v1.ScannerRequest.context:type_name -> privatevm.v1.GuestContext
+	38, // 24: privatevm.v1.DefinitionsStatus.diagnostics:type_name -> privatevm.v1.Diagnostic
+	38, // 25: privatevm.v1.OfflineStatus.diagnostics:type_name -> privatevm.v1.Diagnostic
+	39, // 26: privatevm.v1.ScanEvent.progress:type_name -> privatevm.v1.Progress
+	38, // 27: privatevm.v1.ScanEvent.finding:type_name -> privatevm.v1.Diagnostic
+	0,  // 28: privatevm.v1.ExportApprovedFileRequest.context:type_name -> privatevm.v1.GuestContext
+	0,  // 29: privatevm.v1.WorkspaceStateRequest.context:type_name -> privatevm.v1.GuestContext
+	26, // 30: privatevm.v1.WorkspaceState.entries:type_name -> privatevm.v1.WorkspaceEntry
+	0,  // 31: privatevm.v1.GuestExportFileRequest.context:type_name -> privatevm.v1.GuestContext
+	0,  // 32: privatevm.v1.MarkExportVerifiedRequest.context:type_name -> privatevm.v1.GuestContext
+	40, // 33: privatevm.v1.MarkExportVerifiedRequest.digest:type_name -> privatevm.v1.Hash
+	0,  // 34: privatevm.v1.NetworkWarningRequest.context:type_name -> privatevm.v1.GuestContext
+	0,  // 35: privatevm.v1.ExporterRequest.context:type_name -> privatevm.v1.GuestContext
+	0,  // 36: privatevm.v1.PrepareUSBRequest.context:type_name -> privatevm.v1.GuestContext
+	0,  // 37: privatevm.v1.VerifyExportRequest.context:type_name -> privatevm.v1.GuestContext
+	38, // 38: privatevm.v1.USBStatus.diagnostics:type_name -> privatevm.v1.Diagnostic
+	1,  // 39: privatevm.v1.GuestCommonService.Hello:input_type -> privatevm.v1.GuestHelloRequest
+	3,  // 40: privatevm.v1.GuestCommonService.GetStatus:input_type -> privatevm.v1.GuestStatusRequest
+	3,  // 41: privatevm.v1.GuestCommonService.StreamEvents:input_type -> privatevm.v1.GuestStatusRequest
+	6,  // 42: privatevm.v1.GuestCommonService.Shutdown:input_type -> privatevm.v1.ShutdownRequest
+	25, // 43: privatevm.v1.WorkstationGuestService.GetWorkspaceState:input_type -> privatevm.v1.WorkspaceStateRequest
+	41, // 44: privatevm.v1.WorkstationGuestService.ImportFile:input_type -> privatevm.v1.TransferFrame
+	25, // 45: privatevm.v1.WorkstationGuestService.ListExportFiles:input_type -> privatevm.v1.WorkspaceStateRequest
+	28, // 46: privatevm.v1.WorkstationGuestService.ExportFile:input_type -> privatevm.v1.GuestExportFileRequest
+	29, // 47: privatevm.v1.WorkstationGuestService.MarkExportVerified:input_type -> privatevm.v1.MarkExportVerifiedRequest
+	30, // 48: privatevm.v1.WorkstationGuestService.ShowNetworkWarning:input_type -> privatevm.v1.NetworkWarningRequest
+	9,  // 49: privatevm.v1.DownloaderGuestService.ConfigureWireGuard:input_type -> privatevm.v1.ConfigureWireGuardRequest
+	10, // 50: privatevm.v1.DownloaderGuestService.VerifyVPN:input_type -> privatevm.v1.VerifyVPNRequest
+	12, // 51: privatevm.v1.DownloaderGuestService.AddTorrent:input_type -> privatevm.v1.TorrentInputFrame
+	13, // 52: privatevm.v1.DownloaderGuestService.GetTorrentMetadata:input_type -> privatevm.v1.TorrentRequest
+	16, // 53: privatevm.v1.DownloaderGuestService.SelectTorrentFiles:input_type -> privatevm.v1.SelectTorrentFilesRequest
+	13, // 54: privatevm.v1.DownloaderGuestService.StartDownload:input_type -> privatevm.v1.TorrentRequest
+	13, // 55: privatevm.v1.DownloaderGuestService.PauseDownload:input_type -> privatevm.v1.TorrentRequest
+	13, // 56: privatevm.v1.DownloaderGuestService.GetDownloadStatus:input_type -> privatevm.v1.TorrentRequest
+	13, // 57: privatevm.v1.DownloaderGuestService.SealQuarantine:input_type -> privatevm.v1.TorrentRequest
+	19, // 58: privatevm.v1.ScannerGuestService.UpdateDefinitions:input_type -> privatevm.v1.ScannerRequest
+	19, // 59: privatevm.v1.ScannerGuestService.GetDefinitionsStatus:input_type -> privatevm.v1.ScannerRequest
+	19, // 60: privatevm.v1.ScannerGuestService.VerifyOfflineMode:input_type -> privatevm.v1.ScannerRequest
+	19, // 61: privatevm.v1.ScannerGuestService.Inventory:input_type -> privatevm.v1.ScannerRequest
+	19, // 62: privatevm.v1.ScannerGuestService.Scan:input_type -> privatevm.v1.ScannerRequest
+	19, // 63: privatevm.v1.ScannerGuestService.Reconstruct:input_type -> privatevm.v1.ScannerRequest
+	19, // 64: privatevm.v1.ScannerGuestService.GetScanReport:input_type -> privatevm.v1.ScannerRequest
+	24, // 65: privatevm.v1.ScannerGuestService.ExportApprovedFile:input_type -> privatevm.v1.ExportApprovedFileRequest
+	31, // 66: privatevm.v1.ExporterGuestService.InspectUSB:input_type -> privatevm.v1.ExporterRequest
+	32, // 67: privatevm.v1.ExporterGuestService.PrepareUSB:input_type -> privatevm.v1.PrepareUSBRequest
+	41, // 68: privatevm.v1.ExporterGuestService.WriteFile:input_type -> privatevm.v1.TransferFrame
+	33, // 69: privatevm.v1.ExporterGuestService.VerifyFile:input_type -> privatevm.v1.VerifyExportRequest
+	31, // 70: privatevm.v1.ExporterGuestService.FinalizeUSB:input_type -> privatevm.v1.ExporterRequest
+	2,  // 71: privatevm.v1.GuestCommonService.Hello:output_type -> privatevm.v1.GuestHelloResponse
+	4,  // 72: privatevm.v1.GuestCommonService.GetStatus:output_type -> privatevm.v1.GuestStatus
+	5,  // 73: privatevm.v1.GuestCommonService.StreamEvents:output_type -> privatevm.v1.GuestEvent
+	42, // 74: privatevm.v1.GuestCommonService.Shutdown:output_type -> privatevm.v1.Empty
+	27, // 75: privatevm.v1.WorkstationGuestService.GetWorkspaceState:output_type -> privatevm.v1.WorkspaceState
+	43, // 76: privatevm.v1.WorkstationGuestService.ImportFile:output_type -> privatevm.v1.TransferReceipt
+	27, // 77: privatevm.v1.WorkstationGuestService.ListExportFiles:output_type -> privatevm.v1.WorkspaceState
+	41, // 78: privatevm.v1.WorkstationGuestService.ExportFile:output_type -> privatevm.v1.TransferFrame
+	27, // 79: privatevm.v1.WorkstationGuestService.MarkExportVerified:output_type -> privatevm.v1.WorkspaceState
+	42, // 80: privatevm.v1.WorkstationGuestService.ShowNetworkWarning:output_type -> privatevm.v1.Empty
+	11, // 81: privatevm.v1.DownloaderGuestService.ConfigureWireGuard:output_type -> privatevm.v1.VPNStatus
+	11, // 82: privatevm.v1.DownloaderGuestService.VerifyVPN:output_type -> privatevm.v1.VPNStatus
+	15, // 83: privatevm.v1.DownloaderGuestService.AddTorrent:output_type -> privatevm.v1.TorrentMetadata
+	15, // 84: privatevm.v1.DownloaderGuestService.GetTorrentMetadata:output_type -> privatevm.v1.TorrentMetadata
+	15, // 85: privatevm.v1.DownloaderGuestService.SelectTorrentFiles:output_type -> privatevm.v1.TorrentMetadata
+	17, // 86: privatevm.v1.DownloaderGuestService.StartDownload:output_type -> privatevm.v1.TorrentEvent
+	18, // 87: privatevm.v1.DownloaderGuestService.PauseDownload:output_type -> privatevm.v1.TorrentStatus
+	18, // 88: privatevm.v1.DownloaderGuestService.GetDownloadStatus:output_type -> privatevm.v1.TorrentStatus
+	42, // 89: privatevm.v1.DownloaderGuestService.SealQuarantine:output_type -> privatevm.v1.Empty
+	20, // 90: privatevm.v1.ScannerGuestService.UpdateDefinitions:output_type -> privatevm.v1.DefinitionsStatus
+	20, // 91: privatevm.v1.ScannerGuestService.GetDefinitionsStatus:output_type -> privatevm.v1.DefinitionsStatus
+	21, // 92: privatevm.v1.ScannerGuestService.VerifyOfflineMode:output_type -> privatevm.v1.OfflineStatus
+	22, // 93: privatevm.v1.ScannerGuestService.Inventory:output_type -> privatevm.v1.ScanEvent
+	22, // 94: privatevm.v1.ScannerGuestService.Scan:output_type -> privatevm.v1.ScanEvent
+	22, // 95: privatevm.v1.ScannerGuestService.Reconstruct:output_type -> privatevm.v1.ScanEvent
+	23, // 96: privatevm.v1.ScannerGuestService.GetScanReport:output_type -> privatevm.v1.ScanReportEnvelope
+	41, // 97: privatevm.v1.ScannerGuestService.ExportApprovedFile:output_type -> privatevm.v1.TransferFrame
+	34, // 98: privatevm.v1.ExporterGuestService.InspectUSB:output_type -> privatevm.v1.USBStatus
+	34, // 99: privatevm.v1.ExporterGuestService.PrepareUSB:output_type -> privatevm.v1.USBStatus
+	43, // 100: privatevm.v1.ExporterGuestService.WriteFile:output_type -> privatevm.v1.TransferReceipt
+	43, // 101: privatevm.v1.ExporterGuestService.VerifyFile:output_type -> privatevm.v1.TransferReceipt
+	34, // 102: privatevm.v1.ExporterGuestService.FinalizeUSB:output_type -> privatevm.v1.USBStatus
+	71, // [71:103] is the sub-list for method output_type
+	39, // [39:71] is the sub-list for method input_type
+	39, // [39:39] is the sub-list for extension type_name
+	39, // [39:39] is the sub-list for extension extendee
+	0,  // [0:39] is the sub-list for field type_name
 }
 
 func init() { file_privatevm_v1_guest_proto_init() }
@@ -2384,7 +2584,7 @@ func file_privatevm_v1_guest_proto_init() {
 		return
 	}
 	file_privatevm_v1_common_proto_init()
-	file_privatevm_v1_guest_proto_msgTypes[10].OneofWrappers = []any{
+	file_privatevm_v1_guest_proto_msgTypes[12].OneofWrappers = []any{
 		(*TorrentInputFrame_TorrentChunk)(nil),
 		(*TorrentInputFrame_MagnetChunk)(nil),
 	}
@@ -2394,7 +2594,7 @@ func file_privatevm_v1_guest_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_privatevm_v1_guest_proto_rawDesc), len(file_privatevm_v1_guest_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   33,
+			NumMessages:   35,
 			NumExtensions: 0,
 			NumServices:   5,
 		},

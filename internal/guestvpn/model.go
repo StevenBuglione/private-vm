@@ -68,6 +68,17 @@ type Underlay struct {
 	IPv6Gateway netip.Addr
 }
 
+// NewUnderlay admits only the private point-to-point shape allocated by the
+// host network owner. It keeps validation inside this package while allowing
+// the authenticated RPC adapter to reconstruct the typed value.
+func NewUnderlay(ipv4 netip.Prefix, ipv4Gateway netip.Addr, ipv6 netip.Prefix, ipv6Gateway netip.Addr) (Underlay, error) {
+	underlay := Underlay{IPv4Address: ipv4, IPv4Gateway: ipv4Gateway, IPv6Address: ipv6, IPv6Gateway: ipv6Gateway}
+	if err := underlay.validate(); err != nil {
+		return Underlay{}, err
+	}
+	return underlay, nil
+}
+
 func (underlay Underlay) validate() error {
 	if !underlay.IPv4Address.IsValid() || !underlay.IPv4Address.Addr().Is4() || underlay.IPv4Address.Bits() != 30 ||
 		!underlay.IPv4Gateway.Is4() || !underlay.IPv4Address.Masked().Contains(underlay.IPv4Gateway) ||

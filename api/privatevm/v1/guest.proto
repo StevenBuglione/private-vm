@@ -78,7 +78,34 @@ message GuestStatus { string state = 1; repeated Diagnostic diagnostics = 2; }
 message GuestEvent { uint64 sequence = 1; string code = 2; Progress progress = 3; Diagnostic diagnostic = 4; }
 message ShutdownRequest { GuestContext context = 1; bool poweroff = 2; }
 
-message ConfigureWireGuardRequest { GuestContext context = 1; bytes profile = 2; }
+// GuestUnderlay is the private point-to-point addressing selected by the host
+// network owner. Addresses are canonical 4-byte/16-byte values rather than
+// strings so neither parsing nor logging can accidentally expose them.
+message GuestUnderlay {
+  bytes ipv4_address = 1;
+  uint32 ipv4_prefix_length = 2;
+  bytes ipv4_gateway = 3;
+  bytes ipv6_address = 4;
+  uint32 ipv6_prefix_length = 5;
+  bytes ipv6_gateway = 6;
+}
+
+// VPNProbeTargets are operator-controlled verification fixtures. They are
+// transported only to the authenticated guest and never returned in status.
+message VPNProbeTargets {
+  string dns_name = 1;
+  bytes ipv4_address = 2;
+  uint32 ipv4_port = 3;
+  bytes ipv6_address = 4;
+  uint32 ipv6_port = 5;
+}
+
+message ConfigureWireGuardRequest {
+  GuestContext context = 1;
+  bytes profile = 2;
+  GuestUnderlay underlay = 3;
+  VPNProbeTargets probe_targets = 4;
+}
 message VerifyVPNRequest { GuestContext context = 1; }
 message VPNStatus {
   bool configured = 1;

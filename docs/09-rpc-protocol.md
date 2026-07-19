@@ -307,6 +307,14 @@ and diagnostics contain explicit handshake, tunnel DNS, DNS-bypass, IPv4/IPv6
 route/bypass and qBittorrent-binding booleans plus stable codes only—never
 profile values, probe targets, public IPs or raw command output.
 
+The same authenticated request carries the daemon-selected private IPv4/IPv6
+point-to-point underlay and operator-controlled probe fixtures as closed typed
+messages. Addresses are canonical byte fields with bounded prefix lengths and
+ports, never display strings. The downloader validates them before creating
+its one VPN controller and rejects a second configuration attempt. These
+request-only values never appear in status, diagnostics, events or durable
+state. See ADR 0012.
+
 Scanner:
 
 - `UpdateDefinitions`

@@ -184,6 +184,12 @@ profile-derived command line or configuration file. Missing DNS or verification
 adapters fail construction. The role matrix admits workstation, downloader,
 and scanner-update policies; scanner-scan and exporter networking fail closed.
 
+The host-selected point-to-point addresses and controlled leak-test fixtures
+cross authenticated VSOCK in typed protobuf fields defined by ADR 0012. The
+guest accepts only exact `/30` IPv4 and `/126` IPv6 underlays and validated
+public probe endpoints. It never derives, defaults, logs or persists these
+values, and no machine status contains them.
+
 ## Guest policy
 
 The guest has two zones:
