@@ -19,11 +19,12 @@ and then builds only the focused non-image Nix gates. It cannot accidentally
 duplicate all role TCG boots in one workspace; those heavy gates live only in
 the isolated matrix below.
 
-The workflow and every job have only `contents: read`. There is no package,
+The REL-002 workflow and every one of its jobs have only `contents: read`. There is no package,
 OIDC, attestation, release, cache, or upload action. Pull-request code therefore
-has no publication path. REL-003 must add publication later in a distinct
-protected-environment job and update the workflow-policy contract in the same
-review.
+has no publication path. REL-003 publication is implemented in the distinct,
+tag-only, protected-environment `.github/workflows/release.yml`; it does not
+change this pull-request workflow's permissions or evidence boundary. See
+`docs/39-public-image-publish-acceptance.md`.
 
 ## Exact matrix
 
@@ -71,3 +72,6 @@ do not copy raw Nix logs into persistent project reports.
 
 This document does not pre-claim a remote result. The task remains fail closed
 until the protected branch records all six required job conclusions as success.
+The independent REL-003 tag workflow likewise records its own publication and
+anonymous-verification evidence; a green build-only row is not a substitute for
+a successful protected publication row or fresh anonymous pull.

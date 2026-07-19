@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "project": "private-vm",
+  "release_tag": "v0.1.0-rc.1",
+  "role": "workstation",
+  "bundle": "basic",
+  "repository": "ghcr.io/stevenbuglione/private-vm/workstation-basic",
+  "source_repository": "StevenBuglione/private-vm",
+  "source_commit": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "source_ref": "refs/tags/v0.1.0-rc.1",
+  "workflow": ".github/workflows/release.yml",
+  "image_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "uncompressed_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "sbom_digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+  "manifest_digest": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+  "compressed_size_bytes": 2147483648,
+  "uncompressed_size_bytes": 8589934592,
+  "virtual_size_bytes": 85899345920,
+  "files": [
+    "image.qcow2.zst",
+    "manifest.json",
+    "sbom.spdx.json",
+    "predicate.json"
+  ]
+}

@@ -68,16 +68,18 @@ flake checks. It rejects individual corpus inputs above 64 KiB and includes
 deterministic seeds for each context-bearing daemon request shape, resource
 validation, and the `/proc` stat, status, and pidfd-info parsers. Additional
 task-specific fuzz harnesses and a longer nightly fuzz workflow remain planned.
-`image-build.yml` is active as the build-only REL-002 workflow.
-`release.yml.template` remains a policy-checked dormant template. Activating
-the release template or adding image publication is a separate reviewed change.
-There is no active nightly workflow yet.
+`image-build.yml` remains the build-only REL-002 pull-request and main-branch
+workflow. The active `.github/workflows/release.yml` is the separate REL-003
+image publisher. Its GitHub trigger receives only `v*` tag pushes. Bounded Go
+then permits only canonical `vMAJOR.MINOR.PATCH` or
+`vMAJOR.MINOR.PATCH-rc.N` refs before any Nix build or publication, so a broader
+or noncanonical `v*` ref fails closed. There is no active nightly workflow yet.
 
-Before REL-003 adds image publication or REL-004 activates the release
-template, create and protect the exact `image-publish` and `release` GitHub
-environments, configure their deployment rules, finish the named backlog
-dependencies, and re-run the repository settings audit. Merely naming an
-environment in YAML does not create server-side protection.
+Before the first publication, create and protect the exact `image-publish`
+GitHub environment and configure its deployment rules. Merely naming that
+environment in YAML is not proof of server-side protection. The broader
+`release` environment remains a REL-004 prerequisite for packages and GitHub
+Releases.
 
 Reproduce the workflow-security gate with the locked flake tools:
 
@@ -170,22 +172,61 @@ gated.
 - cleanup/recovery fault injection
 - do not automatically update lockfiles
 
-## Planned workflow: `release.yml`
+## Active protected image workflow: `release.yml`
 
-Triggered by protected semantic tag.
+The REL-003 workflow has six independent `ubuntu-24.04` publication rows, one
+for each canonical role/bundle and fixed GHCR repository. Every publication row:
 
-1. verify clean source/tag
-2. build/test binaries
-3. build packages
-4. build images
-5. run acceptance tests
-6. generate SPDX SBOMs
-7. publish OCI by digest
-8. attest artifacts
-9. publish GitHub release
-10. fresh runner pulls anonymously
-11. verify digest/provenance/SBOM
-12. mark release complete
+1. checks out full history without retaining checkout credentials, verifies the
+   exact official origin, and proves the tag commit is reachable from the
+   fetched protected `origin/main`;
+2. installs only full-SHA-pinned actions and the locked Nix/Go toolchains;
+3. builds one canonical QCOW2 and its exact runtime system closure with
+   `max-jobs = 1` and `cores = 2`;
+4. invokes the bounded Go producer to validate, compress, hash, generate the
+   manifest and complete closure SPDX document, and write a versioned receipt;
+5. invokes
+   `actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6` with
+   `predicate.json`, predicate type `https://slsa.dev/provenance/v1`, subject
+   `image.qcow2.zst` and its exact SHA-256;
+6. passes the action's `bundle-path` to the Go publisher, which verifies the
+   bundle locally before adding it as the fourth OCI layer;
+7. reads the bounded GHCR credential from standard input, disables credential
+   caching and Docker integration, rejects an existing tag, and publishes the
+   exact digest graph; and
+8. removes staged files and reports only redacted bounded status.
+
+The publication job names the protected `image-publish` environment and has
+exactly `contents: read`, `packages: write`, `id-token: write`, and
+`attestations: write`. It never runs for a pull request and has no
+`contents: write`, Docker daemon/store, mutable action tag, artifact upload, or
+credential in argv, environment or logs.
+
+A second six-row job starts on fresh standard runners with read-only repository
+permission and no registry credential. It anonymously resolves and pulls the
+published reference, then uses `NewOfficialVerifier` to verify the manifest
+digest, all four layers, full SPDX closure and offline Sigstore provenance. A
+private/default-inaccessible GHCR package fails this job. The workflow does not
+use an API token to change package visibility; a maintainer must make each
+official package public through the reviewed GitHub settings boundary. GitHub
+documents that a newly published container package defaults to private, so the
+first release candidate can require that one-time owner visibility change and a
+rerun of the failed anonymous rows. Until the unauthenticated rerun succeeds,
+the release gate remains failed.
+
+REL-004 later adds package builds, the protected `release` environment, GitHub
+Release creation and whole-release clean-room verification. It must reuse these
+image digests and refuse every already-existing REL-003 package tag.
+
+## Local versus remote evidence
+
+Implementation work does not wait for the approximately twelve-minute remote
+image workflow after the focused local source, schema and workflow-policy gates
+pass. Continue with the next independent batch and record the remote run for
+later review. This is scheduling, not a weakened release gate: protected
+environment enforcement, actual GHCR publication, package visibility and the
+fresh-runner anonymous pull can be proven only by a completed remote run, and
+no release may treat pending, skipped, cancelled or failed jobs as success.
 
 ## Action pinning
 

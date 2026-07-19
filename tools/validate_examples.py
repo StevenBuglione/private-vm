@@ -40,6 +40,7 @@ pairs = [
     ("schemas/image-cache-entry.schema.json", "examples/image-cache-entry.example.json", "json"),
     ("schemas/image-manifest.schema.json", "examples/image-manifest.example.json", "json"),
     ("schemas/image-provenance-payload.schema.json", "examples/image-provenance-payload.example.json", "json"),
+    ("schemas/image-release-receipt.schema.json", "examples/image-release-receipt.example.json", "json"),
     ("schemas/image-sbom.schema.json", "examples/image-sbom.spdx.example.json", "json"),
     ("schemas/scan-report.schema.json", "examples/scan-report.example.json", "json"),
     ("schemas/workstation-bundles.schema.json", "project/workstation-bundles.json", "json"),
@@ -97,6 +98,12 @@ image_provenance_schema = json.loads(
 )
 image_provenance = json.loads(
     (ROOT / "examples/image-provenance-payload.example.json").read_text(encoding="utf-8")
+)
+image_release_receipt_schema = json.loads(
+    (ROOT / "schemas/image-release-receipt.schema.json").read_text(encoding="utf-8")
+)
+image_release_receipt = json.loads(
+    (ROOT / "examples/image-release-receipt.example.json").read_text(encoding="utf-8")
 )
 image_sbom_schema = json.loads(
     (ROOT / "schemas/image-sbom.schema.json").read_text(encoding="utf-8")
@@ -196,6 +203,24 @@ negative_cases.append(("mutable provenance ref", image_provenance_schema, mutabl
 reused_repository_name = deepcopy(image_provenance)
 reused_repository_name["predicate"]["buildDefinition"]["internalParameters"]["github"]["repository_id"] = "999999999"
 negative_cases.append(("reused provenance repository name", image_provenance_schema, reused_repository_name))
+receipt_secret_field = deepcopy(image_release_receipt)
+receipt_secret_field["registry_token"] = "forbidden"
+negative_cases.append(("release receipt secret field", image_release_receipt_schema, receipt_secret_field))
+receipt_branch_ref = deepcopy(image_release_receipt)
+receipt_branch_ref["source_ref"] = "refs/heads/main"
+negative_cases.append(("release receipt branch ref", image_release_receipt_schema, receipt_branch_ref))
+receipt_role_repository_mismatch = deepcopy(image_release_receipt)
+receipt_role_repository_mismatch["repository"] = "ghcr.io/stevenbuglione/private-vm/scanner"
+negative_cases.append(("release receipt role repository mismatch", image_release_receipt_schema, receipt_role_repository_mismatch))
+receipt_fifth_file = deepcopy(image_release_receipt)
+receipt_fifth_file["files"].append("provenance.json")
+negative_cases.append(("release receipt fifth file", image_release_receipt_schema, receipt_fifth_file))
+receipt_reordered_files = deepcopy(image_release_receipt)
+receipt_reordered_files["files"][0], receipt_reordered_files["files"][1] = receipt_reordered_files["files"][1], receipt_reordered_files["files"][0]
+negative_cases.append(("release receipt reordered files", image_release_receipt_schema, receipt_reordered_files))
+receipt_null_workstation_bundle = deepcopy(image_release_receipt)
+receipt_null_workstation_bundle["bundle"] = None
+negative_cases.append(("release receipt null workstation bundle", image_release_receipt_schema, receipt_null_workstation_bundle))
 missing_sbom_checksum = deepcopy(image_sbom)
 del missing_sbom_checksum["packages"][1]["checksums"]
 negative_cases.append(("missing closure checksum field", image_sbom_schema, missing_sbom_checksum))

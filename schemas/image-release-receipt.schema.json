@@ -1,0 +1,132 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://private-vm.dev/schema/image-release-receipt-v1.json",
+  "title": "private-vm image release preparation receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": { "const": 1 },
+    "project": { "const": "private-vm" },
+    "release_tag": { "$ref": "#/$defs/releaseTag" },
+    "role": { "enum": ["workstation", "downloader", "scanner", "exporter"] },
+    "bundle": { "type": ["string", "null"] },
+    "repository": {
+      "enum": [
+        "ghcr.io/stevenbuglione/private-vm/workstation-basic",
+        "ghcr.io/stevenbuglione/private-vm/workstation-office",
+        "ghcr.io/stevenbuglione/private-vm/workstation-development",
+        "ghcr.io/stevenbuglione/private-vm/downloader",
+        "ghcr.io/stevenbuglione/private-vm/scanner",
+        "ghcr.io/stevenbuglione/private-vm/exporter"
+      ]
+    },
+    "source_repository": { "const": "StevenBuglione/private-vm" },
+    "source_commit": { "$ref": "#/$defs/commit" },
+    "source_ref": { "$ref": "#/$defs/releaseRef" },
+    "workflow": { "const": ".github/workflows/release.yml" },
+    "image_digest": { "$ref": "#/$defs/digest" },
+    "uncompressed_sha256": { "$ref": "#/$defs/sha256" },
+    "sbom_digest": { "$ref": "#/$defs/digest" },
+    "manifest_digest": { "$ref": "#/$defs/digest" },
+    "compressed_size_bytes": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 68719476736
+    },
+    "uncompressed_size_bytes": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 2199023255552
+    },
+    "virtual_size_bytes": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 2199023255552
+    },
+    "files": {
+      "const": [
+        "image.qcow2.zst",
+        "manifest.json",
+        "sbom.spdx.json",
+        "predicate.json"
+      ]
+    }
+  },
+  "required": [
+    "schema_version",
+    "project",
+    "release_tag",
+    "role",
+    "bundle",
+    "repository",
+    "source_repository",
+    "source_commit",
+    "source_ref",
+    "workflow",
+    "image_digest",
+    "uncompressed_sha256",
+    "sbom_digest",
+    "manifest_digest",
+    "compressed_size_bytes",
+    "uncompressed_size_bytes",
+    "virtual_size_bytes",
+    "files"
+  ],
+  "oneOf": [
+    {
+      "properties": {
+        "role": { "const": "workstation" },
+        "bundle": { "const": "basic" },
+        "repository": { "const": "ghcr.io/stevenbuglione/private-vm/workstation-basic" }
+      }
+    },
+    {
+      "properties": {
+        "role": { "const": "workstation" },
+        "bundle": { "const": "office" },
+        "repository": { "const": "ghcr.io/stevenbuglione/private-vm/workstation-office" }
+      }
+    },
+    {
+      "properties": {
+        "role": { "const": "workstation" },
+        "bundle": { "const": "development" },
+        "repository": { "const": "ghcr.io/stevenbuglione/private-vm/workstation-development" }
+      }
+    },
+    {
+      "properties": {
+        "role": { "const": "downloader" },
+        "bundle": { "type": "null" },
+        "repository": { "const": "ghcr.io/stevenbuglione/private-vm/downloader" }
+      }
+    },
+    {
+      "properties": {
+        "role": { "const": "scanner" },
+        "bundle": { "type": "null" },
+        "repository": { "const": "ghcr.io/stevenbuglione/private-vm/scanner" }
+      }
+    },
+    {
+      "properties": {
+        "role": { "const": "exporter" },
+        "bundle": { "type": "null" },
+        "repository": { "const": "ghcr.io/stevenbuglione/private-vm/exporter" }
+      }
+    }
+  ],
+  "$defs": {
+    "digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "commit": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "releaseTag": {
+      "type": "string",
+      "pattern": "^v(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(-rc\\.(0|[1-9][0-9]*))?$"
+    },
+    "releaseRef": {
+      "type": "string",
+      "pattern": "^refs/tags/v(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(-rc\\.(0|[1-9][0-9]*))?$"
+    }
+  }
+}

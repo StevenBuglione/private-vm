@@ -26,6 +26,12 @@ packages.x86_64-linux.image-workstation-development
 packages.x86_64-linux.image-downloader
 packages.x86_64-linux.image-scanner
 packages.x86_64-linux.image-exporter
+packages.x86_64-linux.closure-workstation-basic
+packages.x86_64-linux.closure-workstation-office
+packages.x86_64-linux.closure-workstation-development
+packages.x86_64-linux.closure-downloader
+packages.x86_64-linux.closure-scanner
+packages.x86_64-linux.closure-exporter
 packages.x86_64-linux.sbom-scanner
 nixosModules.default
 checks.x86_64-linux.default
@@ -81,6 +87,39 @@ ordered relationship graph documented in `docs/21-supply-chain.md`. The root
 image package and QCOW2 file checksum bind the installed/uncompressed cache
 identity. The existing scanner-toolchain SPDX output is not an input or
 substitute for this full-closure release document.
+
+## Release producer contract
+
+The protected tag workflow builds one canonical image and its exact
+`system.build.toplevel` runtime closure in each of six independent
+`ubuntu-24.04` matrix jobs. The matrix contains workstation basic, office and
+development, plus downloader, scanner and exporter. Nix is limited to one job
+and two cores; no job builds a second canonical image.
+
+The release producer is bounded Go code. It accepts one reviewed image output,
+walks it without following links, permits only regular files, and requires
+exactly one QCOW2 candidate within its file-count, path-depth and byte limits.
+Before compression it validates the QCOW2 header, version, virtual size, backing
+file prohibition and encryption prohibition. It then hashes the complete source
+file and creates `image.qcow2.zst` with a deterministic single-worker zstd
+profile. Cancellation, timeout, input replacement, short read, close failure or
+limit failure removes the private staging directory.
+
+The same producer receives the exact runtime closure from Nix, canonicalizes
+and sorts its store paths, and emits the complete SPDX 2.3 graph and frozen-v1
+manifest. Shell steps do not select files, parse QCOW2, create the SBOM or OCI
+graph, decide whether a tag may be written, or verify an artifact. The bounded
+release receipt contains public digests and identities only; it contains no
+credential, runner path or captured external-command output and is validated by
+`schemas/image-release-receipt.schema.json`.
+
+After GitHub attests the closed SLSA predicate for the exact
+`image.qcow2.zst` SHA-256 subject, the Go
+publisher first verifies the returned bundle with the same official verifier
+used by clients, then creates the frozen four-layer OCI manifest documented in
+`docs/21-supply-chain.md`. A tag that already resolves is a blocking duplicate;
+the producer never overwrites it. Partial pushes may leave unreachable blobs or
+a digest-addressed manifest, but never a discovery tag.
 
 ## Reproducibility
 

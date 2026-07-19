@@ -41,6 +41,10 @@ const (
 	CodeProvenancePredicate  ErrorCode = "IMAGE_PROVENANCE_PREDICATE_INVALID"
 	CodePullCancelled        ErrorCode = "IMAGE_PULL_CANCELLED"
 	CodePullTimeout          ErrorCode = "IMAGE_PULL_TIMEOUT"
+	CodeReleaseInvalid       ErrorCode = "IMAGE_RELEASE_INVALID"
+	CodeReleaseBuildFailed   ErrorCode = "IMAGE_RELEASE_BUILD_FAILED"
+	CodeReleaseConflict      ErrorCode = "IMAGE_RELEASE_TAG_CONFLICT"
+	CodeReleasePublishFailed ErrorCode = "IMAGE_RELEASE_PUBLISH_FAILED"
 )
 
 // Error carries only stable presentation text. Cause is available to trusted

@@ -16,10 +16,11 @@ Each released binary/package/image has:
 
 ## OCI layout
 
-Repository examples:
+The six official repositories are fixed:
 
 ```text
 ghcr.io/stevenbuglione/private-vm/workstation-basic
+ghcr.io/stevenbuglione/private-vm/workstation-office
 ghcr.io/stevenbuglione/private-vm/workstation-development
 ghcr.io/stevenbuglione/private-vm/downloader
 ghcr.io/stevenbuglione/private-vm/scanner
@@ -36,6 +37,28 @@ application/vnd.dev.sigstore.bundle+json
 ```
 
 The CLI uses `oras-go` rather than Docker.
+
+The frozen image artifact is an OCI image manifest with the exact two-byte
+empty config `{}` and exactly four ordered layers:
+
+| Order | Title | Media type | Bound content |
+| --- | --- | --- | --- |
+| 1 | `image.qcow2.zst` | `application/vnd.private-vm.qcow2+zstd` | deterministic compressed canonical QCOW2 |
+| 2 | `manifest.json` | `application/vnd.private-vm.manifest.v1+json` | frozen-v1 image/build manifest |
+| 3 | `sbom.spdx.json` | `application/spdx+json` | complete canonical runtime Nix closure |
+| 4 | `provenance.json` | `application/vnd.dev.sigstore.bundle+json` | saved GitHub Sigstore bundle |
+
+Each layer descriptor has only its exact OCI title annotation. The manifest has
+no subject, artifact type, manifest annotations, URLs, embedded data or
+platform; adding, omitting, duplicating or reordering a layer is invalid. The
+generic outer provenance media type is intentionally distinct from the inner
+bundle's required `application/vnd.dev.sigstore.bundle.v0.3+json` declaration.
+
+The tag is a discovery alias created only after every blob and the manifest are
+available by digest and the official verifier accepts the staged artifact. The
+publisher checks that the canonical SemVer/RC tag does not resolve before any
+blob push and applies a conditional non-overwrite tag write after a second
+absence check. Duplicate tags fail closed. A partial push does not create a tag.
 
 IMG-001 implements a read-only anonymous HTTPS ORAS client. It opens no Docker
 daemon or credential store, resolves every tag to a canonical SHA-256 manifest
@@ -129,12 +152,32 @@ made while verifying a staged or cached entry.
 The signed payload is the closed SLSA provenance v1 profile in
 `schemas/image-provenance-payload.schema.json`. It binds the compressed-image
 SHA-256 to `image.qcow2.zst`, the source commit, the exact release workflow and
-an immutable `refs/tags/v<SemVer>` tag (only canonical `-rc.N` prereleases are
-accepted). The repository name is additionally pinned by GitHub repository ID
-`1305109560` and owner ID `34593055`. The Fulcio SAN, OIDC issuer, source
+a protected, immutable Git `refs/tags/v<SemVer>` tag (only canonical `-rc.N`
+prereleases are accepted). The repository name is additionally pinned by GitHub
+repository ID `1305109560` and owner ID `34593055`. The Fulcio SAN, OIDC issuer, source
 repository/ref/commit, both numeric IDs, hosted-runner identity, and release
 workflow are exact. Its `RunInvocationURI` must equal the signed SLSA
 `invocationId`; repository-name reuse therefore cannot satisfy policy.
+
+`actions/attest` receives the producer's closed `predicate.json`, predicate type
+`https://slsa.dev/provenance/v1`, exactly the subject name `image.qcow2.zst` and
+the producer-computed `sha256:<digest>`. Its saved `bundle-path`, rather than a
+network-fetched attestation, becomes `provenance.json`. The bounded Go publisher
+rehashes every staged component, validates the release receipt, and runs
+`NewOfficialVerifier` locally before it can publish or tag the graph. A fresh
+runner then pulls anonymously with no Docker configuration or registry
+credential and repeats the complete official client verification. This final
+remote check proves public readability; source tests alone cannot prove GHCR
+visibility.
+
+`schemas/image-release-receipt.schema.json` defines the closed version-1
+pre-attestation handoff. It records the fixed source, tag, role/bundle and GHCR
+repository identity plus immutable component digests and byte counts. Its
+fourth prepared file is `predicate.json`; after `actions/attest` succeeds, the
+saved bundle replaces that producer input in the published graph under the
+fixed title `provenance.json`. Credentials, absolute staging paths, raw command
+output, final OCI digest and mutable source references are forbidden in the
+receipt.
 
 ## Published image SPDX 2.3 profile
 

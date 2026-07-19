@@ -50,7 +50,7 @@ func (factory ORASFactory) Open(repository string) (Repository, error) {
 	}
 	repo.Client = &auth.Client{
 		Client: client,
-		Cache:  auth.NewCache(),
+		Cache:  nil,
 		// A nil Credential callback is intentionally anonymous.
 	}
 	repo.MaxMetadataBytes = DefaultLimits().MaxManifestBytes

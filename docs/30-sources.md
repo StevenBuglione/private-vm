@@ -1,6 +1,7 @@
 # Verified external sources
 
-Verified on 2026-07-18. IMG-003 Sigstore details were rechecked on 2026-07-19.
+Verified on 2026-07-18. IMG-003 Sigstore and REL-003 GitHub/OCI details were
+rechecked on 2026-07-19.
 
 ## NixOS
 
@@ -21,10 +22,16 @@ Verified on 2026-07-18. IMG-003 Sigstore details were rechecked on 2026-07-19.
   2026-07-19)
 - Container registry OCI support and anonymous public pulls:
   https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry
+  (new container packages default private; anonymous pull requires public
+  visibility, rechecked 2026-07-19)
 - Artifact attestations:
   https://docs.github.com/actions/security-for-github-actions/using-artifact-attestations/using-artifact-attestations-to-establish-provenance-for-builds
+- `actions/attest` inputs and `bundle-path` output:
+  https://github.com/actions/attest
 - Artifact attestations REST API (current DSSE/Rekor bundle example):
   https://docs.github.com/rest/orgs/orgs#list-attestations
+- Deployment environments and protection rules:
+  https://docs.github.com/en/actions/reference/workflows-and-actions/deployments-and-environments
 - Secure use and action pinning:
   https://docs.github.com/en/actions/reference/security/secure-use
 
@@ -58,6 +65,10 @@ Verified on 2026-07-18. IMG-003 Sigstore details were rechecked on 2026-07-19.
   https://www.man7.org/linux/man-pages/man8/cryptsetup-luksFormat.8.html
 - ORAS Go:
   https://github.com/oras-project/oras-go
+- ORAS push/pull model:
+  https://oras.land/docs/how_to_guides/pushing_and_pulling
+- OCI image manifest specification:
+  https://github.com/opencontainers/image-spec/blob/main/manifest.md
 
 ## Go
 

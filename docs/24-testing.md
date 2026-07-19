@@ -89,6 +89,53 @@ missing-proof and oversized inputs; cancellation, timeout and repeated offline
 cache reverification. Schema tests also reject mutable refs and repository-name
 reuse with a changed numeric ID.
 
+### OCI release producer and publication boundary
+
+REL-003 focused tests run serially and without Nix or a VM. They directly cover:
+
+- bounded regular-file discovery, QCOW2 v3 header/virtual-size validation,
+  deterministic single-worker zstd output and source/compressed hashes;
+- symlink, duplicate-image, backing-file, encryption, malformed-header,
+  incomplete-closure, cancellation and timeout rejection before publication;
+- exact empty OCI config and ordered four-layer descriptor bytes;
+- credential read only from bounded standard input with no cache, Docker store,
+  argv, environment or diagnostic copy;
+- duplicate-tag rejection before blob writes, a second pre-tag absence check,
+  conditional non-overwrite tag creation and post-write digest resolution;
+- injected failure after every blob/manifest operation, proving that a partial
+  push cannot create the tag and that local staging is removed; and
+- anonymous construction with no credential followed by digest-pinned pull;
+  the IMG-002/IMG-003 tests in the same package independently exercise the
+  complete `NewOfficialVerifier` manifest/SPDX/cryptographic policy.
+
+The same production selector additionally rejects missing images, special
+files, path/count/depth/size overflow and unsupported QCOW2 feature bits. Those
+bounds are enforced in Go even where the focused REL-003 suite uses a
+representative rejection rather than duplicating every selector mutation.
+
+Schema tests validate the release receipt and reject unknown fields, branch or
+arbitrary refs, non-official repositories/workflows, a mismatched role/bundle,
+missing/fifth/reordered file names, invalid digests, and any secret/path-shaped
+field. OCI graph tests independently reject a changed component media type.
+
+The local source gate is:
+
+```bash
+CGO_ENABLED=0 GOMAXPROCS=2 GOMEMLIMIT=3GiB \
+  go test -p=1 ./internal/image ./cmd/private-vm-image-release
+python3 tools/validate_schemas.py
+python3 tools/validate_examples.py
+python3 tools/test_workflow_policy.py
+python3 tools/check_workflow_policy.py
+```
+
+These checks are sufficient to continue local implementation without waiting
+for GitHub's image build. They do not prove server-side environment protection,
+an actual OIDC attestation, GHCR visibility or anonymous reachability. Those
+remote-only conclusions require all six protected publication rows and all six
+fresh anonymous-verification rows to succeed for the same protected Git tag and
+commit. Pending, skipped, cancelled and failed rows are not acceptance evidence.
+
 ### Integration without KVM
 
 - fake QEMU executable with QMP server

@@ -45,7 +45,7 @@ continue to fail closed.
 
 ## What is included
 
-- 39 numbered design, operations, and acceptance-evidence documents
+- 40 numbered design, operations, and acceptance-evidence documents
 - 10 architecture decision records
 - complete v1 CLI and error catalog
 - host and guest protobuf contracts
@@ -53,7 +53,7 @@ continue to fail closed.
 - Go package boundaries, interfaces and tested starter implementations
 - NixOS host module and six image-output scaffolds
 - systemd, Polkit, tmpfiles and udev packaging assets
-- public source and image-build CI plus a secured release workflow template
+- public source/image-build CI plus a tag-only protected image-publication workflow
 - machine-readable implementation backlog, milestones and acceptance suites
 - source drafts preserved under `references/`
 - validation report and archive manifest
@@ -76,9 +76,9 @@ This is not yet an operational security product. Configuration, diagnostics,
 the authenticated host daemon, volatile session records, typed QEMU/QMP
 lifecycle, ephemeral storage primitives, and the authenticated role-restricted
 guest channel are implemented and unit/integration tested. End-to-end role
-orchestration, VPN/torrent/scanner/USB workflows, image release verification,
-packaging, and the complete acceptance runbook remain in progress. Unfinished
-security-sensitive commands intentionally fail as not implemented.
+orchestration, VPN/torrent/scanner/USB workflows, remote image-publication
+acceptance, packaging, and the complete acceptance runbook remain in progress.
+Unfinished security-sensitive commands intentionally fail as not implemented.
 
 ## License
 

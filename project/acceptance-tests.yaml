@@ -204,6 +204,67 @@
       ]
     },
     {
+      "id": "IMAGE_RELEASE",
+      "tests": [
+        {
+          "id": "REL-IMG-001",
+          "name": "Official image publication is tag-only and isolated",
+          "given": "the active release workflow source",
+          "when": "workflow policy evaluates its trigger, matrix, runner, permissions and environment",
+          "then": "only tag pushes can start six independent ubuntu-24.04 publication rows, bounded Go rejects any noncanonical v* ref or commit outside fetched official origin/main before Nix or publication, and each row is behind image-publish with exactly contents read, packages write, id-token write and attestations write"
+        },
+        {
+          "id": "REL-IMG-002",
+          "name": "Bounded producer derives one complete release candidate",
+          "given": "one canonical Nix QCOW2 output and its exact runtime system closure",
+          "when": "the Go preparation boundary runs",
+          "then": "it selects one regular image, validates the QCOW2, deterministically compresses it with one worker, hashes it, emits the complete sorted-closure SPDX document, manifest, predicate and closed version-1 receipt, and removes staging on failure, cancellation or timeout"
+        },
+        {
+          "id": "REL-IMG-003",
+          "name": "Published OCI graph is exact",
+          "given": "a valid prepared image and verified Sigstore bundle",
+          "when": "the Go publisher constructs the OCI manifest",
+          "then": "the config is exactly the two-byte empty object and the only ordered layers are image.qcow2.zst, manifest.json, sbom.spdx.json and provenance.json with their frozen media types and title annotations"
+        },
+        {
+          "id": "REL-IMG-004",
+          "name": "Attestation binds the compressed image before publication",
+          "given": "the producer-computed image.qcow2.zst SHA-256 and the full-SHA-pinned attestation action bundle",
+          "when": "publication is requested",
+          "then": "the saved bundle names exactly image.qcow2.zst, binds that digest and passes NewOfficialVerifier under the official repository/workflow/ref/numeric-ID/invocation policy before any tag is created"
+        },
+        {
+          "id": "REL-IMG-005",
+          "name": "Publisher refuses existing tags and partial pushes do not tag",
+          "given": "an existing release tag or an injected failure after any blob or manifest operation",
+          "when": "the publisher attempts the release",
+          "then": "an existing tag causes no blob writes, a failed partial push leaves no tag, and a successful conditional tag resolves to the exact prepared manifest digest"
+        },
+        {
+          "id": "REL-IMG-006",
+          "name": "Registry credential is transient and bounded",
+          "given": "the protected job's short-lived GHCR credential",
+          "when": "the Go publisher reads it from standard input",
+          "then": "the credential is bounded, not cached, destroyed after use and absent from argv, environment, Docker state and redacted diagnostics"
+        },
+        {
+          "id": "REL-IMG-007",
+          "name": "Published images verify anonymously from clean runners",
+          "given": "all six successfully published official image tags and public GHCR package visibility",
+          "when": "six fresh read-only jobs with no registry credential resolve, pull and verify them",
+          "then": "each tag resolves to its recorded digest and the exact four-layer manifest, complete SPDX closure and offline official Sigstore provenance pass; inaccessible visibility is a blocking reported failure rather than an authorization expansion"
+        },
+        {
+          "id": "REL-IMG-008",
+          "name": "Local completion does not pre-claim remote state",
+          "given": "focused local release, schema and workflow-policy tests pass while a GitHub image run is pending or absent",
+          "when": "implementation scheduling proceeds without waiting for remote CI",
+          "then": "the local source gate is recorded separately and protected-environment enforcement, OIDC issuance, GHCR publication, public visibility and anonymous pull remain unverified blocking release gates until the remote run for the same source commit and protected Git tag succeeds"
+        }
+      ]
+    },
+    {
       "id": "EXPORTER",
       "tests": [
         {

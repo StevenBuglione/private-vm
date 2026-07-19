@@ -21,6 +21,20 @@ PINNED_IMAGE_ACTIONS = [
     "actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10",
     "DeterminateSystems/nix-installer-action@ef8a148080ab6020fd15196c2084a2eea5ff2d25",
 ]
+PINNED_RELEASE_PUBLISH_ACTIONS = [
+    "actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10",
+    "actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16",
+    "DeterminateSystems/nix-installer-action@ef8a148080ab6020fd15196c2084a2eea5ff2d25",
+    "actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6",
+]
+PINNED_RELEASE_VERIFY_ACTIONS = PINNED_RELEASE_PUBLISH_ACTIONS[:2]
+RELEASE_PUBLISH_PERMISSIONS = {
+    "contents": "read",
+    "packages": "write",
+    "id-token": "write",
+    "attestations": "write",
+}
+SLSA_PROVENANCE_V1 = "https://slsa.dev/provenance/v1"
 IMAGE_MATRIX = {
     "workstation-basic": {
         "image_target": "image-workstation-basic",
@@ -57,6 +71,50 @@ IMAGE_MATRIX = {
         "contract_check": "",
         "smoke_primary": "exporter",
         "smoke_secondary": "",
+    },
+}
+RELEASE_IMAGE_MATRIX = {
+    "workstation-basic": {
+        "image_target": "image-workstation-basic",
+        "closure_target": "closure-workstation-basic",
+        "role": "workstation",
+        "bundle": "basic",
+        "repository": "ghcr.io/stevenbuglione/private-vm/workstation-basic",
+    },
+    "workstation-office": {
+        "image_target": "image-workstation-office",
+        "closure_target": "closure-workstation-office",
+        "role": "workstation",
+        "bundle": "office",
+        "repository": "ghcr.io/stevenbuglione/private-vm/workstation-office",
+    },
+    "workstation-development": {
+        "image_target": "image-workstation-development",
+        "closure_target": "closure-workstation-development",
+        "role": "workstation",
+        "bundle": "development",
+        "repository": "ghcr.io/stevenbuglione/private-vm/workstation-development",
+    },
+    "downloader": {
+        "image_target": "image-downloader",
+        "closure_target": "closure-downloader",
+        "role": "downloader",
+        "bundle": "",
+        "repository": "ghcr.io/stevenbuglione/private-vm/downloader",
+    },
+    "scanner": {
+        "image_target": "image-scanner",
+        "closure_target": "closure-scanner",
+        "role": "scanner",
+        "bundle": "",
+        "repository": "ghcr.io/stevenbuglione/private-vm/scanner",
+    },
+    "exporter": {
+        "image_target": "image-exporter",
+        "closure_target": "closure-exporter",
+        "role": "exporter",
+        "bundle": "",
+        "repository": "ghcr.io/stevenbuglione/private-vm/exporter",
     },
 }
 
@@ -105,23 +163,30 @@ def _protected_publish_kind(
             and push.get("tags") == ["v*"]
         ):
             return "release"
-    condition = " ".join(str(job.get("if", "")).split())
-    if environment == "image-publish" and condition == (
-        "github.event_name == 'push' && github.ref == 'refs/heads/main'"
-    ):
-        return "image"
+    if environment == "image-publish" and set(triggers) == {"push"}:
+        push = triggers.get("push")
+        if (
+            isinstance(push, dict)
+            and set(push) == {"tags"}
+            and push.get("tags") == ["v*"]
+        ):
+            return "image"
     return None
 
 
 def _validate_protected_permissions(
     permissions: dict[str, str], kind: str, location: str
 ) -> None:
-    expected = {
-        "contents": "write" if kind == "release" else "read",
-        "packages": "write",
-        "id-token": "write",
-        "attestations": "write",
-    }
+    expected = (
+        {
+            "contents": "write",
+            "packages": "write",
+            "id-token": "write",
+            "attestations": "write",
+        }
+        if kind == "release"
+        else RELEASE_PUBLISH_PERMISSIONS
+    )
     if permissions != expected:
         raise PolicyError(
             f"{location}: protected {kind} permissions must be exactly {expected}"
@@ -196,6 +261,10 @@ def validate_workflow_text(source: str, name: str = "workflow") -> None:
             permissions = _permissions(job["permissions"], f"{location}.permissions")
         protected_kind = _protected_publish_kind(triggers, job)
         if protected_kind:
+            if protected_kind == "image" and Path(name).name != "release.yml":
+                raise PolicyError(
+                    f"{location}: image publication is permitted only in release.yml"
+                )
             _validate_protected_permissions(permissions, protected_kind, location)
         elif _has_write(permissions):
             raise PolicyError(
@@ -354,6 +423,326 @@ def validate_image_workflow_text(source: str, name: str = "image-build.yml") -> 
         raise PolicyError(f"{name}: REL-002 image jobs must not publish artifacts")
 
 
+def _validate_release_matrix(job: dict[str, Any], name: str, job_name: str) -> None:
+    location = f"{name}.jobs.{job_name}.strategy"
+    strategy = _mapping(job.get("strategy"), location)
+    if set(strategy) != {"fail-fast", "matrix"}:
+        raise PolicyError(
+            f"{location}: release strategy fields must be exactly fail-fast and matrix"
+        )
+    if _is_true(strategy.get("fail-fast", "true")):
+        raise PolicyError(
+            f"{name}: one release image failure must not cancel independent rows"
+        )
+    matrix = _mapping(strategy.get("matrix"), f"{location}.matrix")
+    if set(matrix) != {"include"} or not isinstance(matrix.get("include"), list):
+        raise PolicyError(f"{name}: release matrix must contain only an include list")
+
+    required_fields = {
+        "image",
+        "image_target",
+        "closure_target",
+        "role",
+        "bundle",
+        "repository",
+    }
+    actual: dict[str, dict[str, str]] = {}
+    for index, raw_entry in enumerate(matrix["include"]):
+        entry = _mapping(raw_entry, f"{location}.matrix.include[{index}]")
+        if set(entry) != required_fields:
+            raise PolicyError(
+                f"{name}: release matrix fields must be exactly {sorted(required_fields)}"
+            )
+        image = str(entry["image"])
+        if image in actual:
+            raise PolicyError(f"{name}: duplicate release image matrix entry: {image}")
+        actual[image] = {
+            field: str(entry[field]) for field in required_fields if field != "image"
+        }
+    if actual != RELEASE_IMAGE_MATRIX:
+        raise PolicyError(f"{name}: release matrix does not match the six official images")
+
+
+def _bounded_release_timeout(
+    job: dict[str, Any], name: str, job_name: str, maximum: int
+) -> None:
+    try:
+        timeout = int(str(job.get("timeout-minutes", "")))
+    except ValueError as error:
+        raise PolicyError(
+            f"{name}: {job_name} timeout must be a bounded integer"
+        ) from error
+    if timeout < 1 or timeout > maximum:
+        raise PolicyError(
+            f"{name}: {job_name} timeout must be between 1 and {maximum} minutes"
+        )
+
+
+def _release_steps(job: dict[str, Any], name: str, job_name: str) -> list[dict[str, Any]]:
+    raw_steps = job.get("steps")
+    if not isinstance(raw_steps, list) or not raw_steps:
+        raise PolicyError(f"{name}.jobs.{job_name}.steps: expected a non-empty list")
+    steps: list[dict[str, Any]] = []
+    for index, raw_step in enumerate(raw_steps):
+        location = f"{name}.jobs.{job_name}.steps[{index}]"
+        step = _mapping(raw_step, location)
+        _validate_action(step, location)
+        steps.append(step)
+    return steps
+
+
+def _release_action_set(
+    steps: list[dict[str, Any]], expected: list[str], name: str, job_name: str
+) -> None:
+    actual = [str(step["uses"]) for step in steps if "uses" in step]
+    if actual != expected:
+        raise PolicyError(
+            f"{name}: {job_name} action set and order do not match the reviewed pins"
+        )
+
+
+def _validate_release_setup_go(
+    steps: list[dict[str, Any]], name: str, job_name: str
+) -> None:
+    setup = [
+        step
+        for step in steps
+        if str(step.get("uses", "")).startswith("actions/setup-go@")
+    ]
+    if len(setup) != 1 or _mapping(
+        setup[0].get("with"), f"{name}.jobs.{job_name}.setup-go.with"
+    ) != {"go-version": "1.26.5", "cache": "false"}:
+        raise PolicyError(
+            f"{name}: {job_name} must use Go 1.26.5 with the action cache disabled"
+        )
+
+
+def _validate_release_checkout_history(
+    steps: list[dict[str, Any]], name: str
+) -> None:
+    checkouts = [
+        step
+        for step in steps
+        if str(step.get("uses", "")).startswith("actions/checkout@")
+    ]
+    if len(checkouts) != 1 or _mapping(
+        checkouts[0].get("with"), f"{name}.jobs.publish.checkout.with"
+    ) != {"persist-credentials": "false", "fetch-depth": "0"}:
+        raise PolicyError(
+            f"{name}: publish checkout must fetch full history without persisted credentials"
+        )
+
+
+def _step_runs(steps: list[dict[str, Any]], command: str) -> list[tuple[int, str]]:
+    return [
+        (index, str(step.get("run", "")))
+        for index, step in enumerate(steps)
+        if command in str(step.get("run", ""))
+    ]
+
+
+def _validate_release_attestation(
+    steps: list[dict[str, Any]], name: str
+) -> int:
+    prepare = _step_runs(steps, "private-vm-image-release prepare")
+    publish = _step_runs(steps, "private-vm-image-release publish")
+    attest = [
+        (index, step)
+        for index, step in enumerate(steps)
+        if str(step.get("uses", "")).startswith("actions/attest@")
+    ]
+    if len(prepare) != 1 or len(attest) != 1 or len(publish) != 1:
+        raise PolicyError(
+            f"{name}: publish must contain one prepare, attest and publish operation"
+        )
+    prepare_index, _ = prepare[0]
+    attest_index, attest_step = attest[0]
+    publish_index, publish_run = publish[0]
+    for index in (prepare_index, attest_index, publish_index):
+        if "if" in steps[index] or "continue-on-error" in steps[index]:
+            raise PolicyError(
+                f"{name}: prepare, attest and publish steps must fail closed"
+            )
+    if not prepare_index < attest_index < publish_index:
+        raise PolicyError(f"{name}: release preparation, attestation and publication are out of order")
+    if str(attest_step.get("id", "")) != "attest":
+        raise PolicyError(f"{name}: attestation step id must be exactly attest")
+
+    settings = _mapping(attest_step.get("with"), f"{name}.jobs.publish.attest.with")
+    expected = {
+        "subject-name": "image.qcow2.zst",
+        "subject-digest": "${{ steps.prepare.outputs.subject_digest }}",
+        "predicate-type": SLSA_PROVENANCE_V1,
+        "predicate-path": "${{ steps.prepare.outputs.predicate_path }}",
+    }
+    if settings != expected:
+        raise PolicyError(
+            f"{name}: attestation inputs must use the exact compressed-image subject and custom SLSA predicate"
+        )
+    if "${{ steps.attest.outputs.bundle-path }}" not in publish_run:
+        raise PolicyError(
+            f"{name}: publish must consume the bounded local attestation bundle-path"
+        )
+    return publish_index
+
+
+def _validate_stdin_publish_token(
+    source: str, steps: list[dict[str, Any]], publish_index: int, name: str
+) -> None:
+    token = "${{ github.token }}"
+    if source.count(token) != 1 or re.search(
+        r"\$\{\{\s*secrets(?:\.|\[)|\b(?:GITHUB_TOKEN|GH_TOKEN|CR_PAT)\b",
+        source,
+        flags=re.IGNORECASE,
+    ):
+        raise PolicyError(
+            f"{name}: the ephemeral GitHub token must appear exactly once in the publish pipe"
+        )
+    for step in steps:
+        environment = step.get("env")
+        if environment is not None and token in str(environment):
+            raise PolicyError(f"{name}: registry credentials must not enter the environment")
+
+    run = str(steps[publish_index].get("run", ""))
+    lines = [line.strip() for line in run.splitlines() if line.strip()]
+    token_lines = [line for line in lines if token in line]
+    if "set +x" not in lines or len(token_lines) != 1:
+        raise PolicyError(
+            f"{name}: publish must disable tracing and use one direct non-logging token pipe"
+        )
+    token_line = token_lines[0]
+    direct_pipe = re.compile(
+        r"^printf '%s' '\$\{\{ github\.token \}\}' \| "
+        r"(?:\./)?private-vm-image-release publish\b.*\s--token-stdin(?:\s|$)"
+    )
+    if not direct_pipe.fullmatch(token_line):
+        raise PolicyError(
+            f"{name}: publish credential handoff must be the exact printf-to---token-stdin pipe"
+        )
+
+
+def validate_release_workflow_text(source: str, name: str = "release.yml") -> None:
+    """Validate the active REL-003 tag-only image publication workflow."""
+    if len(source.encode()) > MAX_WORKFLOW_BYTES:
+        raise PolicyError(f"{name}: workflow exceeds {MAX_WORKFLOW_BYTES} bytes")
+    try:
+        document = yaml.load(source, Loader=yaml.BaseLoader)
+    except yaml.YAMLError as error:
+        raise PolicyError(f"{name}: invalid YAML: {error}") from error
+    document = _mapping(document, name)
+    if document.get("name") != "Release":
+        raise PolicyError(f"{name}: workflow name must be exactly Release")
+
+    triggers = _triggers(document)
+    if set(triggers) != {"push"}:
+        raise PolicyError(f"{name}: release images must run only for tag pushes")
+    push = _mapping(triggers["push"], f"{name}.on.push")
+    if set(push) != {"tags"} or push.get("tags") != ["v*"]:
+        raise PolicyError(f"{name}: release trigger must be exactly tags v*")
+    if _permissions(document.get("permissions"), f"{name}.permissions") != {
+        "contents": "read"
+    }:
+        raise PolicyError(f"{name}: workflow permissions must be exactly contents: read")
+
+    jobs = _mapping(document.get("jobs"), f"{name}.jobs")
+    if set(jobs) != {"publish", "verify"}:
+        raise PolicyError(f"{name}: REL-003 permits only publish and verify jobs")
+    publish = _mapping(jobs["publish"], f"{name}.jobs.publish")
+    verify = _mapping(jobs["verify"], f"{name}.jobs.verify")
+
+    for job_name, job, maximum_timeout in (
+        ("publish", publish, 180),
+        ("verify", verify, 60),
+    ):
+        if job.get("runs-on") != "ubuntu-24.04":
+            raise PolicyError(
+                f"{name}: {job_name} must use the standard ubuntu-24.04 public runner"
+            )
+        _bounded_release_timeout(job, name, job_name, maximum_timeout)
+        _validate_release_matrix(job, name, job_name)
+        if "if" in job:
+            raise PolicyError(f"{name}: {job_name} must not override normal success gating")
+        for prohibited_key in ("container", "secrets", "services"):
+            if prohibited_key in job:
+                raise PolicyError(f"{name}: {job_name} must not set {prohibited_key}")
+
+    if publish.get("environment") != "image-publish" or "needs" in publish:
+        raise PolicyError(
+            f"{name}: publish must be isolated in only the image-publish environment"
+        )
+    if _permissions(
+        publish.get("permissions"), f"{name}.jobs.publish.permissions"
+    ) != RELEASE_PUBLISH_PERMISSIONS:
+        raise PolicyError(f"{name}: publish permissions do not match the exact reviewed set")
+    publish_environment = _mapping(publish.get("env"), f"{name}.jobs.publish.env")
+    nix_config = str(publish_environment.get("NIX_CONFIG", ""))
+    if set(publish_environment) != {"NIX_CONFIG"} or "max-jobs = 1" not in nix_config or "cores = 2" not in nix_config:
+        raise PolicyError(f"{name}: publish must use only the reviewed serialized Nix limits")
+
+    if verify.get("needs") != "publish" or "environment" in verify or "env" in verify:
+        raise PolicyError(
+            f"{name}: anonymous verification must be a separate fresh job after publish"
+        )
+    if _permissions(verify.get("permissions"), f"{name}.jobs.verify.permissions") != {
+        "contents": "read"
+    }:
+        raise PolicyError(f"{name}: anonymous verification must have only contents: read")
+
+    publish_steps = _release_steps(publish, name, "publish")
+    verify_steps = _release_steps(verify, name, "verify")
+    _release_action_set(
+        publish_steps, PINNED_RELEASE_PUBLISH_ACTIONS, name, "publish"
+    )
+    _release_action_set(verify_steps, PINNED_RELEASE_VERIFY_ACTIONS, name, "verify")
+    _validate_release_setup_go(publish_steps, name, "publish")
+    _validate_release_setup_go(verify_steps, name, "verify")
+    _validate_release_checkout_history(publish_steps, name)
+    publish_index = _validate_release_attestation(publish_steps, name)
+    _validate_stdin_publish_token(source, publish_steps, publish_index, name)
+
+    anonymous = _step_runs(verify_steps, "private-vm-image-release verify-anonymous")
+    if len(anonymous) != 1:
+        raise PolicyError(
+            f"{name}: verify must contain exactly one anonymous full-verification operation"
+        )
+    anonymous_index, anonymous_run = anonymous[0]
+    if (
+        "if" in verify_steps[anonymous_index]
+        or "continue-on-error" in verify_steps[anonymous_index]
+        or not re.match(
+            r"^\s*(?:\./)?private-vm-image-release verify-anonymous(?:\s|$)",
+            anonymous_run,
+        )
+        or re.search(r"(?:\|\||&&|[|;>])", anonymous_run)
+    ):
+        raise PolicyError(f"{name}: anonymous verification must execute once and fail closed")
+    verify_text = "\n".join(
+        str(step.get("run", "")) + "\n" + str(step.get("env", ""))
+        for step in verify_steps
+    ).lower()
+    if re.search(
+        r"(secrets|github\.token|authorization|credential|password|token|login|"
+        r"\bcurl\b|\bwget\b|\bgh\b|\boras\b|"
+        r"packages\s*:\s*(?:read|write)|id-token|attestations)",
+        verify_text,
+    ):
+        raise PolicyError(f"{name}: anonymous verification contains an authentication fallback")
+
+    prohibited = re.compile(
+        r"(actions/(?:upload|download)-artifact|actions/cache|cache\s*:\s*true|"
+        r"docker/|docker://|\bdocker\b|\bpodman\b|\bskopeo\b|"
+        r"\boras\s+login\b|\bgh\s+(?:auth|release)\b|--password(?!-stdin)|"
+        r"--token(?:[=\s])(?!stdin)|--tag\s+(?:latest|rc)\b|"
+        r":(?:latest|rc)\b|\$\{\{\s*secrets(?:\.|\[)|"
+        r"\b(?:GITHUB_TOKEN|GH_TOKEN|CR_PAT)\b)",
+        flags=re.IGNORECASE,
+    )
+    if prohibited.search(source):
+        raise PolicyError(
+            f"{name}: release workflow contains artifact, cache, Docker, mutable-tag or authentication fallback behavior"
+        )
+
+
 def workflow_paths(root: Path) -> list[Path]:
     workflow_dir = root / ".github" / "workflows"
     paths = sorted(workflow_dir.glob("*.yml"))
@@ -384,6 +773,8 @@ def validate_repository(root: Path) -> None:
         validate_workflow_text(source, relative_name)
         if path.name == "image-build.yml":
             validate_image_workflow_text(source, relative_name)
+        if path.name == "release.yml":
+            validate_release_workflow_text(source, relative_name)
 
     with tempfile.TemporaryDirectory(prefix="private-vm-workflows-") as temporary:
         audit_paths: list[str] = []
