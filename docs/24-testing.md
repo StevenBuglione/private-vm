@@ -657,10 +657,13 @@ workspace content is representable in that payload.
 
 Workspace production-invoker tests prove no-follow trusted import, receipt
 mismatch rejection, aggregate-only inventory, fail-before-stream behavior when
-a protected destination is absent, bounded export framing, independent
-destination commit hashing, the daemon verification call, and changed-receipt
-rejection. The destination fixture is memory-only; real USB and encrypted
-container writes remain their destructive system gates.
+a destination is unsupported, semantic USB enum selection with no path or file
+bytes in the request, and changed-receipt rejection. Daemon destination tests
+prove prepare-before-source, bounded source framing, independent receiver
+re-read evidence, three-way digest matching, final READY verification, and
+idempotent abort on failure, cancellation, timeout, digest mismatch, and cleanup
+failure. Real USB writes remain the destructive system gate; encrypted bundles
+remain fail closed pending their separate contract.
 
 ## Test safety
 

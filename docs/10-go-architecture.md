@@ -275,6 +275,15 @@ path, boot entry or argument from RPC. The QEMU package separately renders the
 closed scanner boot-mode enum, and the production boot probe compares its
 `fw_cfg` value with the immutable scanner phase document.
 
+Production workspace export uses a daemon-owned
+`WorkspaceDestinationProvider`. Its plan contains only owner UID, source
+session, opaque output ID, and a closed destination enum. A prepared
+transaction consumes the workstation relay through one bounded source callback
+and returns only independent persistence/re-read/cleanup evidence. The daemon
+owns abort on every failed, canceled, or timed-out transaction and marks the
+guest receipt current only after all three digests agree. No provider API can
+represent a host path, mount, block device, guest command, or QEMU argument.
+
 ## Volatile secret contract
 
 `internal/secret.Bytes` is a bounded handle to shared private state. Copying the

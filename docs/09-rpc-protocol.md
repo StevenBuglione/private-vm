@@ -223,6 +223,7 @@ Core methods:
 - `ImportWorkspaceFile`
 - `ExportWorkspaceFile`
 - `VerifyWorkspaceExport`
+- `ExportWorkspaceToDestination`
 - `ClaimUSB`
 - `ReleaseUSB`
 
@@ -261,6 +262,17 @@ descriptor, stream and guest receipt. Export is hashed independently by the
 guest, daemon relay and final receiver. `VerifyWorkspaceExport` succeeds only
 when the daemon-retained volatile digest and receiver digest match, after which
 the guest rehashes the current output before recording its receipt.
+
+`ExportWorkspaceToDestination` is the production export entry point. Its
+request contains an opaque output ID and a closed destination enum only. The
+daemon verifies that the selected output needs export, prepares the destination
+before consuming source frames, and gives the provider a one-shot bounded
+source callback. Success requires persisted and independently re-read receiver
+evidence, complete destination cleanup, digest equality, and the guest's final
+current-output verification. Cancellation, timeout, framing, persistence,
+receipt, or verification failure leaves the workstation dirty and invokes an
+idempotent abort under an independent bounded context. `usb` is the only v1
+destination; `encrypted-bundle` is explicitly unimplemented.
 
 The host torrent surface is session-scoped and downloader-only. `AddTorrent`
 starts with one contextual begin frame selecting magnet or metainfo, followed

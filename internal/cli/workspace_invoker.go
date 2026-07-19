@@ -5,8 +5,6 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
-	"errors"
-	"io"
 
 	privatevmv1 "github.com/StevenBuglione/private-vm/gen/privatevm/v1"
 	"github.com/StevenBuglione/private-vm/internal/apperror"
@@ -16,27 +14,6 @@ import (
 )
 
 const maximumWorkspaceFileBytes = uint64(8 << 30)
-
-const maximumWorkspaceFrames = maximumWorkspaceFileBytes/transfer.DefaultMaxChunk + 2
-
-// WorkspaceExportDestination is the narrow destination boundary used by the
-// USB exporter and encrypted-bundle adapters. Support must be checked before
-// the guest transfer starts, and Open must return a receiver that independently
-// persists and re-reads the received bytes when Commit is called.
-type WorkspaceExportDestination interface {
-	Supports(destination string) bool
-	Open(context.Context, string, transfer.Header) (WorkspaceExportWriter, error)
-}
-
-// WorkspaceExportWriter accepts one bounded file. Abort must be idempotent and
-// remove an incomplete destination. Commit fsyncs/re-reads the destination and
-// returns its independent SHA-256 digest; it must not expose a host path.
-// Abort is a no-op after a successful commit.
-type WorkspaceExportWriter interface {
-	io.Writer
-	Commit(context.Context) ([sha256.Size]byte, error)
-	Abort() error
-}
 
 func (invoker *ProductionInvoker) invokeWorkspace(ctx context.Context, id CommandID, intent Intent) (Result, error) {
 	connection, client, err := invoker.client()
@@ -200,8 +177,8 @@ func workspaceStateResult(state *privatevmv1.WorkspaceState) (Result, error) {
 }
 
 func (invoker *ProductionInvoker) exportWorkspace(ctx context.Context, client privatevmv1.PrivateVMDaemonServiceClient, requestID, sessionID, requestedOutputID, destination string) (Result, error) {
-	adapter := invoker.workspaceDestination
-	if adapter == nil || !adapter.Supports(destination) {
+	typedDestination, ok := workspaceExportDestination(destination)
+	if !ok {
 		return Result{}, workspaceDestinationError()
 	}
 	state, err := invoker.getWorkspaceState(ctx, client, requestID, sessionID)
@@ -212,29 +189,8 @@ func (invoker *ProductionInvoker) exportWorkspace(ctx context.Context, client pr
 	if err != nil {
 		return Result{}, err
 	}
-	stream, err := client.ExportWorkspaceFile(ctx, &privatevmv1.ExportWorkspaceRequest{Context: sessionRequestContext(requestID, sessionID), OutputId: outputID}, grpc.MaxCallRecvMsgSize(transfer.DefaultMaxChunk+4096))
-	if err != nil {
-		return Result{}, daemonRPCError(err)
-	}
-	first, err := stream.Recv()
-	if err != nil || first.GetBegin() == nil || first.GetBegin().GetTransferId() != outputID || first.GetBegin().GetContext() != nil {
-		return Result{}, workspaceTransferError(err)
-	}
-	header, err := workspaceTransferHeader(first.GetBegin().GetDescriptor_())
-	if err != nil {
-		return Result{}, err
-	}
-	writer, err := adapter.Open(ctx, destination, header)
-	if err != nil || writer == nil {
-		return Result{}, workspaceDestinationWrap(err)
-	}
-	receiverDigest, err := receiveWorkspaceExport(ctx, stream, writer, header)
-	if err != nil {
-		return Result{}, err
-	}
-	verified, err := client.VerifyWorkspaceExport(ctx, &privatevmv1.VerifyWorkspaceExportRequest{
-		Context: sessionRequestContext(requestID, sessionID), OutputId: outputID,
-		DaemonDigest: workspaceHash(header.SHA256), ReceiverDigest: workspaceHash(receiverDigest),
+	verified, err := client.ExportWorkspaceToDestination(ctx, &privatevmv1.ExportWorkspaceToDestinationRequest{
+		Context: sessionRequestContext(requestID, sessionID), OutputId: outputID, Destination: typedDestination,
 	})
 	if err != nil {
 		return Result{}, daemonRPCError(err)
@@ -242,64 +198,17 @@ func (invoker *ProductionInvoker) exportWorkspace(ctx context.Context, client pr
 	return workspaceStateResult(verified)
 }
 
-func receiveWorkspaceExport(ctx context.Context, stream privatevmv1.PrivateVMDaemonService_ExportWorkspaceFileClient, writer WorkspaceExportWriter, header transfer.Header) (digest [sha256.Size]byte, resultErr error) {
-	defer func() {
-		if err := writer.Abort(); err != nil {
-			resultErr = workspaceDestinationWrap(errors.Join(resultErr, err))
-		}
-	}()
-	receiver, err := transfer.NewReceiver(header, maximumWorkspaceFileBytes, writer)
-	if err != nil {
-		return digest, workspaceTransferError(err)
+func workspaceExportDestination(value string) (privatevmv1.WorkspaceExportDestination, bool) {
+	switch value {
+	case "usb":
+		return privatevmv1.WorkspaceExportDestination_WORKSPACE_EXPORT_DESTINATION_USB, true
+	case "encrypted-bundle":
+		// The bundle format has no approved storage contract yet. Keep it
+		// explicitly unavailable instead of inventing a host-path destination.
+		return privatevmv1.WorkspaceExportDestination_WORKSPACE_EXPORT_DESTINATION_UNSPECIFIED, false
+	default:
+		return privatevmv1.WorkspaceExportDestination_WORKSPACE_EXPORT_DESTINATION_UNSPECIFIED, false
 	}
-	var offset, sequence uint64
-	finished := false
-	for frameCount := uint64(1); frameCount < maximumWorkspaceFrames; frameCount++ {
-		frame, receiveErr := stream.Recv()
-		if receiveErr != nil || frame == nil {
-			return digest, workspaceTransferError(receiveErr)
-		}
-		if chunk := frame.GetChunk(); chunk != nil {
-			if chunk.GetSequence() != sequence || receiver.WriteChunk(offset, chunk.GetData()) != nil {
-				clear(chunk.Data)
-				return digest, workspaceTransferError(nil)
-			}
-			offset += uint64(len(chunk.GetData()))
-			sequence++
-			clear(chunk.Data)
-			continue
-		}
-		end := frame.GetEnd()
-		if end == nil || end.GetTotalSize() != header.Size || !workspaceHashEqual(end.GetDigest(), header.SHA256) || receiver.Finish() != nil {
-			return digest, workspaceTransferError(nil)
-		}
-		finished = true
-		break
-	}
-	if !finished {
-		return digest, workspaceTransferError(nil)
-	}
-	if _, err := stream.Recv(); !errors.Is(err, io.EOF) {
-		return digest, workspaceTransferError(err)
-	}
-	digest, err = writer.Commit(ctx)
-	if err != nil || digest != header.SHA256 {
-		return digest, workspaceDestinationWrap(err)
-	}
-	return digest, nil
-}
-
-func workspaceTransferHeader(descriptor *privatevmv1.FileDescriptor) (transfer.Header, error) {
-	if descriptor == nil || descriptor.GetDigest() == nil || descriptor.GetDigest().GetAlgorithm() != "sha256" || len(descriptor.GetDigest().GetValue()) != sha256.Size {
-		return transfer.Header{}, workspaceTransferError(nil)
-	}
-	var digest [sha256.Size]byte
-	copy(digest[:], descriptor.GetDigest().GetValue())
-	header := transfer.Header{Name: descriptor.GetLogicalName(), Size: descriptor.GetSizeBytes(), SHA256: digest, MediaType: descriptor.GetDetectedMime()}
-	if err := header.Validate(maximumWorkspaceFileBytes); err != nil {
-		return transfer.Header{}, workspaceTransferError(err)
-	}
-	return header, nil
 }
 
 func selectWorkspaceExport(state *privatevmv1.WorkspaceState, requestedOutputID string) (string, error) {
@@ -370,10 +279,6 @@ func workspaceSelectionError() error {
 
 func workspaceDestinationError() error {
 	return apperror.New("WORKSPACE_DESTINATION_UNAVAILABLE", exitcode.Transfer, "The selected protected export destination is not available.", "Prepare and claim the exact supported destination, then retry the complete export.")
-}
-
-func workspaceDestinationWrap(err error) error {
-	return apperror.Wrap("WORKSPACE_DESTINATION_FAILED", exitcode.Transfer, "The protected destination did not persist and independently verify the complete result.", "Do not discard the workstation; prepare the destination and retry the complete export.", err)
 }
 
 func workspaceTransferError(err error) error {

@@ -162,17 +162,17 @@ aggregate `WORKSPACE_STATUS` record; machine output contains only state and
 counts. `workspace discard --all` is the explicit destructive choice and stops
 the disposable workstation through the protected daemon stop path.
 
-The authenticated daemon/guest export relay, CLI receiver and three-way
-verification RPC are implemented. Export starts only when the exact selected
-current result requires export and the selected typed destination adapter is
-already available. The CLI checks bounded framing and hashes while writing; the adapter
-must fsync and re-read the destination, then return its independent SHA-256.
-Only equality between the guest/daemon digest and that receiver digest invokes
-`VerifyWorkspaceExport`; failure leaves the workstation dirty. The CLI's
-`--to usb` adapter is composed by the exporter workflow, and the
-encrypted-bundle destination still requires its separately specified
-encryption/container adapter. A missing adapter fails before the guest stream
-begins. `workspace verify` revalidates that exactly one selected guest receipt
+The production CLI sends the exact opaque output ID and closed `usb`
+destination enum to `ExportWorkspaceToDestination`; it never receives output
+bytes or supplies a host path. The daemon prepares a typed destination
+transaction before opening the authenticated workstation stream. That
+transaction must persist and independently re-read the receiver bytes and
+clean its resources. Only equality between the guest/daemon digest and the
+receiver digest invokes guest verification; failure leaves the workstation
+dirty and triggers bounded transaction abort. The concrete USB transaction is
+composed by the exporter workflow. `encrypted-bundle` remains explicitly
+unavailable until its separate storage/encryption ADR is approved. `workspace
+verify` revalidates that exactly one selected guest receipt
 is current and unchanged; destination re-read verification happens during the
 export command and is not reconstructed from persistent CLI state. `--last`
 is accepted only when exactly one current verified receipt exists; otherwise

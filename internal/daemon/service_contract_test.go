@@ -46,6 +46,9 @@ func TestUnaryRequestContextContractCoversEveryContextualMethod(t *testing.T) {
 		{privatevmv1.PrivateVMDaemonService_StopRole_FullMethodName, &privatevmv1.StopRoleRequest{}},
 		{privatevmv1.PrivateVMDaemonService_AbortSession_FullMethodName, &privatevmv1.AbortSessionRequest{}},
 		{privatevmv1.PrivateVMDaemonService_CleanupSession_FullMethodName, &privatevmv1.CleanupSessionRequest{}},
+		{privatevmv1.PrivateVMDaemonService_GetWorkspaceState_FullMethodName, &privatevmv1.HostWorkspaceStateRequest{}},
+		{privatevmv1.PrivateVMDaemonService_VerifyWorkspaceExport_FullMethodName, &privatevmv1.VerifyWorkspaceExportRequest{}},
+		{privatevmv1.PrivateVMDaemonService_ExportWorkspaceToDestination_FullMethodName, &privatevmv1.ExportWorkspaceToDestinationRequest{}},
 		{privatevmv1.PrivateVMDaemonService_ClaimUSB_FullMethodName, &privatevmv1.ClaimUSBRequest{}},
 		{privatevmv1.PrivateVMDaemonService_ReleaseUSB_FullMethodName, &privatevmv1.ReleaseUSBRequest{}},
 	}

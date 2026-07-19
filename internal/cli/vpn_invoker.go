@@ -27,15 +27,14 @@ const maximumVPNImportChunkBytes = 16 << 10
 // Unix socket. Commands not yet backed by a completed orchestration path remain
 // fail closed.
 type ProductionInvoker struct {
-	socketPath           string
-	stdin                io.Reader
-	prompt               io.Writer
-	readInput            func(context.Context, ValueRequest) (*secret.Bytes, error)
-	readStream           func(context.Context, StreamRequest) (io.ReadCloser, error)
-	torrents             TorrentSubmitter
-	viewer               func(context.Context, string) error
-	workspaceDestination WorkspaceExportDestination
-	requestID            func() (string, error)
+	socketPath string
+	stdin      io.Reader
+	prompt     io.Writer
+	readInput  func(context.Context, ValueRequest) (*secret.Bytes, error)
+	readStream func(context.Context, StreamRequest) (io.ReadCloser, error)
+	torrents   TorrentSubmitter
+	viewer     func(context.Context, string) error
+	requestID  func() (string, error)
 }
 
 func NewProductionInvoker(socketPath string, stdin io.Reader, prompt io.Writer) Invoker {

@@ -39,6 +39,7 @@ service PrivateVMDaemonService {
   rpc ImportWorkspaceFile(stream TransferFrame) returns (TransferReceipt);
   rpc ExportWorkspaceFile(ExportWorkspaceRequest) returns (stream TransferFrame);
   rpc VerifyWorkspaceExport(VerifyWorkspaceExportRequest) returns (WorkspaceState);
+  rpc ExportWorkspaceToDestination(ExportWorkspaceToDestinationRequest) returns (WorkspaceState);
   rpc ClaimUSB(ClaimUSBRequest) returns (USBClaim);
   rpc ReleaseUSB(ReleaseUSBRequest) returns (Empty);
 }
@@ -270,6 +271,21 @@ message VerifyWorkspaceExportRequest {
   string output_id = 2;
   Hash daemon_digest = 3;
   Hash receiver_digest = 4;
+}
+
+// Workspace export destinations are semantic capabilities owned by the
+// daemon. Requests never contain a host path, block device, mount point or
+// arbitrary exporter argument.
+enum WorkspaceExportDestination {
+  WORKSPACE_EXPORT_DESTINATION_UNSPECIFIED = 0;
+  WORKSPACE_EXPORT_DESTINATION_USB = 1;
+  WORKSPACE_EXPORT_DESTINATION_ENCRYPTED_BUNDLE = 2;
+}
+
+message ExportWorkspaceToDestinationRequest {
+  RequestContext context = 1;
+  string output_id = 2;
+  WorkspaceExportDestination destination = 3;
 }
 
 message ClaimUSBRequest {

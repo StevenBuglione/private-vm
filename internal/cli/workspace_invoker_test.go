@@ -10,7 +10,6 @@ import (
 	"testing"
 
 	privatevmv1 "github.com/StevenBuglione/private-vm/gen/privatevm/v1"
-	"github.com/StevenBuglione/private-vm/internal/transfer"
 )
 
 type workspaceInvokerDaemon struct {
@@ -20,6 +19,7 @@ type workspaceInvokerDaemon struct {
 	state       *privatevmv1.WorkspaceState
 	exportCalls int
 	verified    bool
+	destination *privatevmv1.ExportWorkspaceToDestinationRequest
 }
 
 func (daemon *workspaceInvokerDaemon) ImportWorkspaceFile(stream privatevmv1.PrivateVMDaemonService_ImportWorkspaceFileServer) error {
@@ -78,36 +78,11 @@ func (daemon *workspaceInvokerDaemon) VerifyWorkspaceExport(_ context.Context, r
 	return &privatevmv1.WorkspaceState{State: "READY", Entries: []*privatevmv1.WorkspaceEntry{{OutputId: request.GetOutputId(), SizeBytes: 4, Exported: true}}}, nil
 }
 
-type workspaceTestDestination struct {
-	supported bool
-	opened    bool
-	writer    *workspaceTestWriter
-}
-
-func (destination *workspaceTestDestination) Supports(value string) bool {
-	return destination.supported && value == "usb"
-}
-
-func (destination *workspaceTestDestination) Open(_ context.Context, _ string, _ transfer.Header) (WorkspaceExportWriter, error) {
-	destination.opened = true
-	destination.writer = &workspaceTestWriter{}
-	return destination.writer, nil
-}
-
-type workspaceTestWriter struct {
-	bytes.Buffer
-	committed bool
-	aborted   bool
-}
-
-func (writer *workspaceTestWriter) Commit(context.Context) ([sha256.Size]byte, error) {
-	writer.committed = true
-	return sha256.Sum256(writer.Bytes()), nil
-}
-
-func (writer *workspaceTestWriter) Abort() error {
-	writer.aborted = true
-	return nil
+func (daemon *workspaceInvokerDaemon) ExportWorkspaceToDestination(_ context.Context, request *privatevmv1.ExportWorkspaceToDestinationRequest) (*privatevmv1.WorkspaceState, error) {
+	daemon.exportCalls++
+	daemon.destination = request
+	daemon.verified = true
+	return &privatevmv1.WorkspaceState{State: "READY", Entries: []*privatevmv1.WorkspaceEntry{{OutputId: request.GetOutputId(), SizeBytes: 4, Exported: true}}}, nil
 }
 
 func TestProductionWorkspaceInvokerStreamsOneStableFileAndReturnsAggregateState(t *testing.T) {
@@ -153,34 +128,32 @@ func TestProductionWorkspaceInvokerRejectsReceiptMismatchAndSymlink(t *testing.T
 	}
 }
 
-func TestProductionWorkspaceExportPersistsAndVerifiesBeforeMarkingReady(t *testing.T) {
+func TestProductionWorkspaceExportUsesSemanticDaemonDestination(t *testing.T) {
 	service := &workspaceInvokerDaemon{fakeSessionDaemon: newFakeSessionDaemon()}
 	service.session.Phase = privatevmv1.SessionPhase_SESSION_PHASE_ACTIVE
 	socket, stop := startSessionInvokerDaemon(t, service)
 	defer stop()
-	destination := &workspaceTestDestination{supported: true}
-	invoker := &ProductionInvoker{
-		socketPath: socket, requestID: func() (string, error) { return "request-export-1234", nil },
-		workspaceDestination: destination,
-	}
+	invoker := NewProductionInvoker(socket, nil, nil)
 	result, err := invoker.Invoke(t.Context(), CommandWorkspaceExport, WorkspaceExportIntent{Destination: "usb", OutputID: "output-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	payload, ok := result.Data.(WorkspaceStatusPayload)
-	if !ok || payload.State != "READY" || payload.ExportedCount != 1 || !service.verified || !destination.opened || !destination.writer.committed || destination.writer.String() != "safe" {
-		t.Fatalf("result = %#v, service=%#v, destination=%#v", result, service, destination)
+	if !ok || payload.State != "READY" || payload.ExportedCount != 1 || !service.verified || service.exportCalls != 1 ||
+		service.destination.GetDestination() != privatevmv1.WorkspaceExportDestination_WORKSPACE_EXPORT_DESTINATION_USB ||
+		service.destination.GetOutputId() != "output-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" || service.destination.GetContext().GetSessionId() != cliSessionID {
+		t.Fatalf("result = %#v, service=%#v", result, service)
 	}
 }
 
-func TestProductionWorkspaceExportFailsBeforeGuestStreamWithoutDestination(t *testing.T) {
+func TestProductionWorkspaceExportFailsBeforeDaemonForUnsupportedDestination(t *testing.T) {
 	service := &workspaceInvokerDaemon{fakeSessionDaemon: newFakeSessionDaemon()}
 	service.session.Phase = privatevmv1.SessionPhase_SESSION_PHASE_ACTIVE
 	socket, stop := startSessionInvokerDaemon(t, service)
 	defer stop()
-	invoker := &ProductionInvoker{socketPath: socket, requestID: func() (string, error) { return "request-export-1234", nil }}
-	if _, err := invoker.Invoke(t.Context(), CommandWorkspaceExport, WorkspaceExportIntent{Destination: "usb", OutputID: "output-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}); err == nil {
-		t.Fatal("missing destination was accepted")
+	invoker := NewProductionInvoker(socket, nil, nil)
+	if _, err := invoker.Invoke(t.Context(), CommandWorkspaceExport, WorkspaceExportIntent{Destination: "encrypted-bundle", OutputID: "output-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}); err == nil {
+		t.Fatal("unsupported destination was accepted")
 	}
 	if service.exportCalls != 0 {
 		t.Fatalf("guest export calls = %d", service.exportCalls)

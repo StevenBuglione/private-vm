@@ -19,39 +19,40 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	PrivateVMDaemonService_GetVersion_FullMethodName            = "/privatevm.v1.PrivateVMDaemonService/GetVersion"
-	PrivateVMDaemonService_Doctor_FullMethodName                = "/privatevm.v1.PrivateVMDaemonService/Doctor"
-	PrivateVMDaemonService_PlanSession_FullMethodName           = "/privatevm.v1.PrivateVMDaemonService/PlanSession"
-	PrivateVMDaemonService_CreateSession_FullMethodName         = "/privatevm.v1.PrivateVMDaemonService/CreateSession"
-	PrivateVMDaemonService_GetSession_FullMethodName            = "/privatevm.v1.PrivateVMDaemonService/GetSession"
-	PrivateVMDaemonService_ListSessions_FullMethodName          = "/privatevm.v1.PrivateVMDaemonService/ListSessions"
-	PrivateVMDaemonService_ImportVPNProfile_FullMethodName      = "/privatevm.v1.PrivateVMDaemonService/ImportVPNProfile"
-	PrivateVMDaemonService_InspectVPNProfile_FullMethodName     = "/privatevm.v1.PrivateVMDaemonService/InspectVPNProfile"
-	PrivateVMDaemonService_TestVPNProfile_FullMethodName        = "/privatevm.v1.PrivateVMDaemonService/TestVPNProfile"
-	PrivateVMDaemonService_RemoveVPNProfile_FullMethodName      = "/privatevm.v1.PrivateVMDaemonService/RemoveVPNProfile"
-	PrivateVMDaemonService_AddTorrent_FullMethodName            = "/privatevm.v1.PrivateVMDaemonService/AddTorrent"
-	PrivateVMDaemonService_GetTorrentMetadata_FullMethodName    = "/privatevm.v1.PrivateVMDaemonService/GetTorrentMetadata"
-	PrivateVMDaemonService_SelectTorrentFiles_FullMethodName    = "/privatevm.v1.PrivateVMDaemonService/SelectTorrentFiles"
-	PrivateVMDaemonService_StartTorrentDownload_FullMethodName  = "/privatevm.v1.PrivateVMDaemonService/StartTorrentDownload"
-	PrivateVMDaemonService_PauseTorrentDownload_FullMethodName  = "/privatevm.v1.PrivateVMDaemonService/PauseTorrentDownload"
-	PrivateVMDaemonService_GetTorrentStatus_FullMethodName      = "/privatevm.v1.PrivateVMDaemonService/GetTorrentStatus"
-	PrivateVMDaemonService_SealTorrentQuarantine_FullMethodName = "/privatevm.v1.PrivateVMDaemonService/SealTorrentQuarantine"
-	PrivateVMDaemonService_StartScanner_FullMethodName          = "/privatevm.v1.PrivateVMDaemonService/StartScanner"
-	PrivateVMDaemonService_GetScannerStatus_FullMethodName      = "/privatevm.v1.PrivateVMDaemonService/GetScannerStatus"
-	PrivateVMDaemonService_GetScannerReport_FullMethodName      = "/privatevm.v1.PrivateVMDaemonService/GetScannerReport"
-	PrivateVMDaemonService_ApproveScanner_FullMethodName        = "/privatevm.v1.PrivateVMDaemonService/ApproveScanner"
-	PrivateVMDaemonService_RejectScanner_FullMethodName         = "/privatevm.v1.PrivateVMDaemonService/RejectScanner"
-	PrivateVMDaemonService_StartRole_FullMethodName             = "/privatevm.v1.PrivateVMDaemonService/StartRole"
-	PrivateVMDaemonService_StopRole_FullMethodName              = "/privatevm.v1.PrivateVMDaemonService/StopRole"
-	PrivateVMDaemonService_AbortSession_FullMethodName          = "/privatevm.v1.PrivateVMDaemonService/AbortSession"
-	PrivateVMDaemonService_CleanupSession_FullMethodName        = "/privatevm.v1.PrivateVMDaemonService/CleanupSession"
-	PrivateVMDaemonService_StreamEvents_FullMethodName          = "/privatevm.v1.PrivateVMDaemonService/StreamEvents"
-	PrivateVMDaemonService_GetWorkspaceState_FullMethodName     = "/privatevm.v1.PrivateVMDaemonService/GetWorkspaceState"
-	PrivateVMDaemonService_ImportWorkspaceFile_FullMethodName   = "/privatevm.v1.PrivateVMDaemonService/ImportWorkspaceFile"
-	PrivateVMDaemonService_ExportWorkspaceFile_FullMethodName   = "/privatevm.v1.PrivateVMDaemonService/ExportWorkspaceFile"
-	PrivateVMDaemonService_VerifyWorkspaceExport_FullMethodName = "/privatevm.v1.PrivateVMDaemonService/VerifyWorkspaceExport"
-	PrivateVMDaemonService_ClaimUSB_FullMethodName              = "/privatevm.v1.PrivateVMDaemonService/ClaimUSB"
-	PrivateVMDaemonService_ReleaseUSB_FullMethodName            = "/privatevm.v1.PrivateVMDaemonService/ReleaseUSB"
+	PrivateVMDaemonService_GetVersion_FullMethodName                   = "/privatevm.v1.PrivateVMDaemonService/GetVersion"
+	PrivateVMDaemonService_Doctor_FullMethodName                       = "/privatevm.v1.PrivateVMDaemonService/Doctor"
+	PrivateVMDaemonService_PlanSession_FullMethodName                  = "/privatevm.v1.PrivateVMDaemonService/PlanSession"
+	PrivateVMDaemonService_CreateSession_FullMethodName                = "/privatevm.v1.PrivateVMDaemonService/CreateSession"
+	PrivateVMDaemonService_GetSession_FullMethodName                   = "/privatevm.v1.PrivateVMDaemonService/GetSession"
+	PrivateVMDaemonService_ListSessions_FullMethodName                 = "/privatevm.v1.PrivateVMDaemonService/ListSessions"
+	PrivateVMDaemonService_ImportVPNProfile_FullMethodName             = "/privatevm.v1.PrivateVMDaemonService/ImportVPNProfile"
+	PrivateVMDaemonService_InspectVPNProfile_FullMethodName            = "/privatevm.v1.PrivateVMDaemonService/InspectVPNProfile"
+	PrivateVMDaemonService_TestVPNProfile_FullMethodName               = "/privatevm.v1.PrivateVMDaemonService/TestVPNProfile"
+	PrivateVMDaemonService_RemoveVPNProfile_FullMethodName             = "/privatevm.v1.PrivateVMDaemonService/RemoveVPNProfile"
+	PrivateVMDaemonService_AddTorrent_FullMethodName                   = "/privatevm.v1.PrivateVMDaemonService/AddTorrent"
+	PrivateVMDaemonService_GetTorrentMetadata_FullMethodName           = "/privatevm.v1.PrivateVMDaemonService/GetTorrentMetadata"
+	PrivateVMDaemonService_SelectTorrentFiles_FullMethodName           = "/privatevm.v1.PrivateVMDaemonService/SelectTorrentFiles"
+	PrivateVMDaemonService_StartTorrentDownload_FullMethodName         = "/privatevm.v1.PrivateVMDaemonService/StartTorrentDownload"
+	PrivateVMDaemonService_PauseTorrentDownload_FullMethodName         = "/privatevm.v1.PrivateVMDaemonService/PauseTorrentDownload"
+	PrivateVMDaemonService_GetTorrentStatus_FullMethodName             = "/privatevm.v1.PrivateVMDaemonService/GetTorrentStatus"
+	PrivateVMDaemonService_SealTorrentQuarantine_FullMethodName        = "/privatevm.v1.PrivateVMDaemonService/SealTorrentQuarantine"
+	PrivateVMDaemonService_StartScanner_FullMethodName                 = "/privatevm.v1.PrivateVMDaemonService/StartScanner"
+	PrivateVMDaemonService_GetScannerStatus_FullMethodName             = "/privatevm.v1.PrivateVMDaemonService/GetScannerStatus"
+	PrivateVMDaemonService_GetScannerReport_FullMethodName             = "/privatevm.v1.PrivateVMDaemonService/GetScannerReport"
+	PrivateVMDaemonService_ApproveScanner_FullMethodName               = "/privatevm.v1.PrivateVMDaemonService/ApproveScanner"
+	PrivateVMDaemonService_RejectScanner_FullMethodName                = "/privatevm.v1.PrivateVMDaemonService/RejectScanner"
+	PrivateVMDaemonService_StartRole_FullMethodName                    = "/privatevm.v1.PrivateVMDaemonService/StartRole"
+	PrivateVMDaemonService_StopRole_FullMethodName                     = "/privatevm.v1.PrivateVMDaemonService/StopRole"
+	PrivateVMDaemonService_AbortSession_FullMethodName                 = "/privatevm.v1.PrivateVMDaemonService/AbortSession"
+	PrivateVMDaemonService_CleanupSession_FullMethodName               = "/privatevm.v1.PrivateVMDaemonService/CleanupSession"
+	PrivateVMDaemonService_StreamEvents_FullMethodName                 = "/privatevm.v1.PrivateVMDaemonService/StreamEvents"
+	PrivateVMDaemonService_GetWorkspaceState_FullMethodName            = "/privatevm.v1.PrivateVMDaemonService/GetWorkspaceState"
+	PrivateVMDaemonService_ImportWorkspaceFile_FullMethodName          = "/privatevm.v1.PrivateVMDaemonService/ImportWorkspaceFile"
+	PrivateVMDaemonService_ExportWorkspaceFile_FullMethodName          = "/privatevm.v1.PrivateVMDaemonService/ExportWorkspaceFile"
+	PrivateVMDaemonService_VerifyWorkspaceExport_FullMethodName        = "/privatevm.v1.PrivateVMDaemonService/VerifyWorkspaceExport"
+	PrivateVMDaemonService_ExportWorkspaceToDestination_FullMethodName = "/privatevm.v1.PrivateVMDaemonService/ExportWorkspaceToDestination"
+	PrivateVMDaemonService_ClaimUSB_FullMethodName                     = "/privatevm.v1.PrivateVMDaemonService/ClaimUSB"
+	PrivateVMDaemonService_ReleaseUSB_FullMethodName                   = "/privatevm.v1.PrivateVMDaemonService/ReleaseUSB"
 )
 
 // PrivateVMDaemonServiceClient is the client API for PrivateVMDaemonService service.
@@ -89,6 +90,7 @@ type PrivateVMDaemonServiceClient interface {
 	ImportWorkspaceFile(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[TransferFrame, TransferReceipt], error)
 	ExportWorkspaceFile(ctx context.Context, in *ExportWorkspaceRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[TransferFrame], error)
 	VerifyWorkspaceExport(ctx context.Context, in *VerifyWorkspaceExportRequest, opts ...grpc.CallOption) (*WorkspaceState, error)
+	ExportWorkspaceToDestination(ctx context.Context, in *ExportWorkspaceToDestinationRequest, opts ...grpc.CallOption) (*WorkspaceState, error)
 	ClaimUSB(ctx context.Context, in *ClaimUSBRequest, opts ...grpc.CallOption) (*USBClaim, error)
 	ReleaseUSB(ctx context.Context, in *ReleaseUSBRequest, opts ...grpc.CallOption) (*Empty, error)
 }
@@ -456,6 +458,16 @@ func (c *privateVMDaemonServiceClient) VerifyWorkspaceExport(ctx context.Context
 	return out, nil
 }
 
+func (c *privateVMDaemonServiceClient) ExportWorkspaceToDestination(ctx context.Context, in *ExportWorkspaceToDestinationRequest, opts ...grpc.CallOption) (*WorkspaceState, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(WorkspaceState)
+	err := c.cc.Invoke(ctx, PrivateVMDaemonService_ExportWorkspaceToDestination_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *privateVMDaemonServiceClient) ClaimUSB(ctx context.Context, in *ClaimUSBRequest, opts ...grpc.CallOption) (*USBClaim, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(USBClaim)
@@ -511,6 +523,7 @@ type PrivateVMDaemonServiceServer interface {
 	ImportWorkspaceFile(grpc.ClientStreamingServer[TransferFrame, TransferReceipt]) error
 	ExportWorkspaceFile(*ExportWorkspaceRequest, grpc.ServerStreamingServer[TransferFrame]) error
 	VerifyWorkspaceExport(context.Context, *VerifyWorkspaceExportRequest) (*WorkspaceState, error)
+	ExportWorkspaceToDestination(context.Context, *ExportWorkspaceToDestinationRequest) (*WorkspaceState, error)
 	ClaimUSB(context.Context, *ClaimUSBRequest) (*USBClaim, error)
 	ReleaseUSB(context.Context, *ReleaseUSBRequest) (*Empty, error)
 	mustEmbedUnimplementedPrivateVMDaemonServiceServer()
@@ -615,6 +628,9 @@ func (UnimplementedPrivateVMDaemonServiceServer) ExportWorkspaceFile(*ExportWork
 }
 func (UnimplementedPrivateVMDaemonServiceServer) VerifyWorkspaceExport(context.Context, *VerifyWorkspaceExportRequest) (*WorkspaceState, error) {
 	return nil, status.Error(codes.Unimplemented, "method VerifyWorkspaceExport not implemented")
+}
+func (UnimplementedPrivateVMDaemonServiceServer) ExportWorkspaceToDestination(context.Context, *ExportWorkspaceToDestinationRequest) (*WorkspaceState, error) {
+	return nil, status.Error(codes.Unimplemented, "method ExportWorkspaceToDestination not implemented")
 }
 func (UnimplementedPrivateVMDaemonServiceServer) ClaimUSB(context.Context, *ClaimUSBRequest) (*USBClaim, error) {
 	return nil, status.Error(codes.Unimplemented, "method ClaimUSB not implemented")
@@ -1141,6 +1157,24 @@ func _PrivateVMDaemonService_VerifyWorkspaceExport_Handler(srv interface{}, ctx 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _PrivateVMDaemonService_ExportWorkspaceToDestination_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ExportWorkspaceToDestinationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PrivateVMDaemonServiceServer).ExportWorkspaceToDestination(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PrivateVMDaemonService_ExportWorkspaceToDestination_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PrivateVMDaemonServiceServer).ExportWorkspaceToDestination(ctx, req.(*ExportWorkspaceToDestinationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _PrivateVMDaemonService_ClaimUSB_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ClaimUSBRequest)
 	if err := dec(in); err != nil {
@@ -1279,6 +1313,10 @@ var PrivateVMDaemonService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "VerifyWorkspaceExport",
 			Handler:    _PrivateVMDaemonService_VerifyWorkspaceExport_Handler,
+		},
+		{
+			MethodName: "ExportWorkspaceToDestination",
+			Handler:    _PrivateVMDaemonService_ExportWorkspaceToDestination_Handler,
 		},
 		{
 			MethodName: "ClaimUSB",
