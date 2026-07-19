@@ -1,6 +1,10 @@
 package cli
 
-import "github.com/spf13/cobra"
+import (
+	"strconv"
+
+	"github.com/spf13/cobra"
+)
 
 type commandFactory struct {
 	app *App
@@ -117,8 +121,20 @@ func (factory commandFactory) desktop() *cobra.Command {
 }
 
 func (factory commandFactory) workstationStart(use string) (*cobra.Command, *WorkstationIntent) {
-	intent := &WorkstationIntent{Bundle: "basic"}
+	intent := &WorkstationIntent{}
 	command := factory.operation(use, "Start a graphical workstation", CommandWorkstationStart, noArgs, func(command *cobra.Command) error {
+		if !command.Flags().Changed("bundle") {
+			intent.Bundle = factory.app.configuration.Desktop().Bundle()
+		}
+		if !command.Flags().Changed("audio") {
+			intent.Audio = factory.app.configuration.Desktop().Audio()
+		}
+		if !command.Flags().Changed("memory") {
+			intent.Memory = strconv.FormatUint(factory.app.configuration.Desktop().MemoryBytes(), 10) + "B"
+		}
+		if !command.Flags().Changed("cpus") {
+			intent.CPUs = int(factory.app.configuration.Desktop().VCPUs())
+		}
 		if err := enum(intent.Bundle, "bundle", "basic", "office", "development"); err != nil {
 			return err
 		}

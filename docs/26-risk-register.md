@@ -27,3 +27,4 @@
 | R-023 | GHCR custom artifact incompatibility | low/medium | medium | ORAS integration test and release fallback |
 | R-024 | Attestation library/API drift | medium | high | pin dependency, golden bundles, fallback verifier |
 | R-025 | Legal redistribution issue | low/medium | high | license inventory before release |
+| R-026 | A malicious kernel-backed userspace filesystem blocks while resolving a selected config/policy path | low | medium | accept only trusted local paths in operations; use nonblocking `openat2`; accept only explicitly allowlisted local filesystem descriptors; packaging installs system files locally; move arbitrary external file acquisition behind an owned killable worker before v1 release |

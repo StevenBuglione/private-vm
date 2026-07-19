@@ -51,6 +51,14 @@ The module should:
 
 After group changes, re-login.
 
+The daemon configuration is `/etc/private-vm/config.toml`. It must be a
+root-owned regular local file with no group/world write or executable bits; the
+packaged example is `examples/config.example.toml`. The daemon reads it once at
+startup. A user may add an effective-user-owned file at
+`$XDG_CONFIG_HOME/private-vm/config.toml`, but it supplies request preferences
+only and cannot replace daemon enforcement. Neither file may contain a VPN key,
+password, token, magnet or other secret.
+
 ## Nix CLI-only development
 
 ```bash

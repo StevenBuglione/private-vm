@@ -10,6 +10,7 @@ import (
 
 	"github.com/StevenBuglione/private-vm/internal/apperror"
 	"github.com/StevenBuglione/private-vm/internal/buildinfo"
+	"github.com/StevenBuglione/private-vm/internal/config"
 	"github.com/StevenBuglione/private-vm/internal/exitcode"
 	"github.com/StevenBuglione/private-vm/internal/preflight"
 )
@@ -19,11 +20,12 @@ const maximumCompletionBytes = 1 << 20
 // Dependencies are the narrow composition seams used by the command layer.
 // Product orchestration remains behind Invoker rather than Cobra callbacks.
 type Dependencies struct {
-	Stdout    io.Writer
-	Stderr    io.Writer
-	Invoker   Invoker
-	Doctor    func(context.Context, bool) preflight.Report
-	BuildInfo func() buildinfo.Info
+	Stdout     io.Writer
+	Stderr     io.Writer
+	Invoker    Invoker
+	Doctor     func(context.Context, bool) preflight.Report
+	BuildInfo  func() buildinfo.Info
+	LoadConfig func(string, config.Overrides) (config.Config, error)
 }
 
 // App owns one immutable CLI invocation and its root command.
@@ -34,6 +36,8 @@ type App struct {
 	invoker       Invoker
 	doctor        func(context.Context, bool) preflight.Report
 	buildInfo     func() buildinfo.Info
+	loadConfig    func(string, config.Overrides) (config.Config, error)
+	configuration config.Config
 	machineOutput bool
 	root          *cobra.Command
 }
@@ -57,13 +61,18 @@ func New(dependencies Dependencies) *App {
 	if dependencies.BuildInfo == nil {
 		dependencies.BuildInfo = buildinfo.Current
 	}
+	if dependencies.LoadConfig == nil {
+		dependencies.LoadConfig = config.LoadWithOverrides
+	}
 	app := &App{
-		options:   defaultOptions(),
-		stdout:    dependencies.Stdout,
-		stderr:    dependencies.Stderr,
-		invoker:   dependencies.Invoker,
-		doctor:    dependencies.Doctor,
-		buildInfo: dependencies.BuildInfo,
+		options:       defaultOptions(),
+		stdout:        dependencies.Stdout,
+		stderr:        dependencies.Stderr,
+		invoker:       dependencies.Invoker,
+		doctor:        dependencies.Doctor,
+		buildInfo:     dependencies.BuildInfo,
+		loadConfig:    dependencies.LoadConfig,
+		configuration: config.Defaults(),
 	}
 	app.root = app.newRootCommand()
 	return app
@@ -156,8 +165,11 @@ func (app *App) newRootCommand() *cobra.Command {
 		Args:          noArgs,
 		SilenceErrors: true,
 		SilenceUsage:  true,
-		PersistentPreRunE: func(*cobra.Command, []string) error {
-			return validateGlobalOptions(app.options)
+		PersistentPreRunE: func(command *cobra.Command, _ []string) error {
+			if err := validateGlobalOptions(app.options); err != nil {
+				return err
+			}
+			return app.loadConfiguration(command)
 		},
 		RunE: func(command *cobra.Command, _ []string) error {
 			if app.options.Version {
@@ -195,6 +207,50 @@ func (app *App) newRootCommand() *cobra.Command {
 	root.AddCommand(factory.commands()...)
 	root.AddCommand(app.versionCommand(), app.doctorCommand(), app.completionCommand())
 	return root
+}
+
+func (app *App) loadConfiguration(command *cobra.Command) error {
+	if !app.commandNeedsConfiguration(command) {
+		return nil
+	}
+	overrides := config.Overrides{}
+	if app.root.PersistentFlags().Changed("strict") {
+		overrides.Strict = &app.options.Strict
+	}
+	configuration, err := app.loadConfig(app.options.ConfigPath, overrides)
+	if err == nil {
+		err = configuration.Validate()
+	}
+	if err != nil {
+		var configurationError *config.Error
+		if errors.As(err, &configurationError) {
+			return apperror.New(
+				configurationError.Code,
+				exitcode.Configuration,
+				configurationError.Message,
+				configurationError.Remediation,
+			)
+		}
+		return apperror.New(
+			"CONFIG_READ",
+			exitcode.Configuration,
+			"The effective configuration could not be loaded.",
+			"Verify the documented system and user configuration files and retry.",
+		)
+	}
+	app.configuration = configuration
+	return nil
+}
+
+func (app *App) commandNeedsConfiguration(command *cobra.Command) bool {
+	if command == app.root {
+		return false
+	}
+	top := command
+	for top.Parent() != nil && top.Parent() != app.root {
+		top = top.Parent()
+	}
+	return top.Name() != "version" && top.Name() != "completion"
 }
 
 func (app *App) versionCommand() *cobra.Command {
@@ -236,7 +292,7 @@ func (app *App) doctorCommand() *cobra.Command {
 			if err := ctx.Err(); err != nil {
 				return contextError(err)
 			}
-			report := app.doctor(ctx, app.options.Strict)
+			report := app.doctor(ctx, app.configuration.Strict())
 			if err := ctx.Err(); err != nil {
 				return contextError(err)
 			}
