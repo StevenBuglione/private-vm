@@ -750,9 +750,10 @@
             virtualisation.memorySize = 2048;
             virtualisation.cores = 2;
             virtualisation.vlans = [ ];
+            # Override the VM module's default SLiRP device rather than adding
+            # a later `-nic none`, which cannot remove an already-declared NIC.
+            virtualisation.qemu.networkingOptions = lib.mkForce [ "-nic none" ];
             virtualisation.qemu.options = tcgQEMUOptionsFor system ++ [
-              "-nic"
-              "none"
               "-drive"
               "file=${quarantineFixture},if=none,format=raw,readonly=on,id=quarantine"
               "-device"
