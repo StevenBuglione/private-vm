@@ -16,7 +16,7 @@
       ];
       forAllSystems = nixpkgs.lib.genAttrs supportedSystems;
       pkgsFor = system: import nixpkgs { inherit system; };
-      projectVersion = "0.0.0-dev";
+      projectVersion = nixpkgs.lib.strings.removeSuffix "\n" (builtins.readFile ./VERSION);
       sourceCommit = self.rev or (self.dirtyRev or "unknown");
       sourceDirty = if self ? rev then "false" else "true";
       sourceLastModifiedDate = self.lastModifiedDate or "19700101000000";

@@ -105,3 +105,25 @@ Archive the immutable workflow URL, run attempt, tag, commit, artifact digests,
 attestation verification result and redacted clean-system JUnit/JSON summary.
 Do not create `v1.0.0` until the independent security review is recorded; use an
 RC tag while that external gate remains outstanding.
+
+The protected job invokes only:
+
+```text
+private-vm-release prepare
+actions/attest for DEB, RPM and generic archive
+private-vm-release publish --token-stdin
+```
+
+`prepare` refuses a dirty checkout, non-official origin, non-main ancestor,
+noncanonical SemVer/RC tag, mismatched commit, or missing anonymously verified
+image. `publish` verifies all package bytes, manifests, SPDX files and offline
+Sigstore bundles before creating a draft. A failed upload deletes that draft
+with an independent 30-second cleanup context and reports
+`RELEASE_CLEANUP_INCOMPLETE` if absence cannot be proved. Never delete or move
+the Git tag as rollback; inspect/delete only the unpublished draft, then rerun
+the same tag as a new workflow attempt after absence is recorded.
+
+The fresh `verify-release` job has only `contents: read`. It downloads exactly
+13 public assets without a credential, verifies three packages and all six OCI
+digests against `release-index.json`, and fails on missing, extra, changed,
+private or ambiguously addressed content.

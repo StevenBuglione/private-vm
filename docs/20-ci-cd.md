@@ -214,9 +214,16 @@ first release candidate can require that one-time owner visibility change and a
 rerun of the failed anonymous rows. Until the unauthenticated rerun succeeds,
 the release gate remains failed.
 
-REL-004 later adds package builds, the protected `release` environment, GitHub
-Release creation and whole-release clean-room verification. It must reuse these
-image digests and refuse every already-existing REL-003 package tag.
+REL-004 adds two later jobs. `packages` runs only after all six image verification
+rows, uses the protected `release` environment, builds DEB/RPM/generic outputs
+serially, creates SPDX/build manifests, anonymously re-verifies the six image
+digests, attests each exact package subject and publishes one draft-first GitHub
+Release. `verify-release` is a fresh `contents: read` runner with no credential;
+it downloads the exact 13-asset package release, verifies every digest, closed
+manifest, SPDX document and Sigstore bundle, then requires the six OCI digests
+to equal the closed whole-release index. Partial drafts are deleted; the Git tag
+is never deleted or moved. Server-side protection and live publication are
+remote-only gates.
 
 ## Local versus remote evidence
 

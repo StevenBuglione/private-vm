@@ -73,12 +73,28 @@
 - [ ] exact repository/workflow/ref/numeric-ID/invocation verification succeeds
 - [ ] revocation list checked
 - [ ] normalized reproducibility comparison
+- [ ] closed whole-release index binds three packages and six image digests
+- [ ] protected `release` environment rules verified in GitHub settings
+- [ ] partial-draft rollback and exact draft absence recorded
+- [ ] fresh read-only runner verifies the exact 13 package-release assets anonymously
 
 Local source and policy tests may be recorded without waiting for the remote
 image workflow. Do not check any protected-environment, actual publication,
 package-visibility, OIDC or anonymous-pull item until the corresponding remote
 run has completed successfully and its immutable run URL and commit are saved
 in the release record.
+
+Run the fixed source evidence producer inside the pinned development shell:
+
+```bash
+private-vm-release-acceptance \
+  --workdir "$PWD" \
+  --json /tmp/private-vm-release-source.json \
+  --junit /tmp/private-vm-release-source.junit.xml
+```
+
+Its expected source-only terminal result is `RELEASE_GATES_INCOMPLETE`; the
+JSON/JUnit files distinguish passed source checks from unavailable live gates.
 
 ## Documentation
 

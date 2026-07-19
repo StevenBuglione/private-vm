@@ -106,6 +106,34 @@ func (verifier *sigstoreProvenanceVerifier) VerifyProvenance(ctx context.Context
 }
 
 func (verifier *sigstoreProvenanceVerifier) verifyBundle(ctx context.Context, bundleBytes []byte, manifest Manifest) error {
+	return verifier.verifyArtifactBundle(ctx, bundleBytes, imageProvenanceIdentity(manifest))
+}
+
+// VerifyOfficialArtifactProvenance verifies one bounded offline actions/attest
+// bundle against the same embedded Sigstore root and exact repository/workflow
+// identity used for images. It does not expose a custom trust-root seam.
+func VerifyOfficialArtifactProvenance(ctx context.Context, bundleBytes []byte, artifact OfficialArtifactProvenance) error {
+	limits := DefaultVerificationLimits()
+	verifier, err := newEmbeddedOfficialProvenanceVerifier(limits)
+	if err != nil {
+		return err
+	}
+	if artifact.SubjectName == "" || len(artifact.SubjectName) > 255 ||
+		!commitPattern.MatchString(artifact.SourceCommit) || !officialReleaseRefPattern.MatchString(artifact.SourceRef) {
+		return provenanceIdentityError("The package provenance identity is incomplete or outside the official release contract.", nil)
+	}
+	concrete, ok := verifier.(*sigstoreProvenanceVerifier)
+	if !ok {
+		return provenanceInvalid("The embedded official Sigstore verifier has an unexpected implementation.", nil)
+	}
+	return concrete.verifyArtifactBundle(ctx, bundleBytes, provenanceArtifactIdentity{
+		subjectName: artifact.SubjectName, digest: artifact.Digest,
+		sourceRepository: officialRepository, workflow: officialWorkflow,
+		sourceCommit: artifact.SourceCommit, sourceRef: artifact.SourceRef,
+	})
+}
+
+func (verifier *sigstoreProvenanceVerifier) verifyArtifactBundle(ctx context.Context, bundleBytes []byte, artifact provenanceArtifactIdentity) error {
 	if err := ctx.Err(); err != nil {
 		return contextError(ctx, err)
 	}
@@ -121,11 +149,11 @@ func (verifier *sigstoreProvenanceVerifier) verifyBundle(ctx context.Context, bu
 	if err != nil {
 		return err
 	}
-	digestBytes, err := hex.DecodeString(stringsTrimSHA256(manifest.ImageDigest))
+	digestBytes, err := hex.DecodeString(stringsTrimSHA256(artifact.digest))
 	if err != nil || len(digestBytes) != 32 {
 		return imageError(CodeDigestMismatch, "The compressed image digest cannot be bound to provenance.", "Do not launch the image; publish one canonical SHA-256 image digest.", err)
 	}
-	identity, err := verifier.certificateIdentity(manifest, invocationID)
+	identity, err := verifier.certificateIdentityForArtifact(artifact, invocationID)
 	if err != nil {
 		return provenanceInvalid("The exact official certificate identity policy could not be constructed.", err)
 	}
@@ -151,14 +179,18 @@ func (verifier *sigstoreProvenanceVerifier) verifyBundle(ctx context.Context, bu
 	if !hasVerifiedObserver(result) {
 		return provenanceInvalid("Sigstore verification did not return the required authenticated observer timestamp.", nil)
 	}
-	if err := statement.validate(ctx, manifest); err != nil {
+	if err := statement.validateArtifact(ctx, artifact); err != nil {
 		return err
 	}
 	return nil
 }
 
 func (verifier *sigstoreProvenanceVerifier) certificateIdentity(manifest Manifest, invocationID string) (sigverify.CertificateIdentity, error) {
-	san := officialWorkflowIdentity(manifest)
+	return verifier.certificateIdentityForArtifact(imageProvenanceIdentity(manifest), invocationID)
+}
+
+func (verifier *sigstoreProvenanceVerifier) certificateIdentityForArtifact(artifact provenanceArtifactIdentity, invocationID string) (sigverify.CertificateIdentity, error) {
+	san := officialWorkflowIdentityForRef(artifact.sourceRef)
 	sanMatcher, err := sigverify.NewSANMatcher(san, "")
 	if err != nil {
 		return sigverify.CertificateIdentity{}, err
@@ -172,21 +204,21 @@ func (verifier *sigstoreProvenanceVerifier) certificateIdentity(manifest Manifes
 		repositoryURL := "https://github.com/" + officialRepository
 		extensions = fulciocert.Extensions{
 			GithubWorkflowTrigger:               "push",
-			GithubWorkflowSHA:                   manifest.SourceCommit,
+			GithubWorkflowSHA:                   artifact.sourceCommit,
 			GithubWorkflowName:                  "Release",
 			GithubWorkflowRepository:            officialRepository,
-			GithubWorkflowRef:                   manifest.SourceRef,
+			GithubWorkflowRef:                   artifact.sourceRef,
 			BuildSignerURI:                      san,
-			BuildSignerDigest:                   manifest.SourceCommit,
+			BuildSignerDigest:                   artifact.sourceCommit,
 			RunnerEnvironment:                   "github-hosted",
 			SourceRepositoryURI:                 repositoryURL,
-			SourceRepositoryDigest:              manifest.SourceCommit,
-			SourceRepositoryRef:                 manifest.SourceRef,
+			SourceRepositoryDigest:              artifact.sourceCommit,
+			SourceRepositoryRef:                 artifact.sourceRef,
 			SourceRepositoryIdentifier:          officialRepositoryID,
 			SourceRepositoryOwnerURI:            "https://github.com/StevenBuglione",
 			SourceRepositoryOwnerIdentifier:     officialRepositoryOwnerID,
 			BuildConfigURI:                      san,
-			BuildConfigDigest:                   manifest.SourceCommit,
+			BuildConfigDigest:                   artifact.sourceCommit,
 			BuildTrigger:                        "push",
 			RunInvocationURI:                    invocationID,
 			SourceRepositoryVisibilityAtSigning: "public",

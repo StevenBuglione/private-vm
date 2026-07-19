@@ -47,6 +47,17 @@ CLI API.
 | `SYSTEM_UNINSTALL_INVALID` | 10 | The generic uninstall intent did not match its typed command contract. |
 | `SYSTEM_UNINSTALL_FAILED` | 10 | Installed-manifest verification, deactivation, fixed-path removal or rollback failed closed. |
 | `SYSTEM_ROLLBACK_INCOMPLETE` | 24 | A generic install/uninstall transaction could not prove rollback or staging cleanup complete. |
+| `RELEASE_INVALID` | 12 | A release request, path, tag or immutable identity is outside the frozen contract. |
+| `RELEASE_SOURCE_UNPROTECTED` | 12 | Source is dirty, non-official, not the tagged commit or not reachable from fetched protected main. |
+| `RELEASE_ARTIFACT_INVALID` | 12 | A package, SPDX document, build manifest or release index failed bounded verification. |
+| `RELEASE_PROVENANCE_INVALID` | 12 | A package offline Sigstore bundle failed official repository/workflow/tag verification. |
+| `RELEASE_CONFLICT` | 12 | The immutable GitHub Release already exists and will not be overwritten. |
+| `RELEASE_PUBLISH_FAILED` | 12 | Draft creation, bounded upload or final publication failed closed. |
+| `RELEASE_VERIFY_FAILED` | 12 | Anonymous package/image clean-room verification failed. |
+| `RELEASE_CANCELLED` | 21 | A bounded release transaction was canceled and cleanup was admitted. |
+| `RELEASE_TIMEOUT` | 12 | A release transaction exceeded its finite deadline. |
+| `RELEASE_CLEANUP_INCOMPLETE` | 24 | Local staging or remote draft absence could not be proved. |
+| `RELEASE_GATES_INCOMPLETE` | 12 | Source evidence passed or failed, but one or more live release gates remain blocking. |
 
 ## Stable daemon RPC errors
 
