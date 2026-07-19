@@ -87,20 +87,20 @@ func newLinuxQuarantineBackend(mkfs, devicePath, mountPath string, uid, gid int)
 }
 
 func (backend *linuxQuarantineBackend) verifySysfsIdentity() error {
-	root := "/sys/dev/block/" + strconv.FormatUint(uint64(backend.major), 10) + ":" + strconv.FormatUint(uint64(backend.minor), 10)
-	serial, err := readSmallFile(filepath.Join(root, "device/serial"), 64)
+	serialPath, readOnlyPath, capacityPath := quarantineSysfsAttributePaths(backend.major, backend.minor)
+	serial, err := readSmallFile(serialPath, 64)
 	if err != nil || string(bytes.TrimSpace(serial)) != "quarantine" {
 		clearBytes(serial)
 		return errors.New("fixed quarantine device identity mismatch")
 	}
 	clearBytes(serial)
-	readOnly, err := readSmallFile(filepath.Join(root, "ro"), 8)
+	readOnly, err := readSmallFile(readOnlyPath, 8)
 	if err != nil || string(bytes.TrimSpace(readOnly)) != "0" {
 		clearBytes(readOnly)
 		return errors.New("fixed quarantine device is not writable")
 	}
 	clearBytes(readOnly)
-	sectors, err := readSmallFile(filepath.Join(root, "size"), 32)
+	sectors, err := readSmallFile(capacityPath, 32)
 	if err != nil {
 		return errors.New("fixed quarantine capacity unavailable")
 	}
@@ -110,6 +110,13 @@ func (backend *linuxQuarantineBackend) verifySysfsIdentity() error {
 		return errors.New("fixed quarantine capacity invalid")
 	}
 	return nil
+}
+
+func quarantineSysfsAttributePaths(major, minor uint32) (string, string, string) {
+	root := "/sys/dev/block/" + strconv.FormatUint(uint64(major), 10) + ":" + strconv.FormatUint(uint64(minor), 10)
+	// Virtio-blk publishes serial on the block device. The device directory
+	// points back to the transport and does not contain this attribute.
+	return filepath.Join(root, "serial"), filepath.Join(root, "ro"), filepath.Join(root, "size")
 }
 
 func (backend *linuxQuarantineBackend) Mounted(context.Context) (bool, error) {

@@ -7,6 +7,13 @@ import (
 	"testing"
 )
 
+func TestQuarantineSysfsAttributePaths(t *testing.T) {
+	serial, readOnly, capacity := quarantineSysfsAttributePaths(253, 16)
+	if serial != "/sys/dev/block/253:16/serial" || readOnly != "/sys/dev/block/253:16/ro" || capacity != "/sys/dev/block/253:16/size" {
+		t.Fatalf("unexpected sysfs paths: serial=%q ro=%q size=%q", serial, readOnly, capacity)
+	}
+}
+
 func TestInspectQuarantineFormatAcceptsOnlyBlankOrExt4(t *testing.T) {
 	for name, test := range map[string]struct {
 		mutate  func([]byte)

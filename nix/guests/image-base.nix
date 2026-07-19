@@ -165,7 +165,11 @@ in
   systemd.services.private-vm-guestd = {
     description = "private-vm guest control daemon";
     wantedBy = [ "multi-user.target" ];
-    after = [ "systemd-modules-load.service" ];
+    requires = [ "systemd-tmpfiles-setup.service" ];
+    after = [
+      "systemd-modules-load.service"
+      "systemd-tmpfiles-setup.service"
+    ];
     serviceConfig = {
       ExecStart = "${privateVMPackage}/bin/private-vm-guestd";
       Restart = "on-failure";

@@ -236,8 +236,16 @@
             users.users.root.hashedPasswordFile = lib.mkForce null;
             users.users.private = {
               isNormalUser = true;
+              createHome = true;
+              homeMode = "0700";
               hashedPassword = "!";
             };
+            # Keep the smallest guestd boot gate faithful to the workstation
+            # runtime contract without importing the full desktop closure.
+            systemd.tmpfiles.rules = [
+              "d /home/private/Inbox 0700 private users -"
+              "d /home/private/Export 0700 private users -"
+            ];
             virtualisation.memorySize = 1024;
             virtualisation.cores = 2;
             virtualisation.vlans = [ ];

@@ -45,6 +45,14 @@ in
     quarantineMount
     "/run/private-vm-qbittorrent"
   ];
+  # guestd validates the fixed virtio serial before formatting or mounting.
+  # Hold startup until udev has exposed that exact device identity.
+  systemd.services.private-vm-guestd.requires = [
+    "dev-disk-by\\x2did-virtio\\x2dquarantine.device"
+  ];
+  systemd.services.private-vm-guestd.after = [
+    "dev-disk-by\\x2did-virtio\\x2dquarantine.device"
+  ];
   systemd.services.private-vm-guestd.serviceConfig.RestrictAddressFamilies = lib.mkForce [
     "AF_UNIX"
     "AF_VSOCK"
