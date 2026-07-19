@@ -156,6 +156,68 @@ func TestTmpfsScratchUsesBoundedNoExecMountAndIdempotentCleanup(t *testing.T) {
 	if err := handle.Destroy(context.Background()); err != nil {
 		t.Fatalf("repeated cleanup failed: %v", err)
 	}
+	if err := handle.Audit(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestTmpfsCancellationAfterMountCleansAndAudits(t *testing.T) {
+	root := t.TempDir()
+	sessionID := "pvm-0123456789abcdef0123456789abcdef"
+	if err := os.Mkdir(filepath.Join(root, sessionID), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	mounter := &fakeMounter{afterMount: cancel}
+	manager := &TmpfsManager{RuntimeRoot: root, Mounter: mounter}
+	handle, err := manager.Create(ctx, sessionID, 512<<20)
+	if !errors.Is(err, context.Canceled) || handle != nil {
+		t.Fatalf("canceled tmpfs allocation did not clean: handle=%v err=%v", handle, err)
+	}
+	if mounter.mounted {
+		t.Fatal("canceled tmpfs allocation remains mounted")
+	}
+	if _, err := os.Lstat(filepath.Join(root, sessionID, "mount")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("canceled tmpfs allocation left its mountpoint: %v", err)
+	}
+}
+
+func TestTmpfsFailedRollbackReturnsRetryableOwner(t *testing.T) {
+	root := t.TempDir()
+	sessionID := "pvm-0123456789abcdef0123456789abcdef"
+	if err := os.Mkdir(filepath.Join(root, sessionID), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	mounter := &fakeMounter{afterMount: cancel, failUnmountOnce: true}
+	manager := &TmpfsManager{RuntimeRoot: root, Mounter: mounter}
+	handle, err := manager.Create(ctx, sessionID, 512<<20)
+	if err == nil || handle == nil {
+		t.Fatalf("failed tmpfs rollback lost cleanup ownership: handle=%v err=%v", handle, err)
+	}
+	if err := handle.Destroy(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if err := handle.Audit(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestCapacityEvidenceParsersAllowOnlyZRAMSwap(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "meminfo")
+	if err := os.WriteFile(path, []byte("MemTotal:       16384 kB\nMemAvailable:    8192 kB\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	total, available, err := readMemoryCapacity(path)
+	if err != nil || total != 16<<20 || available != 8<<20 {
+		t.Fatalf("memory evidence: total=%d available=%d err=%v", total, available, err)
+	}
+	if hasDiskBackedSwap([]byte("Filename Type Size Used Priority\n/dev/zram0 partition 1 0 5\n")) {
+		t.Fatal("zram was treated as disk-backed swap")
+	}
+	if !hasDiskBackedSwap([]byte("Filename Type Size Used Priority\n/swapfile file 1 0 -2\n")) {
+		t.Fatal("disk-backed swap was not detected")
+	}
 }
 
 func testLUKSManager(t *testing.T) (*LUKSManager, *fakeRunner, *fakeMounter, string) {
@@ -240,19 +302,28 @@ func (r *fakeRunner) KeyEvidence() (int, bool) {
 }
 
 type fakeMounter struct {
-	mounted    bool
-	unmounted  bool
-	filesystem string
-	data       string
+	mounted         bool
+	unmounted       bool
+	filesystem      string
+	data            string
+	failMount       bool
+	failUnmountOnce bool
+	afterMount      func()
 }
 
 func (m *fakeMounter) Mount(_, _ string, filesystem string, _ uintptr, data string) error {
 	if filesystem != "ext4" && filesystem != "tmpfs" {
 		return fmt.Errorf("unexpected filesystem %s", filesystem)
 	}
+	if m.failMount {
+		return errors.New("injected mount failure")
+	}
 	m.mounted = true
 	m.filesystem = filesystem
 	m.data = data
+	if m.afterMount != nil {
+		m.afterMount()
+	}
 	return nil
 }
 
@@ -260,7 +331,12 @@ func (m *fakeMounter) Unmount(string, int) error {
 	if !m.mounted {
 		return errors.New("not mounted")
 	}
+	if m.failUnmountOnce {
+		m.failUnmountOnce = false
+		return errors.New("injected unmount failure")
+	}
 	m.unmounted = true
+	m.mounted = false
 	return nil
 }
 
