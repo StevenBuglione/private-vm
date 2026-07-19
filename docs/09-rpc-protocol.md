@@ -36,7 +36,7 @@ numeric-PID reuse race.
 For every boot:
 
 1. daemon allocates unique guest CID
-2. daemon creates random 32-byte token in locked volatile memory
+2. daemon creates a random 32-byte token in protected volatile memory
 3. QEMU receives token via `fw_cfg` from inherited FD
 4. guestd reads token from sysfs
 5. gRPC metadata includes `x-private-vm-session-token`
@@ -47,10 +47,14 @@ Token is never persisted in image or disk.
 
 The raw `fw_cfg` item is exactly 32 bytes. guestd opens its sysfs `raw` node
 with `O_NOFOLLOW`, rejects shorter or longer input, and holds the result in the
-locked-memory secret type. Metadata carries exactly one unpadded base64url
+volatile secret type. On Linux that type uses a core-dump-excluded memfd mapping
+and attempts `mlock`; inability to lock memory does not silently strengthen the
+security claim. Metadata carries exactly one unpadded base64url
 encoding. Missing, duplicated, malformed, or incorrect metadata returns the
 same `GUEST_AUTHENTICATION_FAILED` response before a handler runs. Comparison
-is constant-time.
+is constant-time. gRPC metadata necessarily contains a short-lived encoded
+string copy in both processes; teardown destroys the owned raw-token mapping,
+but Go and gRPC cannot prove zeroing of every transient copy.
 
 Authentication proves possession of the per-boot capability; it does not make
 an unverified image trustworthy. The first bounded `Hello` call additionally

@@ -17,6 +17,7 @@
 - stream framing/hash
 - redaction
 - cleanup idempotency
+- volatile secret zero/nil/copy safety, serialization rejection and size bounds
 
 ### Fuzz
 
@@ -48,6 +49,21 @@ Targets:
 - fake cryptsetup/nft/ip/usb processes
 - filesystem ownership/race tests
 - crash injection at every resource creation step
+
+### Volatile-secret evidence
+
+Linux tests verify the memfd mode, required seals, `FD_CLOEXEC`, read-only
+exports, independent offset-zero descriptors, `MADV_DONTDUMP`, best-effort
+`mlock` failure, fail-closed memfd failure and byte-level zeroing through a
+retained read-only descriptor. A bounded helper process receives a public test
+fixture as runtime input on inherited fd 3 while its live
+`/proc/<pid>/cmdline` and `/proc/<pid>/environ` are inspected for absence of
+that fixture. The non-secret expected fixture is necessarily embedded in the
+test executable. The LUKS fake fully consumes both consecutive key descriptors,
+temporarily holds and then clears the first read, and proves that their complete
+values match without printing or persisting the value. Race tests serialize an
+active reader against destruction. CI and the Nix source check cross-compile
+the package for Darwin so Linux syscalls cannot leak into common source files.
 
 ### NixOS VM tests
 

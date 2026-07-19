@@ -38,6 +38,17 @@
 - [ ] crash-recovery path is tested;
 - [ ] backup and snapshot exclusion is documented.
 
+## Volatile secret review
+
+- [ ] nil, zero and copied handles cannot close or duplicate unrelated FDs;
+- [ ] supported Linux uses a mode-0600 memfd with dump and size protections;
+- [ ] exported descriptors are read-only, CLOEXEC, offset-zero and independent;
+- [ ] raw secret backing is not exposed as a mutable slice;
+- [ ] serialization and formatting cannot disclose the value;
+- [ ] argv and environment absence is inspected on a live helper process;
+- [ ] destroy zeroes the live mapping before unmap and close;
+- [ ] `mlock`, Go-copy and transient metadata limitations are documented.
+
 ## Scan review
 
 - [ ] scanner definitions updated before quarantine attachment;

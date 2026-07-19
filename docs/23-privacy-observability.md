@@ -56,10 +56,17 @@ metrics from session state.
 ## Crash handling
 
 - core dumps disabled for CLI, daemon, guestd, and QEMU scopes
+- Linux secret memfd mappings additionally use `MADV_DONTDUMP`; failure to set
+  it is blocking even though process-scope core limits remain mandatory
 - no automatic crash upload
 - panic output redacted and bounded
 - official bug reports request user-exported diagnostic bundle
 - diagnostic bundle must display manifest before creation
+
+`mlock` is best effort and is not described as a guarantee. Secret ownership
+ends with explicit overwrite and destruction of the package-owned mapping, but
+transient Go, encoder, gRPC, kernel, hypervisor or hardware copies may remain.
+This limitation is why privacy wording never claims perfect erasure.
 
 ## Diagnostic bundle
 

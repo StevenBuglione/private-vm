@@ -28,7 +28,8 @@ const (
 const defaultTerminalPath = "/dev/tty"
 
 const (
-	// MaximumSensitiveValueBytes bounds values copied into locked secret memory.
+	// MaximumSensitiveValueBytes bounds values copied into protected volatile
+	// secret storage. Memory locking is best effort.
 	MaximumSensitiveValueBytes int64 = 1 << 20
 	// MaximumSensitiveStreamBytes bounds streamed credential or metadata input.
 	MaximumSensitiveStreamBytes int64 = 64 << 20

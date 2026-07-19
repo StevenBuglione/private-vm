@@ -1,10 +1,12 @@
 package storage
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -40,6 +42,10 @@ func TestLUKSLifecycleKeepsKeyOffArgumentsAndDeletesCiphertext(t *testing.T) {
 				t.Fatalf("cryptsetup key was not inherited by FD: %+v", command)
 			}
 		}
+	}
+	keyReads, keysMatched := runner.KeyEvidence()
+	if keyReads != 2 || !keysMatched {
+		t.Fatalf("cryptsetup did not receive the same complete inherited key twice: reads=%d matched=%t", keyReads, keysMatched)
 	}
 	if err := handle.Destroy(context.Background()); err != nil {
 		t.Fatal(err)
@@ -186,12 +192,31 @@ type fakeRunner struct {
 	mu            sync.Mutex
 	commands      []recordedCommand
 	failCloseOnce bool
+	firstKey      []byte
+	keyReads      int
+	keysMatched   bool
 }
 
 func (r *fakeRunner) Run(_ context.Context, command Command) (Result, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.commands = append(r.commands, recordedCommand{Path: command.Path, Args: append([]string(nil), command.Args...), ExtraFiles: len(command.ExtraFiles)})
+	if len(command.ExtraFiles) == 1 && len(command.Args) > 0 && command.Args[0] != "close" {
+		key, err := io.ReadAll(io.LimitReader(command.ExtraFiles[0], 65))
+		if err != nil || len(key) != 64 {
+			clear(key)
+			return Result{}, errors.New("inherited key fixture had an invalid length")
+		}
+		r.keyReads++
+		if r.keyReads == 1 {
+			r.firstKey = append([]byte(nil), key...)
+		} else if r.keyReads == 2 {
+			r.keysMatched = bytes.Equal(r.firstKey, key)
+			clear(r.firstKey)
+			r.firstKey = nil
+		}
+		clear(key)
+	}
 	if r.failCloseOnce && len(command.Args) > 0 && command.Args[0] == "close" {
 		r.failCloseOnce = false
 		return Result{}, errors.New("injected mapper close failure")
@@ -206,6 +231,12 @@ func (r *fakeRunner) Commands() []recordedCommand {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return append([]recordedCommand(nil), r.commands...)
+}
+
+func (r *fakeRunner) KeyEvidence() (int, bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.keyReads, r.keysMatched
 }
 
 type fakeMounter struct {

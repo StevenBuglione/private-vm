@@ -1,7 +1,12 @@
 package guest
 
 import (
+	"bytes"
+	"encoding/base64"
+	"encoding/gob"
 	"encoding/json"
+	"encoding/xml"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -70,9 +75,36 @@ func TestTokenRedactionAndDestruction(t *testing.T) {
 	if _, err := json.Marshal(token); err == nil {
 		t.Fatal("token JSON serialization succeeded")
 	}
+	copyOfToken := *token
+	if got := fmt.Sprintf("%v %#v", copyOfToken, copyOfToken); got != "[REDACTED] [REDACTED]" {
+		t.Fatalf("unsafe copied-token formatting: %q", got)
+	}
+	if _, err := json.Marshal(copyOfToken); !errors.Is(err, ErrTokenSerialization) {
+		t.Fatalf("copied token JSON error = %v", err)
+	}
+	if _, err := xml.Marshal(copyOfToken); !errors.Is(err, ErrTokenSerialization) {
+		t.Fatalf("copied token XML error = %v", err)
+	}
+	var destination bytes.Buffer
+	if err := gob.NewEncoder(&destination).Encode(copyOfToken); !errors.Is(err, ErrTokenSerialization) {
+		t.Fatalf("copied token gob error = %v", err)
+	}
 	token.Destroy()
 	if _, err := token.outgoingContext(t.Context()); err == nil {
 		t.Fatal("destroyed token remained usable")
+	}
+}
+
+func TestTokenEncodingRequiresExactBound(t *testing.T) {
+	valid := repeatedToken(0x31)
+	encoded, err := encodeTokenReader(bytes.NewReader(valid))
+	if err != nil || encoded != base64.RawURLEncoding.EncodeToString(valid) {
+		t.Fatalf("exact token encoding failed: length=%d error=%v", len(encoded), err)
+	}
+	for _, size := range []int{TokenSize - 1, TokenSize + 1} {
+		if _, err := encodeTokenReader(bytes.NewReader(make([]byte, size))); err == nil {
+			t.Fatalf("token encoder accepted %d bytes", size)
+		}
 	}
 }
 

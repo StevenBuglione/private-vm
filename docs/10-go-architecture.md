@@ -107,10 +107,50 @@ Packages must depend inward toward interfaces. External process execution is
 centralized behind narrow interfaces so tests can use fakes.
 
 `internal/guest` owns the volatile CID allocator, context-aware AF_VSOCK dialer,
-VSOCK-only gRPC transport credentials, locked capability token, authentication
+VSOCK-only gRPC transport credentials, protected capability token, authentication
 and request-context interceptors, exact role service registration, and verified
 Hello handshake. Linux dialing uses a cancellable socket connect directly;
 there is no detached dial goroutine.
+
+## Volatile secret contract
+
+`internal/secret.Bytes` is a bounded handle to shared private state. Copying the
+Go handle is safe: every copy refers to the same state, and `Destroy` through
+one invalidates all copies. A nil or zero-value handle is inert and cannot
+duplicate or close an unrelated descriptor. The type rejects JSON, text,
+binary, gob and XML serialization and implements redacted string and formatting
+interfaces.
+
+On Linux, creation uses a mode-0600 `memfd`, a shared writable mapping,
+`MADV_DONTDUMP`, and grow, shrink, future-write and seal seals. `mlock` is
+attempted but remains best effort because ordinary users may have a zero or
+small `RLIMIT_MEMLOCK`. A supported-kernel memfd setup, mapping, dump-exclusion
+or sealing failure is blocking. Only `ENOSYS` permits a documented heap
+fallback; that fallback cannot export an inherited FD and provides weaker
+copy/dump guarantees. Non-Linux storage is a compile-only heap fallback and is
+not a supported production secret transport.
+
+`DupFile` reopens the owned memfd as a read-only, independent open-file
+description at offset zero. This is required because a normal duplicated FD
+would share its offset and would cause the second `cryptsetup` key read to see
+EOF. Callers own and close the returned CLOEXEC descriptor, and product process
+launchers pass it only through `ExtraFiles`.
+
+`WithReader` provides a forward-only view that copies into the callback's read
+buffers and is invalidated when the callback returns; it never exposes the live
+mutable backing slice. `Equal` provides the dedicated constant-time comparison
+operation. A callback or downstream encoder can necessarily retain bytes it
+chooses to read, and gRPC metadata necessarily creates a transient string.
+Callbacks are therefore small, trusted and bounded. They must not re-enter a
+method on the same shared secret handle because the lifecycle lock is held for
+the callback's complete duration.
+
+`Destroy` serializes against active readers and overwrites the current mapping.
+It then best-effort syncs, unlocks, unmaps and closes after the overwrite; those
+kernel cleanup results are not a perfect-erasure signal. Explicit destruction
+reduces exposure but is not a perfect-erasure claim: compiler, runtime,
+syscall, library, kernel, hypervisor and hardware
+copies outside the owned mapping cannot all be identified or overwritten.
 
 ## Dependency policy
 

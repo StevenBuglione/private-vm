@@ -45,10 +45,12 @@ func TestSensitiveInputTerminalDisablesEchoAndRestoresIt(t *testing.T) {
 		}
 		defer value.Destroy()
 		var actual string
-		inputErr = value.With(func(bytes []byte) error {
-			actual = string(bytes)
-			return nil
-		})
+		protected, readErr := readProtectedValue(value)
+		if readErr == nil {
+			actual = string(protected)
+		}
+		clear(protected)
+		inputErr = readErr
 		done <- result{value: actual, err: inputErr}
 	}()
 
@@ -563,8 +565,13 @@ func TestSensitiveTerminalAcquisitionIsSerialized(t *testing.T) {
 			return
 		}
 		defer value.Destroy()
+		protected, readErr := readProtectedValue(value)
 		var text string
-		err = value.With(func(bytes []byte) error { text = string(bytes); return nil })
+		if readErr == nil {
+			text = string(protected)
+		}
+		clear(protected)
+		err = readErr
 		done <- result{value: text, err: err}
 	}
 	first, second := make(chan result, 1), make(chan result, 1)
