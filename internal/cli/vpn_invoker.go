@@ -62,6 +62,10 @@ func (invoker *ProductionInvoker) Invoke(ctx context.Context, id CommandID, inte
 			return Result{}, invalidTorrentIntent()
 		}
 		return invoker.submitTorrent(ctx, request)
+	case CommandTorrentRun, CommandTorrentStart, CommandTorrentMetadata, CommandTorrentSelect,
+		CommandTorrentPlan, CommandTorrentDownload, CommandTorrentPause, CommandTorrentResume,
+		CommandTorrentStatus, CommandTorrentComplete:
+		return invoker.invokeTorrent(ctx, id, intent)
 	case CommandVPNImport, CommandVPNRotate:
 		request, ok := intent.(VPNImportIntent)
 		if !ok {
@@ -311,6 +315,10 @@ func daemonDetailExitCode(code string) int {
 		return exitcode.DirtyWorkspace
 	case "CLEANUP_INCOMPLETE":
 		return exitcode.Cleanup
+	case "DOWNLOADER_CLEANUP_INCOMPLETE":
+		return exitcode.Cleanup
+	case "TORRENT_CAPACITY_INSUFFICIENT":
+		return exitcode.Storage
 	case "ROLE_START_FAILED", "SESSION_TRANSITION_INVALID", "SESSION_NOT_FOUND", "SESSION_SELECTION_REQUIRED":
 		return exitcode.Runtime
 	case "INTERNAL_ERROR", "RPC_CONTEXT_CONTRACT_INVALID":
@@ -318,6 +326,9 @@ func daemonDetailExitCode(code string) int {
 	case "PROTOCOL_VERSION_MISMATCH":
 		return exitcode.Runtime
 	default:
+		if len(code) >= len("TORRENT_") && code[:len("TORRENT_")] == "TORRENT_" || len(code) >= len("QUARANTINE_") && code[:len("QUARANTINE_")] == "QUARANTINE_" {
+			return exitcode.Torrent
+		}
 		return exitcode.Network
 	}
 }

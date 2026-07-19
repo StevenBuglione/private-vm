@@ -32,6 +32,7 @@ const (
 	CodeAcknowledged  Code = "ACKNOWLEDGED"
 	CodeVPNProfile    Code = "VPN_PROFILE_STATUS"
 	CodeSessionStatus Code = "SESSION_STATUS"
+	CodeTorrentStatus Code = "TORRENT_STATUS"
 	CodeInternalError Code = "INTERNAL_ERROR"
 	CodeRenderFailed  Code = "OUTPUT_RENDER_FAILED"
 )
@@ -116,6 +117,23 @@ type SessionView struct {
 }
 
 func (SessionPayload) machinePayload() {}
+
+// TorrentStatusPayload deliberately carries only aggregate counters and
+// stable state. Torrent names, file paths, hashes and peer identifiers never
+// cross the CLI machine-output boundary.
+type TorrentStatusPayload struct {
+	SchemaVersion  uint32 `json:"schema_version"`
+	State          string `json:"state"`
+	CompletedBytes uint64 `json:"completed_bytes"`
+	TotalBytes     uint64 `json:"total_bytes"`
+	FileCount      uint32 `json:"file_count"`
+	SelectedCount  uint32 `json:"selected_count"`
+	PayloadPaused  bool   `json:"payload_paused"`
+	Code           string `json:"code"`
+	Remediation    string `json:"remediation"`
+}
+
+func (TorrentStatusPayload) machinePayload() {}
 
 // EventPayload is deliberately sealed independently from success payloads.
 // Adding an event shape requires an explicit, reviewed concrete type.
@@ -311,6 +329,11 @@ func validSuccess(success SuccessEnvelope) bool {
 			}
 		}
 		return true
+	case TorrentStatusPayload:
+		return success.Code == CodeTorrentStatus && data.SchemaVersion == 1 &&
+			validCode(Code(data.State)) && data.CompletedBytes <= data.TotalBytes &&
+			data.SelectedCount <= data.FileCount && validCode(Code(data.Code)) &&
+			validRequiredString(data.Remediation, 512)
 	default:
 		return false
 	}
@@ -423,6 +446,12 @@ func humanSuccess(code Code, data MachinePayload) string {
 			fmt.Fprintf(&buffer, "%s role=%s phase=%s%s\n", safeLine(current.ID), safeLine(current.Role), safeLine(current.Phase), workflow)
 		}
 		return buffer.String()
+	case TorrentStatusPayload:
+		return fmt.Sprintf(
+			"%s state=%s progress=%d/%d files=%d selected=%d payload_paused=%t\nremediation: %s\n",
+			safeLine(value.Code), safeLine(value.State), value.CompletedBytes, value.TotalBytes,
+			value.FileCount, value.SelectedCount, value.PayloadPaused, safeLine(value.Remediation),
+		)
 	default:
 		// MachinePayload is sealed; this protects against new payload types being
 		// added without a corresponding reviewed human representation.

@@ -17,8 +17,8 @@ const (
 	MaximumFiles          = 100_000
 	MaximumPathBytes      = 1024
 	MaximumDisplayName    = 255
-	QuarantineMountPath   = "/mnt/private-vm/quarantine"
-	QuarantineDownloadDir = "/mnt/private-vm/quarantine/payload"
+	QuarantineMountPath   = "/mnt/quarantine"
+	QuarantineDownloadDir = "/mnt/quarantine/payload"
 )
 
 type State string

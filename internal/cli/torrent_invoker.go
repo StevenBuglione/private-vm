@@ -4,10 +4,13 @@ import (
 	"context"
 	"errors"
 	"io"
+	"time"
 
+	privatevmv1 "github.com/StevenBuglione/private-vm/gen/privatevm/v1"
 	"github.com/StevenBuglione/private-vm/internal/apperror"
 	"github.com/StevenBuglione/private-vm/internal/exitcode"
 	"github.com/StevenBuglione/private-vm/internal/torrent"
+	"google.golang.org/grpc"
 )
 
 // TorrentSubmitter is the synchronous host-orchestrator handoff. The caller
@@ -19,8 +22,12 @@ type TorrentSubmitter interface {
 }
 
 func (invoker *ProductionInvoker) submitTorrent(ctx context.Context, request TorrentInputIntent) (Result, error) {
-	if invoker == nil || invoker.torrents == nil {
-		return Result{}, apperror.New("NOT_IMPLEMENTED", exitcode.Runtime, "The authenticated torrent orchestrator is not installed.", "Start a verified downloader session through private-vmd before submitting torrent input.")
+	if invoker == nil {
+		return Result{}, invalidTorrentIntent()
+	}
+	submitter := invoker.torrents
+	if submitter == nil {
+		submitter = daemonTorrentSubmitter{invoker: invoker}
 	}
 	readInput := invoker.readInput
 	if readInput == nil {
@@ -59,7 +66,7 @@ func (invoker *ProductionInvoker) submitTorrent(ctx context.Context, request Tor
 			}
 			defer input.Destroy()
 			return input.WithReader(ctx, func(_ context.Context, protected io.Reader) error {
-				result, parseErr = invoker.torrents.Submit(ctx, torrent.InputMagnet, protected)
+				result, parseErr = submitter.Submit(ctx, torrent.InputMagnet, protected)
 				return parseErr
 			})
 		})
@@ -72,7 +79,7 @@ func (invoker *ProductionInvoker) submitTorrent(ctx context.Context, request Tor
 		if err != nil {
 			return Result{}, torrentInputError(err)
 		}
-		result, submitErr := invoker.torrents.Submit(ctx, torrent.InputMetainfo, stream)
+		result, submitErr := submitter.Submit(ctx, torrent.InputMetainfo, stream)
 		closeErr := stream.Close()
 		if submitErr != nil {
 			return Result{}, torrentInputError(submitErr)
@@ -107,4 +114,260 @@ func torrentInputError(err error) error {
 
 func invalidTorrentIntent() error {
 	return apperror.New("TORRENT_REQUEST_INVALID", exitcode.Torrent, "The torrent input request contract is invalid.", "Use exactly one documented secure torrent input source.")
+}
+
+type daemonTorrentSubmitter struct{ invoker *ProductionInvoker }
+
+func (submitter daemonTorrentSubmitter) Submit(ctx context.Context, kind torrent.InputKind, reader io.Reader) (Result, error) {
+	if submitter.invoker == nil || reader == nil {
+		return Result{}, invalidTorrentIntent()
+	}
+	connection, client, requestID, current, err := submitter.invoker.downloaderClient(ctx)
+	if err != nil {
+		return Result{}, err
+	}
+	defer connection.Close()
+	stream, err := client.AddTorrent(ctx,
+		grpc.MaxCallSendMsgSize(torrent.MaximumMetainfoBytes+64<<10),
+		grpc.MaxCallRecvMsgSize(4<<20),
+	)
+	if err != nil {
+		return Result{}, daemonRPCError(err)
+	}
+	protoKind := privatevmv1.TorrentInputKind_TORRENT_INPUT_KIND_UNSPECIFIED
+	switch kind {
+	case torrent.InputMagnet:
+		protoKind = privatevmv1.TorrentInputKind_TORRENT_INPUT_KIND_MAGNET
+	case torrent.InputMetainfo:
+		protoKind = privatevmv1.TorrentInputKind_TORRENT_INPUT_KIND_METAINFO
+	default:
+		return Result{}, invalidTorrentIntent()
+	}
+	if err := stream.Send(&privatevmv1.HostTorrentInputFrame{Frame: &privatevmv1.HostTorrentInputFrame_Begin{Begin: &privatevmv1.HostTorrentInputBegin{
+		Context: sessionRequestContext(requestID, current.GetId()), Kind: protoKind,
+	}}}); err != nil {
+		return Result{}, daemonRPCError(err)
+	}
+	buffer := make([]byte, maximumHostTorrentInputChunkBytes)
+	defer clear(buffer)
+	for {
+		n, readErr := reader.Read(buffer)
+		if n > 0 {
+			chunk := append([]byte(nil), buffer[:n]...)
+			sendErr := stream.Send(&privatevmv1.HostTorrentInputFrame{Frame: &privatevmv1.HostTorrentInputFrame_Chunk{Chunk: &privatevmv1.HostTorrentChunk{Data: chunk}}})
+			clear(chunk)
+			clear(buffer[:n])
+			if sendErr != nil {
+				return Result{}, daemonRPCError(sendErr)
+			}
+		}
+		if errors.Is(readErr, io.EOF) {
+			break
+		}
+		if readErr != nil || n == 0 {
+			return Result{}, torrentInputError(readErr)
+		}
+	}
+	metadata, err := stream.CloseAndRecv()
+	if err != nil {
+		return Result{}, daemonRPCError(err)
+	}
+	return torrentMetadataResult(metadata)
+}
+
+const maximumHostTorrentInputChunkBytes = 16 << 10
+
+func (invoker *ProductionInvoker) invokeTorrent(ctx context.Context, id CommandID, intent Intent) (Result, error) {
+	switch id {
+	case CommandTorrentRun, CommandTorrentStart:
+		request, ok := intent.(TorrentIntent)
+		if !ok {
+			return Result{}, invalidTorrentIntent()
+		}
+		return invoker.startDownloader(ctx, request)
+	}
+
+	connection, client, requestID, current, err := invoker.downloaderClient(ctx)
+	if err != nil {
+		return Result{}, err
+	}
+	defer connection.Close()
+	request := &privatevmv1.TorrentControlRequest{Context: sessionRequestContext(requestID, current.GetId())}
+	switch id {
+	case CommandTorrentMetadata, CommandTorrentPlan:
+		metadata, err := client.GetTorrentMetadata(ctx, request)
+		if err != nil {
+			return Result{}, daemonRPCError(err)
+		}
+		return torrentMetadataResult(metadata)
+	case CommandTorrentSelect:
+		selection, ok := intent.(TorrentSelectionIntent)
+		if !ok || len(selection.Files) == 0 {
+			return Result{}, invalidTorrentIntent()
+		}
+		metadata, err := client.SelectTorrentFiles(ctx, &privatevmv1.HostSelectTorrentFilesRequest{
+			Context: request.Context, Indexes: append([]uint32(nil), selection.Files...),
+		})
+		if err != nil {
+			return Result{}, daemonRPCError(err)
+		}
+		return torrentMetadataResult(metadata)
+	case CommandTorrentDownload, CommandTorrentResume:
+		stream, err := client.StartTorrentDownload(ctx, request)
+		if err != nil {
+			return Result{}, daemonRPCError(err)
+		}
+		for {
+			event, recvErr := stream.Recv()
+			if errors.Is(recvErr, io.EOF) {
+				break
+			}
+			if recvErr != nil {
+				return Result{}, daemonRPCError(recvErr)
+			}
+			if event == nil || event.GetProgress() == nil || event.GetProgress().GetCompleted() > event.GetProgress().GetTotal() {
+				return Result{}, internalTorrentError()
+			}
+		}
+		status, err := client.GetTorrentStatus(ctx, request)
+		return torrentStatusResult(status, err)
+	case CommandTorrentPause:
+		status, err := client.PauseTorrentDownload(ctx, request)
+		return torrentStatusResult(status, err)
+	case CommandTorrentStatus:
+		status, err := client.GetTorrentStatus(ctx, request)
+		return torrentStatusResult(status, err)
+	case CommandTorrentComplete:
+		status, err := client.SealTorrentQuarantine(ctx, request)
+		return torrentStatusResult(status, err)
+	default:
+		return Result{}, invalidTorrentIntent()
+	}
+}
+
+func (invoker *ProductionInvoker) startDownloader(ctx context.Context, intent TorrentIntent) (Result, error) {
+	if intent.Policy != "safe" && intent.Policy != "quarantine" {
+		return Result{}, invalidTorrentIntent()
+	}
+	connection, client, err := invoker.client()
+	if err != nil {
+		return Result{}, err
+	}
+	defer connection.Close()
+	requestID, err := invoker.nextRequestID()
+	if err != nil {
+		return Result{}, internalTorrentError()
+	}
+	resources := &privatevmv1.ResourceRequest{Vcpus: 4, MemoryBytes: 6 << 30, RootBytes: 32 << 30}
+	plan, err := client.PlanSession(ctx, &privatevmv1.PlanSessionRequest{
+		Context: sessionRequestContext(requestID, ""), Role: privatevmv1.GuestRole_GUEST_ROLE_DOWNLOADER,
+		PolicyName: intent.Policy, Resources: resources,
+	})
+	if err != nil {
+		return Result{}, daemonRPCError(err)
+	}
+	if !plan.GetRunnable() {
+		return Result{}, apperror.New("HOST_PREFLIGHT_FAILED", exitcode.Preflight, "The host did not pass the strict downloader preflight.", "Run private-vm doctor --strict --json, correct every blocking diagnostic, and retry.")
+	}
+	created, err := client.CreateSession(ctx, &privatevmv1.CreateSessionRequest{
+		Context: sessionRequestContext(requestID, ""), Role: privatevmv1.GuestRole_GUEST_ROLE_DOWNLOADER,
+		PolicyName: intent.Policy, Resources: resources,
+	})
+	if err != nil {
+		return Result{}, daemonRPCError(err)
+	}
+	started, err := client.StartRole(ctx, &privatevmv1.StartRoleRequest{Context: sessionRequestContext(requestID, created.GetId())})
+	if err != nil {
+		cleanupCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		_, _ = client.AbortSession(cleanupCtx, &privatevmv1.AbortSessionRequest{Context: sessionRequestContext(requestID, created.GetId()), ReasonCode: "CLIENT_START_FAILED"})
+		cancel()
+		return Result{}, daemonRPCError(err)
+	}
+	return sessionResult(started, nil)
+}
+
+func (invoker *ProductionInvoker) downloaderClient(ctx context.Context) (*grpc.ClientConn, privatevmv1.PrivateVMDaemonServiceClient, string, *privatevmv1.Session, error) {
+	connection, client, err := invoker.client()
+	if err != nil {
+		return nil, nil, "", nil, err
+	}
+	requestID, err := invoker.nextRequestID()
+	if err != nil {
+		connection.Close()
+		return nil, nil, "", nil, internalTorrentError()
+	}
+	response, err := client.ListSessions(ctx, &privatevmv1.ListSessionsRequest{Context: sessionRequestContext(requestID, "")})
+	if err != nil {
+		connection.Close()
+		return nil, nil, "", nil, daemonRPCError(err)
+	}
+	var selected *privatevmv1.Session
+	for _, current := range response.GetSessions() {
+		if current.GetRole() != privatevmv1.GuestRole_GUEST_ROLE_DOWNLOADER || current.GetPhase() != privatevmv1.SessionPhase_SESSION_PHASE_ACTIVE {
+			continue
+		}
+		if selected != nil {
+			connection.Close()
+			return nil, nil, "", nil, apperror.New("SESSION_SELECTION_REQUIRED", exitcode.Torrent, "More than one downloader session is active.", "Stop the extra downloader and retry with exactly one active workflow.")
+		}
+		selected = current
+	}
+	if selected == nil {
+		connection.Close()
+		return nil, nil, "", nil, apperror.New("SESSION_NOT_FOUND", exitcode.Torrent, "No active downloader session exists.", "Start a torrent workflow and verify its VPN before continuing.")
+	}
+	return connection, client, requestID, selected, nil
+}
+
+func torrentMetadataResult(metadata *privatevmv1.TorrentMetadata) (Result, error) {
+	if metadata == nil || len(metadata.GetFiles()) == 0 || !metadata.GetPayloadPaused() {
+		return Result{}, internalTorrentError()
+	}
+	var selected uint32
+	var total uint64
+	for _, file := range metadata.GetFiles() {
+		if file == nil || file.GetSizeBytes() == 0 || total > ^uint64(0)-file.GetSizeBytes() {
+			return Result{}, internalTorrentError()
+		}
+		total += file.GetSizeBytes()
+		if file.GetSelected() {
+			selected++
+		}
+	}
+	state := "FILE_SELECTION_REQUIRED"
+	code := "TORRENT_SELECTION_REQUIRED"
+	remediation := "Review the exact file list in the isolated downloader and select only approved indexes."
+	if metadata.GetSelectedSizeBytes() > 0 {
+		state = "CAPACITY_VERIFIED"
+		code = "TORRENT_CAPACITY_VERIFIED"
+		remediation = "Start payload transfer only while the VPN remains verified."
+	}
+	payload := TorrentStatusPayload{
+		SchemaVersion: 1, State: state, TotalBytes: total, FileCount: uint32(len(metadata.GetFiles())),
+		SelectedCount: selected, PayloadPaused: true, Code: code, Remediation: remediation,
+	}
+	return Result{Code: CodeTorrentStatus, Data: payload}, nil
+}
+
+func torrentStatusResult(status *privatevmv1.TorrentStatus, err error) (Result, error) {
+	if err != nil {
+		return Result{}, daemonRPCError(err)
+	}
+	if status == nil || status.GetProgress() == nil || status.GetProgress().GetCompleted() > status.GetProgress().GetTotal() {
+		return Result{}, internalTorrentError()
+	}
+	code, remediation := "TORRENT_STATE_INVALID", "Abort and clean the session."
+	if diagnostics := status.GetDiagnostics(); len(diagnostics) == 1 && diagnostics[0] != nil {
+		code, remediation = diagnostics[0].GetCode(), diagnostics[0].GetRemediation()
+	}
+	payload := TorrentStatusPayload{
+		SchemaVersion: 1, State: status.GetState(), CompletedBytes: status.GetProgress().GetCompleted(),
+		TotalBytes: status.GetProgress().GetTotal(), PayloadPaused: status.GetState() != "DOWNLOADING",
+		Code: code, Remediation: remediation,
+	}
+	return Result{Code: CodeTorrentStatus, Data: payload}, nil
+}
+
+func internalTorrentError() error {
+	return apperror.New("INTERNAL_ERROR", exitcode.Internal, "The torrent response could not be represented safely.", "Inspect volatile session status and retry only if its documented state permits it.")
 }

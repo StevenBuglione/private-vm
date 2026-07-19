@@ -19,25 +19,32 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	PrivateVMDaemonService_GetVersion_FullMethodName          = "/privatevm.v1.PrivateVMDaemonService/GetVersion"
-	PrivateVMDaemonService_Doctor_FullMethodName              = "/privatevm.v1.PrivateVMDaemonService/Doctor"
-	PrivateVMDaemonService_PlanSession_FullMethodName         = "/privatevm.v1.PrivateVMDaemonService/PlanSession"
-	PrivateVMDaemonService_CreateSession_FullMethodName       = "/privatevm.v1.PrivateVMDaemonService/CreateSession"
-	PrivateVMDaemonService_GetSession_FullMethodName          = "/privatevm.v1.PrivateVMDaemonService/GetSession"
-	PrivateVMDaemonService_ListSessions_FullMethodName        = "/privatevm.v1.PrivateVMDaemonService/ListSessions"
-	PrivateVMDaemonService_ImportVPNProfile_FullMethodName    = "/privatevm.v1.PrivateVMDaemonService/ImportVPNProfile"
-	PrivateVMDaemonService_InspectVPNProfile_FullMethodName   = "/privatevm.v1.PrivateVMDaemonService/InspectVPNProfile"
-	PrivateVMDaemonService_TestVPNProfile_FullMethodName      = "/privatevm.v1.PrivateVMDaemonService/TestVPNProfile"
-	PrivateVMDaemonService_RemoveVPNProfile_FullMethodName    = "/privatevm.v1.PrivateVMDaemonService/RemoveVPNProfile"
-	PrivateVMDaemonService_StartRole_FullMethodName           = "/privatevm.v1.PrivateVMDaemonService/StartRole"
-	PrivateVMDaemonService_StopRole_FullMethodName            = "/privatevm.v1.PrivateVMDaemonService/StopRole"
-	PrivateVMDaemonService_AbortSession_FullMethodName        = "/privatevm.v1.PrivateVMDaemonService/AbortSession"
-	PrivateVMDaemonService_CleanupSession_FullMethodName      = "/privatevm.v1.PrivateVMDaemonService/CleanupSession"
-	PrivateVMDaemonService_StreamEvents_FullMethodName        = "/privatevm.v1.PrivateVMDaemonService/StreamEvents"
-	PrivateVMDaemonService_ImportWorkspaceFile_FullMethodName = "/privatevm.v1.PrivateVMDaemonService/ImportWorkspaceFile"
-	PrivateVMDaemonService_ExportWorkspaceFile_FullMethodName = "/privatevm.v1.PrivateVMDaemonService/ExportWorkspaceFile"
-	PrivateVMDaemonService_ClaimUSB_FullMethodName            = "/privatevm.v1.PrivateVMDaemonService/ClaimUSB"
-	PrivateVMDaemonService_ReleaseUSB_FullMethodName          = "/privatevm.v1.PrivateVMDaemonService/ReleaseUSB"
+	PrivateVMDaemonService_GetVersion_FullMethodName            = "/privatevm.v1.PrivateVMDaemonService/GetVersion"
+	PrivateVMDaemonService_Doctor_FullMethodName                = "/privatevm.v1.PrivateVMDaemonService/Doctor"
+	PrivateVMDaemonService_PlanSession_FullMethodName           = "/privatevm.v1.PrivateVMDaemonService/PlanSession"
+	PrivateVMDaemonService_CreateSession_FullMethodName         = "/privatevm.v1.PrivateVMDaemonService/CreateSession"
+	PrivateVMDaemonService_GetSession_FullMethodName            = "/privatevm.v1.PrivateVMDaemonService/GetSession"
+	PrivateVMDaemonService_ListSessions_FullMethodName          = "/privatevm.v1.PrivateVMDaemonService/ListSessions"
+	PrivateVMDaemonService_ImportVPNProfile_FullMethodName      = "/privatevm.v1.PrivateVMDaemonService/ImportVPNProfile"
+	PrivateVMDaemonService_InspectVPNProfile_FullMethodName     = "/privatevm.v1.PrivateVMDaemonService/InspectVPNProfile"
+	PrivateVMDaemonService_TestVPNProfile_FullMethodName        = "/privatevm.v1.PrivateVMDaemonService/TestVPNProfile"
+	PrivateVMDaemonService_RemoveVPNProfile_FullMethodName      = "/privatevm.v1.PrivateVMDaemonService/RemoveVPNProfile"
+	PrivateVMDaemonService_AddTorrent_FullMethodName            = "/privatevm.v1.PrivateVMDaemonService/AddTorrent"
+	PrivateVMDaemonService_GetTorrentMetadata_FullMethodName    = "/privatevm.v1.PrivateVMDaemonService/GetTorrentMetadata"
+	PrivateVMDaemonService_SelectTorrentFiles_FullMethodName    = "/privatevm.v1.PrivateVMDaemonService/SelectTorrentFiles"
+	PrivateVMDaemonService_StartTorrentDownload_FullMethodName  = "/privatevm.v1.PrivateVMDaemonService/StartTorrentDownload"
+	PrivateVMDaemonService_PauseTorrentDownload_FullMethodName  = "/privatevm.v1.PrivateVMDaemonService/PauseTorrentDownload"
+	PrivateVMDaemonService_GetTorrentStatus_FullMethodName      = "/privatevm.v1.PrivateVMDaemonService/GetTorrentStatus"
+	PrivateVMDaemonService_SealTorrentQuarantine_FullMethodName = "/privatevm.v1.PrivateVMDaemonService/SealTorrentQuarantine"
+	PrivateVMDaemonService_StartRole_FullMethodName             = "/privatevm.v1.PrivateVMDaemonService/StartRole"
+	PrivateVMDaemonService_StopRole_FullMethodName              = "/privatevm.v1.PrivateVMDaemonService/StopRole"
+	PrivateVMDaemonService_AbortSession_FullMethodName          = "/privatevm.v1.PrivateVMDaemonService/AbortSession"
+	PrivateVMDaemonService_CleanupSession_FullMethodName        = "/privatevm.v1.PrivateVMDaemonService/CleanupSession"
+	PrivateVMDaemonService_StreamEvents_FullMethodName          = "/privatevm.v1.PrivateVMDaemonService/StreamEvents"
+	PrivateVMDaemonService_ImportWorkspaceFile_FullMethodName   = "/privatevm.v1.PrivateVMDaemonService/ImportWorkspaceFile"
+	PrivateVMDaemonService_ExportWorkspaceFile_FullMethodName   = "/privatevm.v1.PrivateVMDaemonService/ExportWorkspaceFile"
+	PrivateVMDaemonService_ClaimUSB_FullMethodName              = "/privatevm.v1.PrivateVMDaemonService/ClaimUSB"
+	PrivateVMDaemonService_ReleaseUSB_FullMethodName            = "/privatevm.v1.PrivateVMDaemonService/ReleaseUSB"
 )
 
 // PrivateVMDaemonServiceClient is the client API for PrivateVMDaemonService service.
@@ -54,6 +61,13 @@ type PrivateVMDaemonServiceClient interface {
 	InspectVPNProfile(ctx context.Context, in *VPNProfileRequest, opts ...grpc.CallOption) (*VPNProfileStatus, error)
 	TestVPNProfile(ctx context.Context, in *VPNProfileRequest, opts ...grpc.CallOption) (*VPNProfileStatus, error)
 	RemoveVPNProfile(ctx context.Context, in *VPNProfileRequest, opts ...grpc.CallOption) (*VPNProfileStatus, error)
+	AddTorrent(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[HostTorrentInputFrame, TorrentMetadata], error)
+	GetTorrentMetadata(ctx context.Context, in *TorrentControlRequest, opts ...grpc.CallOption) (*TorrentMetadata, error)
+	SelectTorrentFiles(ctx context.Context, in *HostSelectTorrentFilesRequest, opts ...grpc.CallOption) (*TorrentMetadata, error)
+	StartTorrentDownload(ctx context.Context, in *TorrentControlRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[TorrentEvent], error)
+	PauseTorrentDownload(ctx context.Context, in *TorrentControlRequest, opts ...grpc.CallOption) (*TorrentStatus, error)
+	GetTorrentStatus(ctx context.Context, in *TorrentControlRequest, opts ...grpc.CallOption) (*TorrentStatus, error)
+	SealTorrentQuarantine(ctx context.Context, in *TorrentControlRequest, opts ...grpc.CallOption) (*TorrentStatus, error)
 	StartRole(ctx context.Context, in *StartRoleRequest, opts ...grpc.CallOption) (*Session, error)
 	StopRole(ctx context.Context, in *StopRoleRequest, opts ...grpc.CallOption) (*Session, error)
 	AbortSession(ctx context.Context, in *AbortSessionRequest, opts ...grpc.CallOption) (*Session, error)
@@ -176,6 +190,88 @@ func (c *privateVMDaemonServiceClient) RemoveVPNProfile(ctx context.Context, in 
 	return out, nil
 }
 
+func (c *privateVMDaemonServiceClient) AddTorrent(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[HostTorrentInputFrame, TorrentMetadata], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &PrivateVMDaemonService_ServiceDesc.Streams[1], PrivateVMDaemonService_AddTorrent_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[HostTorrentInputFrame, TorrentMetadata]{ClientStream: stream}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type PrivateVMDaemonService_AddTorrentClient = grpc.ClientStreamingClient[HostTorrentInputFrame, TorrentMetadata]
+
+func (c *privateVMDaemonServiceClient) GetTorrentMetadata(ctx context.Context, in *TorrentControlRequest, opts ...grpc.CallOption) (*TorrentMetadata, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(TorrentMetadata)
+	err := c.cc.Invoke(ctx, PrivateVMDaemonService_GetTorrentMetadata_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *privateVMDaemonServiceClient) SelectTorrentFiles(ctx context.Context, in *HostSelectTorrentFilesRequest, opts ...grpc.CallOption) (*TorrentMetadata, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(TorrentMetadata)
+	err := c.cc.Invoke(ctx, PrivateVMDaemonService_SelectTorrentFiles_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *privateVMDaemonServiceClient) StartTorrentDownload(ctx context.Context, in *TorrentControlRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[TorrentEvent], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &PrivateVMDaemonService_ServiceDesc.Streams[2], PrivateVMDaemonService_StartTorrentDownload_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[TorrentControlRequest, TorrentEvent]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type PrivateVMDaemonService_StartTorrentDownloadClient = grpc.ServerStreamingClient[TorrentEvent]
+
+func (c *privateVMDaemonServiceClient) PauseTorrentDownload(ctx context.Context, in *TorrentControlRequest, opts ...grpc.CallOption) (*TorrentStatus, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(TorrentStatus)
+	err := c.cc.Invoke(ctx, PrivateVMDaemonService_PauseTorrentDownload_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *privateVMDaemonServiceClient) GetTorrentStatus(ctx context.Context, in *TorrentControlRequest, opts ...grpc.CallOption) (*TorrentStatus, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(TorrentStatus)
+	err := c.cc.Invoke(ctx, PrivateVMDaemonService_GetTorrentStatus_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *privateVMDaemonServiceClient) SealTorrentQuarantine(ctx context.Context, in *TorrentControlRequest, opts ...grpc.CallOption) (*TorrentStatus, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(TorrentStatus)
+	err := c.cc.Invoke(ctx, PrivateVMDaemonService_SealTorrentQuarantine_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *privateVMDaemonServiceClient) StartRole(ctx context.Context, in *StartRoleRequest, opts ...grpc.CallOption) (*Session, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(Session)
@@ -218,7 +314,7 @@ func (c *privateVMDaemonServiceClient) CleanupSession(ctx context.Context, in *C
 
 func (c *privateVMDaemonServiceClient) StreamEvents(ctx context.Context, in *GetSessionRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[SessionEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &PrivateVMDaemonService_ServiceDesc.Streams[1], PrivateVMDaemonService_StreamEvents_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &PrivateVMDaemonService_ServiceDesc.Streams[3], PrivateVMDaemonService_StreamEvents_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -237,7 +333,7 @@ type PrivateVMDaemonService_StreamEventsClient = grpc.ServerStreamingClient[Sess
 
 func (c *privateVMDaemonServiceClient) ImportWorkspaceFile(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[TransferFrame, TransferReceipt], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &PrivateVMDaemonService_ServiceDesc.Streams[2], PrivateVMDaemonService_ImportWorkspaceFile_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &PrivateVMDaemonService_ServiceDesc.Streams[4], PrivateVMDaemonService_ImportWorkspaceFile_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -250,7 +346,7 @@ type PrivateVMDaemonService_ImportWorkspaceFileClient = grpc.ClientStreamingClie
 
 func (c *privateVMDaemonServiceClient) ExportWorkspaceFile(ctx context.Context, in *ExportWorkspaceRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[TransferFrame], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &PrivateVMDaemonService_ServiceDesc.Streams[3], PrivateVMDaemonService_ExportWorkspaceFile_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &PrivateVMDaemonService_ServiceDesc.Streams[5], PrivateVMDaemonService_ExportWorkspaceFile_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -301,6 +397,13 @@ type PrivateVMDaemonServiceServer interface {
 	InspectVPNProfile(context.Context, *VPNProfileRequest) (*VPNProfileStatus, error)
 	TestVPNProfile(context.Context, *VPNProfileRequest) (*VPNProfileStatus, error)
 	RemoveVPNProfile(context.Context, *VPNProfileRequest) (*VPNProfileStatus, error)
+	AddTorrent(grpc.ClientStreamingServer[HostTorrentInputFrame, TorrentMetadata]) error
+	GetTorrentMetadata(context.Context, *TorrentControlRequest) (*TorrentMetadata, error)
+	SelectTorrentFiles(context.Context, *HostSelectTorrentFilesRequest) (*TorrentMetadata, error)
+	StartTorrentDownload(*TorrentControlRequest, grpc.ServerStreamingServer[TorrentEvent]) error
+	PauseTorrentDownload(context.Context, *TorrentControlRequest) (*TorrentStatus, error)
+	GetTorrentStatus(context.Context, *TorrentControlRequest) (*TorrentStatus, error)
+	SealTorrentQuarantine(context.Context, *TorrentControlRequest) (*TorrentStatus, error)
 	StartRole(context.Context, *StartRoleRequest) (*Session, error)
 	StopRole(context.Context, *StopRoleRequest) (*Session, error)
 	AbortSession(context.Context, *AbortSessionRequest) (*Session, error)
@@ -349,6 +452,27 @@ func (UnimplementedPrivateVMDaemonServiceServer) TestVPNProfile(context.Context,
 }
 func (UnimplementedPrivateVMDaemonServiceServer) RemoveVPNProfile(context.Context, *VPNProfileRequest) (*VPNProfileStatus, error) {
 	return nil, status.Error(codes.Unimplemented, "method RemoveVPNProfile not implemented")
+}
+func (UnimplementedPrivateVMDaemonServiceServer) AddTorrent(grpc.ClientStreamingServer[HostTorrentInputFrame, TorrentMetadata]) error {
+	return status.Error(codes.Unimplemented, "method AddTorrent not implemented")
+}
+func (UnimplementedPrivateVMDaemonServiceServer) GetTorrentMetadata(context.Context, *TorrentControlRequest) (*TorrentMetadata, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetTorrentMetadata not implemented")
+}
+func (UnimplementedPrivateVMDaemonServiceServer) SelectTorrentFiles(context.Context, *HostSelectTorrentFilesRequest) (*TorrentMetadata, error) {
+	return nil, status.Error(codes.Unimplemented, "method SelectTorrentFiles not implemented")
+}
+func (UnimplementedPrivateVMDaemonServiceServer) StartTorrentDownload(*TorrentControlRequest, grpc.ServerStreamingServer[TorrentEvent]) error {
+	return status.Error(codes.Unimplemented, "method StartTorrentDownload not implemented")
+}
+func (UnimplementedPrivateVMDaemonServiceServer) PauseTorrentDownload(context.Context, *TorrentControlRequest) (*TorrentStatus, error) {
+	return nil, status.Error(codes.Unimplemented, "method PauseTorrentDownload not implemented")
+}
+func (UnimplementedPrivateVMDaemonServiceServer) GetTorrentStatus(context.Context, *TorrentControlRequest) (*TorrentStatus, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetTorrentStatus not implemented")
+}
+func (UnimplementedPrivateVMDaemonServiceServer) SealTorrentQuarantine(context.Context, *TorrentControlRequest) (*TorrentStatus, error) {
+	return nil, status.Error(codes.Unimplemented, "method SealTorrentQuarantine not implemented")
 }
 func (UnimplementedPrivateVMDaemonServiceServer) StartRole(context.Context, *StartRoleRequest) (*Session, error) {
 	return nil, status.Error(codes.Unimplemented, "method StartRole not implemented")
@@ -568,6 +692,114 @@ func _PrivateVMDaemonService_RemoveVPNProfile_Handler(srv interface{}, ctx conte
 	return interceptor(ctx, in, info, handler)
 }
 
+func _PrivateVMDaemonService_AddTorrent_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(PrivateVMDaemonServiceServer).AddTorrent(&grpc.GenericServerStream[HostTorrentInputFrame, TorrentMetadata]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type PrivateVMDaemonService_AddTorrentServer = grpc.ClientStreamingServer[HostTorrentInputFrame, TorrentMetadata]
+
+func _PrivateVMDaemonService_GetTorrentMetadata_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(TorrentControlRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PrivateVMDaemonServiceServer).GetTorrentMetadata(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PrivateVMDaemonService_GetTorrentMetadata_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PrivateVMDaemonServiceServer).GetTorrentMetadata(ctx, req.(*TorrentControlRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PrivateVMDaemonService_SelectTorrentFiles_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(HostSelectTorrentFilesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PrivateVMDaemonServiceServer).SelectTorrentFiles(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PrivateVMDaemonService_SelectTorrentFiles_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PrivateVMDaemonServiceServer).SelectTorrentFiles(ctx, req.(*HostSelectTorrentFilesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PrivateVMDaemonService_StartTorrentDownload_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(TorrentControlRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(PrivateVMDaemonServiceServer).StartTorrentDownload(m, &grpc.GenericServerStream[TorrentControlRequest, TorrentEvent]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type PrivateVMDaemonService_StartTorrentDownloadServer = grpc.ServerStreamingServer[TorrentEvent]
+
+func _PrivateVMDaemonService_PauseTorrentDownload_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(TorrentControlRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PrivateVMDaemonServiceServer).PauseTorrentDownload(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PrivateVMDaemonService_PauseTorrentDownload_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PrivateVMDaemonServiceServer).PauseTorrentDownload(ctx, req.(*TorrentControlRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PrivateVMDaemonService_GetTorrentStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(TorrentControlRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PrivateVMDaemonServiceServer).GetTorrentStatus(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PrivateVMDaemonService_GetTorrentStatus_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PrivateVMDaemonServiceServer).GetTorrentStatus(ctx, req.(*TorrentControlRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PrivateVMDaemonService_SealTorrentQuarantine_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(TorrentControlRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PrivateVMDaemonServiceServer).SealTorrentQuarantine(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PrivateVMDaemonService_SealTorrentQuarantine_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PrivateVMDaemonServiceServer).SealTorrentQuarantine(ctx, req.(*TorrentControlRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _PrivateVMDaemonService_StartRole_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(StartRoleRequest)
 	if err := dec(in); err != nil {
@@ -749,6 +981,26 @@ var PrivateVMDaemonService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _PrivateVMDaemonService_RemoveVPNProfile_Handler,
 		},
 		{
+			MethodName: "GetTorrentMetadata",
+			Handler:    _PrivateVMDaemonService_GetTorrentMetadata_Handler,
+		},
+		{
+			MethodName: "SelectTorrentFiles",
+			Handler:    _PrivateVMDaemonService_SelectTorrentFiles_Handler,
+		},
+		{
+			MethodName: "PauseTorrentDownload",
+			Handler:    _PrivateVMDaemonService_PauseTorrentDownload_Handler,
+		},
+		{
+			MethodName: "GetTorrentStatus",
+			Handler:    _PrivateVMDaemonService_GetTorrentStatus_Handler,
+		},
+		{
+			MethodName: "SealTorrentQuarantine",
+			Handler:    _PrivateVMDaemonService_SealTorrentQuarantine_Handler,
+		},
+		{
 			MethodName: "StartRole",
 			Handler:    _PrivateVMDaemonService_StartRole_Handler,
 		},
@@ -778,6 +1030,16 @@ var PrivateVMDaemonService_ServiceDesc = grpc.ServiceDesc{
 			StreamName:    "ImportVPNProfile",
 			Handler:       _PrivateVMDaemonService_ImportVPNProfile_Handler,
 			ClientStreams: true,
+		},
+		{
+			StreamName:    "AddTorrent",
+			Handler:       _PrivateVMDaemonService_AddTorrent_Handler,
+			ClientStreams: true,
+		},
+		{
+			StreamName:    "StartTorrentDownload",
+			Handler:       _PrivateVMDaemonService_StartTorrentDownload_Handler,
+			ServerStreams: true,
 		},
 		{
 			StreamName:    "StreamEvents",

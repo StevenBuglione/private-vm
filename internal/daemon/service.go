@@ -36,6 +36,7 @@ type Service struct {
 	Profiles              *vpn.MemoryStore
 	VPNResolver           *vpn.EndpointResolver
 	Roles                 RoleOrchestrator
+	Torrents              TorrentOrchestrator
 	roleOperations        *roleOperationSet
 	afterCreate           func()
 	cleanupCanceledCreate func(context.Context, string, uint32) error
@@ -585,20 +586,25 @@ type contextualDaemonRequest interface {
 }
 
 var unarySessionRequirement = map[string]bool{
-	privatevmv1.PrivateVMDaemonService_Doctor_FullMethodName:            false,
-	privatevmv1.PrivateVMDaemonService_PlanSession_FullMethodName:       false,
-	privatevmv1.PrivateVMDaemonService_CreateSession_FullMethodName:     false,
-	privatevmv1.PrivateVMDaemonService_GetSession_FullMethodName:        true,
-	privatevmv1.PrivateVMDaemonService_ListSessions_FullMethodName:      false,
-	privatevmv1.PrivateVMDaemonService_InspectVPNProfile_FullMethodName: false,
-	privatevmv1.PrivateVMDaemonService_TestVPNProfile_FullMethodName:    false,
-	privatevmv1.PrivateVMDaemonService_RemoveVPNProfile_FullMethodName:  false,
-	privatevmv1.PrivateVMDaemonService_StartRole_FullMethodName:         true,
-	privatevmv1.PrivateVMDaemonService_StopRole_FullMethodName:          true,
-	privatevmv1.PrivateVMDaemonService_AbortSession_FullMethodName:      true,
-	privatevmv1.PrivateVMDaemonService_CleanupSession_FullMethodName:    true,
-	privatevmv1.PrivateVMDaemonService_ClaimUSB_FullMethodName:          true,
-	privatevmv1.PrivateVMDaemonService_ReleaseUSB_FullMethodName:        true,
+	privatevmv1.PrivateVMDaemonService_Doctor_FullMethodName:                false,
+	privatevmv1.PrivateVMDaemonService_PlanSession_FullMethodName:           false,
+	privatevmv1.PrivateVMDaemonService_CreateSession_FullMethodName:         false,
+	privatevmv1.PrivateVMDaemonService_GetSession_FullMethodName:            true,
+	privatevmv1.PrivateVMDaemonService_ListSessions_FullMethodName:          false,
+	privatevmv1.PrivateVMDaemonService_InspectVPNProfile_FullMethodName:     false,
+	privatevmv1.PrivateVMDaemonService_TestVPNProfile_FullMethodName:        false,
+	privatevmv1.PrivateVMDaemonService_RemoveVPNProfile_FullMethodName:      false,
+	privatevmv1.PrivateVMDaemonService_GetTorrentMetadata_FullMethodName:    true,
+	privatevmv1.PrivateVMDaemonService_SelectTorrentFiles_FullMethodName:    true,
+	privatevmv1.PrivateVMDaemonService_PauseTorrentDownload_FullMethodName:  true,
+	privatevmv1.PrivateVMDaemonService_GetTorrentStatus_FullMethodName:      true,
+	privatevmv1.PrivateVMDaemonService_SealTorrentQuarantine_FullMethodName: true,
+	privatevmv1.PrivateVMDaemonService_StartRole_FullMethodName:             true,
+	privatevmv1.PrivateVMDaemonService_StopRole_FullMethodName:              true,
+	privatevmv1.PrivateVMDaemonService_AbortSession_FullMethodName:          true,
+	privatevmv1.PrivateVMDaemonService_CleanupSession_FullMethodName:        true,
+	privatevmv1.PrivateVMDaemonService_ClaimUSB_FullMethodName:              true,
+	privatevmv1.PrivateVMDaemonService_ReleaseUSB_FullMethodName:            true,
 }
 
 func requestContextUnaryInterceptor(ctx context.Context, request any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {

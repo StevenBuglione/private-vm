@@ -32,6 +32,12 @@ construct the same intent and command ID as their canonical workflow entry
 point. The default invoker fails closed with `NOT_IMPLEMENTED` until the owning
 backlog task installs a tested orchestrator implementation.
 
+Torrent commands use the Unix daemon protocol in production. Input is read and
+destroyed by the CLI boundary, streamed in 16-KiB frames, and projected to an
+aggregate-only `TorrentStatusPayload`. The daemon's `TorrentOrchestrator`
+interface is the sole bridge to an authenticated downloader guest; it exposes
+no generic guest dialer or qBittorrent request surface.
+
 Operational command pre-run resolves an immutable `internal/config.Config`
 snapshot. The loader distinguishes absent boolean flags from explicit false
 values and maps its redacted stable errors to exit 11 without wrapping raw file

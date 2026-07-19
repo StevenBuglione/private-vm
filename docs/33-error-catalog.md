@@ -328,6 +328,8 @@ their eventual boundary.
 | Code | Exit | Safe meaning |
 |---|---:|---|
 | `TORRENT_REQUEST_INVALID` | 17 | The current state or typed request is invalid. |
+| `TORRENT_STREAM_INVALID` | 17 | The host torrent begin/chunk framing is invalid. |
+| `TORRENT_STATE_INVALID` | 17 | The active downloader is not in the required workflow state. |
 | `TORRENT_INPUT_INVALID` | 17 | Magnet/metainfo syntax or stream framing is invalid. |
 | `TORRENT_INPUT_TOO_LARGE` | 17 | Magnet or metainfo exceeded its fixed bound. |
 | `TORRENT_SOURCE_UNSAFE` | 17 | The selected metainfo file failed local regular/no-follow checks. |

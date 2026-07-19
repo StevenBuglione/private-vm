@@ -14,6 +14,7 @@ pairs = [
     ("schemas/cli-event.schema.json", "examples/cli-event.example.json", "json"),
     ("schemas/cli-success.schema.json", "examples/cli-success.example.json", "json"),
     ("schemas/cli-success.schema.json", "examples/cli-session-success.example.json", "json"),
+    ("schemas/cli-success.schema.json", "examples/cli-torrent-success.example.json", "json"),
     ("schemas/config.schema.json", "examples/config.example.toml", "toml"),
     ("schemas/policy.schema.json", "examples/policy.safe.toml", "toml"),
     ("schemas/policy.schema.json", "examples/policy.quarantine.toml", "toml"),

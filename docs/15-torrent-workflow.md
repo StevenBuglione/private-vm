@@ -32,6 +32,9 @@ hash but does not parse the file.
 - no alternate paths
 - guestd confirms qBittorrent interface binding
 
+The downloader image and Go controller share the fixed mount
+`/mnt/quarantine`; payload is restricted to `/mnt/quarantine/payload`.
+
 ## Metadata-only stage
 
 qBittorrent receives torrent paused. The guest waits for metadata but leaves all
@@ -123,6 +126,9 @@ TOR-001 through TOR-003 are implemented in the source boundary as follows:
   the CLI never parses it or sends its source path onward;
 - guest streaming accepts one input kind, 16-KiB chunks, at most 1,024 frames
   and one final marker, detaching and clearing every protobuf chunk;
+- the CLI-to-daemon stream starts with one contextual input-kind frame and ends
+  at stream EOF; the daemon never buffers the complete magnet or metainfo and
+  relays only through its typed authenticated downloader orchestrator;
 - the qBittorrent API origin and save path are compiled constants, additions
   are paused, metadata requires zero payload bytes and all file priorities are
   reset to zero before selection;
@@ -138,8 +144,20 @@ TOR-001 through TOR-003 are implemented in the source boundary as follows:
 - a scanner-ready receipt exists only after the host cleanup owner proves the
   downloader absent. Failed absence audits are retryable without resealing.
 
+The host daemon owns semantic add, metadata, selection, start/resume, pause,
+status and seal RPCs. It accepts them only for the caller's active downloader,
+serializes workflow admission, pauses on interrupted download streams, and
+invokes the independent session cleanup owner when a post-admission metadata
+operation fails. CLI machine output is aggregate-only and cannot represent
+torrent names, file paths, identifiers or hashes.
+
 The focused source suite uses only synthetic values and an in-memory
 qBittorrent HTTP fixture. Live qBittorrent version/configuration, encrypted
 quarantine block I/O, VPN packet loss, QEMU destruction and scanner attachment
 remain system acceptance gates; source tests do not report those gates as
 passed.
+
+The daemon composition root still requires the concrete role runtime to supply
+an authenticated VSOCK downloader client and exact QEMU/quarantine cleanup
+implementation. Until that provider is installed, the semantic daemon methods
+fail closed with `NOT_IMPLEMENTED`; the CLI does not bypass the daemon.

@@ -207,6 +207,13 @@ Core methods:
 - `InspectVPNProfile`
 - `TestVPNProfile`
 - `RemoveVPNProfile`
+- `AddTorrent`
+- `GetTorrentMetadata`
+- `SelectTorrentFiles`
+- `StartTorrentDownload`
+- `PauseTorrentDownload`
+- `GetTorrentStatus`
+- `SealTorrentQuarantine`
 - `StartRole`
 - `StopRole`
 - `AbortSession`
@@ -218,6 +225,14 @@ Core methods:
 - `ReleaseUSB`
 
 No arbitrary command execution method is permitted.
+
+The host torrent surface is session-scoped and downloader-only. `AddTorrent`
+starts with one contextual begin frame selecting magnet or metainfo, followed
+only by non-empty chunks of at most 16 KiB. The daemon consumes the stream
+synchronously, applies the input-kind total bound, and relays only through its
+authenticated guest orchestrator. It owns the documented downloader workflow
+transitions and never exposes a qBittorrent URL, save path, guest token, command
+or device selector.
 
 ## Guest services
 

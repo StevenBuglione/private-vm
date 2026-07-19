@@ -52,6 +52,15 @@ var workstationStartedStates = []string{
 	"WORKING",
 }
 
+var downloaderStartedStates = []string{
+	"PLANNED",
+	"SCANNER_UPDATE_PREPARED",
+	"DOWNLOADER_BOOTING",
+	"GUEST_AUTHENTICATED",
+	"VPN_CONFIGURED",
+	"VPN_VERIFIED",
+}
+
 func (s *Service) startRole(ctx context.Context, id string, ownerUID uint32) (*session.Snapshot, error) {
 	snapshot, err := s.Sessions.Get(id, ownerUID)
 	if err != nil {
@@ -60,8 +69,9 @@ func (s *Service) startRole(ctx context.Context, id string, ownerUID uint32) (*s
 	if snapshot.Phase != session.PhaseCreated {
 		return nil, session.ErrInvalidTransition
 	}
-	if snapshot.Role == session.RoleWorkstation {
-		snapshot, err = s.Sessions.TransitionWorkflow(ctx, id, ownerUID, workstationStartedStates[0])
+	startupStates := roleStartupStates(snapshot.Role)
+	if len(startupStates) > 0 {
+		snapshot, err = s.Sessions.TransitionWorkflow(ctx, id, ownerUID, startupStates[0])
 		if err != nil {
 			return nil, s.failedStart(id, ownerUID, err)
 		}
@@ -80,8 +90,8 @@ func (s *Service) startRole(ctx context.Context, id string, ownerUID uint32) (*s
 	if err != nil {
 		return nil, s.failedStart(id, ownerUID, err)
 	}
-	if snapshot.Role == session.RoleWorkstation {
-		if snapshot, err = s.Sessions.TransitionWorkflow(ctx, id, ownerUID, workstationStartedStates[1]); err != nil {
+	if len(startupStates) > 1 {
+		if snapshot, err = s.Sessions.TransitionWorkflow(ctx, id, ownerUID, startupStates[1]); err != nil {
 			return nil, s.failedStart(id, ownerUID, err)
 		}
 	}
@@ -96,8 +106,8 @@ func (s *Service) startRole(ctx context.Context, id string, ownerUID uint32) (*s
 	if err != nil {
 		return nil, s.failedStart(id, ownerUID, err)
 	}
-	if snapshot.Role == session.RoleWorkstation {
-		if snapshot, err = s.Sessions.TransitionWorkflow(ctx, id, ownerUID, workstationStartedStates[2]); err != nil {
+	if len(startupStates) > 2 {
+		if snapshot, err = s.Sessions.TransitionWorkflow(ctx, id, ownerUID, startupStates[2]); err != nil {
 			return nil, s.failedStart(id, ownerUID, err)
 		}
 	}
@@ -112,8 +122,8 @@ func (s *Service) startRole(ctx context.Context, id string, ownerUID uint32) (*s
 	if err != nil {
 		return nil, s.failedStart(id, ownerUID, err)
 	}
-	if snapshot.Role == session.RoleWorkstation {
-		for _, state := range workstationStartedStates[3:] {
+	if len(startupStates) > 3 {
+		for _, state := range startupStates[3:] {
 			snapshot, err = s.Sessions.TransitionWorkflow(ctx, id, ownerUID, state)
 			if err != nil {
 				return nil, s.failedStart(id, ownerUID, err)
@@ -121,6 +131,17 @@ func (s *Service) startRole(ctx context.Context, id string, ownerUID uint32) (*s
 		}
 	}
 	return &snapshot, nil
+}
+
+func roleStartupStates(role session.Role) []string {
+	switch role {
+	case session.RoleWorkstation:
+		return workstationStartedStates
+	case session.RoleDownloader:
+		return downloaderStartedStates
+	default:
+		return nil
+	}
 }
 
 func (s *Service) failedStart(id string, ownerUID uint32, cause error) error {

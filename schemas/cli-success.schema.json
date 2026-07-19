@@ -44,6 +44,12 @@
         "code": { "const": "SESSION_STATUS" },
         "data": { "$ref": "#/$defs/session_status" }
       }
+    },
+    {
+      "properties": {
+        "code": { "const": "TORRENT_STATUS" },
+        "data": { "$ref": "#/$defs/torrent_status" }
+      }
     }
   ],
   "$defs": {
@@ -154,6 +160,22 @@
         "workflow_state": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]{2,63}$" }
       },
       "required": ["id", "role", "phase"]
+    },
+    "torrent_status": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": { "const": 1 },
+        "state": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]{2,63}$" },
+        "completed_bytes": { "type": "integer", "minimum": 0 },
+        "total_bytes": { "type": "integer", "minimum": 0 },
+        "file_count": { "type": "integer", "minimum": 0, "maximum": 100000 },
+        "selected_count": { "type": "integer", "minimum": 0, "maximum": 100000 },
+        "payload_paused": { "type": "boolean" },
+        "code": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]{2,63}$" },
+        "remediation": { "type": "string", "minLength": 1, "maxLength": 512 }
+      },
+      "required": ["schema_version", "state", "completed_bytes", "total_bytes", "file_count", "selected_count", "payload_paused", "code", "remediation"]
     }
   }
 }

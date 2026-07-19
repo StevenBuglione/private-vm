@@ -161,6 +161,13 @@ private-vm torrent status
 private-vm torrent complete
 ```
 
+Torrent subcommands automatically select the sole active downloader owned by
+the caller and fail when none or more than one exists. They always traverse the
+Unix daemon and its session authorization boundary; the CLI never dials guest
+VSOCK directly. Machine results expose only state, byte/file counts and stable
+remediation. Torrent names, paths, hashes, peer identifiers and input values are
+omitted; exact file review remains inside the isolated downloader display.
+
 `--magnet STRING` is absent by default. A deliberately unsafe argv flag may be
 added only for debugging builds, never official release UX.
 

@@ -226,7 +226,7 @@ func (factory commandFactory) optionalSessionOperation(use string, id CommandID)
 
 func (factory commandFactory) torrent() *cobra.Command {
 	var startPolicy string
-	start := factory.operation("start", "Start a torrent workflow", "torrent.start", noArgs, func(*cobra.Command) error {
+	start := factory.operation("start", "Start a torrent workflow", CommandTorrentStart, noArgs, func(*cobra.Command) error {
 		return enum(startPolicy, "policy", "safe", "quarantine")
 	}, func([]string) Intent { return TorrentIntent{Policy: startPolicy} })
 	start.Flags().StringVar(&startPolicy, "policy", "safe", "safe or quarantine")
@@ -252,7 +252,7 @@ func (factory commandFactory) torrent() *cobra.Command {
 	add.Flags().StringVar(&torrentFile, "torrent-file", "", "stream one bounded .torrent file")
 
 	var files string
-	selectFiles := factory.operation("select", "Select torrent file indexes", "torrent.select", noArgs, func(*cobra.Command) error {
+	selectFiles := factory.operation("select", "Select torrent file indexes", CommandTorrentSelect, noArgs, func(*cobra.Command) error {
 		return validateFileSelection(files)
 	}, func([]string) Intent {
 		indexes, _ := parseFileSelection(files)
@@ -260,10 +260,15 @@ func (factory commandFactory) torrent() *cobra.Command {
 	})
 	selectFiles.Flags().StringVar(&files, "files", "", "comma-separated file indexes")
 
-	children := []*cobra.Command{start, add, factory.simple("metadata", "torrent.metadata"), selectFiles}
-	for _, name := range []string{"plan", "download", "pause", "resume", "status", "complete"} {
-		children = append(children, factory.simple(name, CommandID("torrent."+name)))
-	}
+	children := []*cobra.Command{start, add, factory.simple("metadata", CommandTorrentMetadata), selectFiles}
+	children = append(children,
+		factory.simple("plan", CommandTorrentPlan),
+		factory.simple("download", CommandTorrentDownload),
+		factory.simple("pause", CommandTorrentPause),
+		factory.simple("resume", CommandTorrentResume),
+		factory.simple("status", CommandTorrentStatus),
+		factory.simple("complete", CommandTorrentComplete),
+	)
 	return factory.group("torrent", "Acquire torrent content into quarantine", children...)
 }
 

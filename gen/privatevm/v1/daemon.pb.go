@@ -21,6 +21,55 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+type TorrentInputKind int32
+
+const (
+	TorrentInputKind_TORRENT_INPUT_KIND_UNSPECIFIED TorrentInputKind = 0
+	TorrentInputKind_TORRENT_INPUT_KIND_MAGNET      TorrentInputKind = 1
+	TorrentInputKind_TORRENT_INPUT_KIND_METAINFO    TorrentInputKind = 2
+)
+
+// Enum value maps for TorrentInputKind.
+var (
+	TorrentInputKind_name = map[int32]string{
+		0: "TORRENT_INPUT_KIND_UNSPECIFIED",
+		1: "TORRENT_INPUT_KIND_MAGNET",
+		2: "TORRENT_INPUT_KIND_METAINFO",
+	}
+	TorrentInputKind_value = map[string]int32{
+		"TORRENT_INPUT_KIND_UNSPECIFIED": 0,
+		"TORRENT_INPUT_KIND_MAGNET":      1,
+		"TORRENT_INPUT_KIND_METAINFO":    2,
+	}
+)
+
+func (x TorrentInputKind) Enum() *TorrentInputKind {
+	p := new(TorrentInputKind)
+	*p = x
+	return p
+}
+
+func (x TorrentInputKind) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (TorrentInputKind) Descriptor() protoreflect.EnumDescriptor {
+	return file_privatevm_v1_daemon_proto_enumTypes[0].Descriptor()
+}
+
+func (TorrentInputKind) Type() protoreflect.EnumType {
+	return &file_privatevm_v1_daemon_proto_enumTypes[0]
+}
+
+func (x TorrentInputKind) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use TorrentInputKind.Descriptor instead.
+func (TorrentInputKind) EnumDescriptor() ([]byte, []int) {
+	return file_privatevm_v1_daemon_proto_rawDescGZIP(), []int{0}
+}
+
 type VersionResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Version       string                 `protobuf:"bytes,1,opt,name=version,proto3" json:"version,omitempty"`
@@ -959,6 +1008,280 @@ func (x *VPNProfileStatus) GetDnsServerCount() uint32 {
 	return 0
 }
 
+type HostTorrentInputBegin struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Context       *RequestContext        `protobuf:"bytes,1,opt,name=context,proto3" json:"context,omitempty"`
+	Kind          TorrentInputKind       `protobuf:"varint,2,opt,name=kind,proto3,enum=privatevm.v1.TorrentInputKind" json:"kind,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *HostTorrentInputBegin) Reset() {
+	*x = HostTorrentInputBegin{}
+	mi := &file_privatevm_v1_daemon_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *HostTorrentInputBegin) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*HostTorrentInputBegin) ProtoMessage() {}
+
+func (x *HostTorrentInputBegin) ProtoReflect() protoreflect.Message {
+	mi := &file_privatevm_v1_daemon_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use HostTorrentInputBegin.ProtoReflect.Descriptor instead.
+func (*HostTorrentInputBegin) Descriptor() ([]byte, []int) {
+	return file_privatevm_v1_daemon_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *HostTorrentInputBegin) GetContext() *RequestContext {
+	if x != nil {
+		return x.Context
+	}
+	return nil
+}
+
+func (x *HostTorrentInputBegin) GetKind() TorrentInputKind {
+	if x != nil {
+		return x.Kind
+	}
+	return TorrentInputKind_TORRENT_INPUT_KIND_UNSPECIFIED
+}
+
+type HostTorrentChunk struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Data          []byte                 `protobuf:"bytes,1,opt,name=data,proto3" json:"data,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *HostTorrentChunk) Reset() {
+	*x = HostTorrentChunk{}
+	mi := &file_privatevm_v1_daemon_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *HostTorrentChunk) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*HostTorrentChunk) ProtoMessage() {}
+
+func (x *HostTorrentChunk) ProtoReflect() protoreflect.Message {
+	mi := &file_privatevm_v1_daemon_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use HostTorrentChunk.ProtoReflect.Descriptor instead.
+func (*HostTorrentChunk) Descriptor() ([]byte, []int) {
+	return file_privatevm_v1_daemon_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *HostTorrentChunk) GetData() []byte {
+	if x != nil {
+		return x.Data
+	}
+	return nil
+}
+
+type HostTorrentInputFrame struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Types that are valid to be assigned to Frame:
+	//
+	//	*HostTorrentInputFrame_Begin
+	//	*HostTorrentInputFrame_Chunk
+	Frame         isHostTorrentInputFrame_Frame `protobuf_oneof:"frame"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *HostTorrentInputFrame) Reset() {
+	*x = HostTorrentInputFrame{}
+	mi := &file_privatevm_v1_daemon_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *HostTorrentInputFrame) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*HostTorrentInputFrame) ProtoMessage() {}
+
+func (x *HostTorrentInputFrame) ProtoReflect() protoreflect.Message {
+	mi := &file_privatevm_v1_daemon_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use HostTorrentInputFrame.ProtoReflect.Descriptor instead.
+func (*HostTorrentInputFrame) Descriptor() ([]byte, []int) {
+	return file_privatevm_v1_daemon_proto_rawDescGZIP(), []int{17}
+}
+
+func (x *HostTorrentInputFrame) GetFrame() isHostTorrentInputFrame_Frame {
+	if x != nil {
+		return x.Frame
+	}
+	return nil
+}
+
+func (x *HostTorrentInputFrame) GetBegin() *HostTorrentInputBegin {
+	if x != nil {
+		if x, ok := x.Frame.(*HostTorrentInputFrame_Begin); ok {
+			return x.Begin
+		}
+	}
+	return nil
+}
+
+func (x *HostTorrentInputFrame) GetChunk() *HostTorrentChunk {
+	if x != nil {
+		if x, ok := x.Frame.(*HostTorrentInputFrame_Chunk); ok {
+			return x.Chunk
+		}
+	}
+	return nil
+}
+
+type isHostTorrentInputFrame_Frame interface {
+	isHostTorrentInputFrame_Frame()
+}
+
+type HostTorrentInputFrame_Begin struct {
+	Begin *HostTorrentInputBegin `protobuf:"bytes,1,opt,name=begin,proto3,oneof"`
+}
+
+type HostTorrentInputFrame_Chunk struct {
+	Chunk *HostTorrentChunk `protobuf:"bytes,2,opt,name=chunk,proto3,oneof"`
+}
+
+func (*HostTorrentInputFrame_Begin) isHostTorrentInputFrame_Frame() {}
+
+func (*HostTorrentInputFrame_Chunk) isHostTorrentInputFrame_Frame() {}
+
+type TorrentControlRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Context       *RequestContext        `protobuf:"bytes,1,opt,name=context,proto3" json:"context,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TorrentControlRequest) Reset() {
+	*x = TorrentControlRequest{}
+	mi := &file_privatevm_v1_daemon_proto_msgTypes[18]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TorrentControlRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TorrentControlRequest) ProtoMessage() {}
+
+func (x *TorrentControlRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_privatevm_v1_daemon_proto_msgTypes[18]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TorrentControlRequest.ProtoReflect.Descriptor instead.
+func (*TorrentControlRequest) Descriptor() ([]byte, []int) {
+	return file_privatevm_v1_daemon_proto_rawDescGZIP(), []int{18}
+}
+
+func (x *TorrentControlRequest) GetContext() *RequestContext {
+	if x != nil {
+		return x.Context
+	}
+	return nil
+}
+
+type HostSelectTorrentFilesRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Context       *RequestContext        `protobuf:"bytes,1,opt,name=context,proto3" json:"context,omitempty"`
+	Indexes       []uint32               `protobuf:"varint,2,rep,packed,name=indexes,proto3" json:"indexes,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *HostSelectTorrentFilesRequest) Reset() {
+	*x = HostSelectTorrentFilesRequest{}
+	mi := &file_privatevm_v1_daemon_proto_msgTypes[19]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *HostSelectTorrentFilesRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*HostSelectTorrentFilesRequest) ProtoMessage() {}
+
+func (x *HostSelectTorrentFilesRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_privatevm_v1_daemon_proto_msgTypes[19]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use HostSelectTorrentFilesRequest.ProtoReflect.Descriptor instead.
+func (*HostSelectTorrentFilesRequest) Descriptor() ([]byte, []int) {
+	return file_privatevm_v1_daemon_proto_rawDescGZIP(), []int{19}
+}
+
+func (x *HostSelectTorrentFilesRequest) GetContext() *RequestContext {
+	if x != nil {
+		return x.Context
+	}
+	return nil
+}
+
+func (x *HostSelectTorrentFilesRequest) GetIndexes() []uint32 {
+	if x != nil {
+		return x.Indexes
+	}
+	return nil
+}
+
 type StartRoleRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Context       *RequestContext        `protobuf:"bytes,1,opt,name=context,proto3" json:"context,omitempty"`
@@ -968,7 +1291,7 @@ type StartRoleRequest struct {
 
 func (x *StartRoleRequest) Reset() {
 	*x = StartRoleRequest{}
-	mi := &file_privatevm_v1_daemon_proto_msgTypes[15]
+	mi := &file_privatevm_v1_daemon_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -980,7 +1303,7 @@ func (x *StartRoleRequest) String() string {
 func (*StartRoleRequest) ProtoMessage() {}
 
 func (x *StartRoleRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_privatevm_v1_daemon_proto_msgTypes[15]
+	mi := &file_privatevm_v1_daemon_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -993,7 +1316,7 @@ func (x *StartRoleRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StartRoleRequest.ProtoReflect.Descriptor instead.
 func (*StartRoleRequest) Descriptor() ([]byte, []int) {
-	return file_privatevm_v1_daemon_proto_rawDescGZIP(), []int{15}
+	return file_privatevm_v1_daemon_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *StartRoleRequest) GetContext() *RequestContext {
@@ -1014,7 +1337,7 @@ type StopRoleRequest struct {
 
 func (x *StopRoleRequest) Reset() {
 	*x = StopRoleRequest{}
-	mi := &file_privatevm_v1_daemon_proto_msgTypes[16]
+	mi := &file_privatevm_v1_daemon_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1026,7 +1349,7 @@ func (x *StopRoleRequest) String() string {
 func (*StopRoleRequest) ProtoMessage() {}
 
 func (x *StopRoleRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_privatevm_v1_daemon_proto_msgTypes[16]
+	mi := &file_privatevm_v1_daemon_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1039,7 +1362,7 @@ func (x *StopRoleRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StopRoleRequest.ProtoReflect.Descriptor instead.
 func (*StopRoleRequest) Descriptor() ([]byte, []int) {
-	return file_privatevm_v1_daemon_proto_rawDescGZIP(), []int{16}
+	return file_privatevm_v1_daemon_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *StopRoleRequest) GetContext() *RequestContext {
@@ -1073,7 +1396,7 @@ type AbortSessionRequest struct {
 
 func (x *AbortSessionRequest) Reset() {
 	*x = AbortSessionRequest{}
-	mi := &file_privatevm_v1_daemon_proto_msgTypes[17]
+	mi := &file_privatevm_v1_daemon_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1085,7 +1408,7 @@ func (x *AbortSessionRequest) String() string {
 func (*AbortSessionRequest) ProtoMessage() {}
 
 func (x *AbortSessionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_privatevm_v1_daemon_proto_msgTypes[17]
+	mi := &file_privatevm_v1_daemon_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1098,7 +1421,7 @@ func (x *AbortSessionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AbortSessionRequest.ProtoReflect.Descriptor instead.
 func (*AbortSessionRequest) Descriptor() ([]byte, []int) {
-	return file_privatevm_v1_daemon_proto_rawDescGZIP(), []int{17}
+	return file_privatevm_v1_daemon_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *AbortSessionRequest) GetContext() *RequestContext {
@@ -1124,7 +1447,7 @@ type CleanupSessionRequest struct {
 
 func (x *CleanupSessionRequest) Reset() {
 	*x = CleanupSessionRequest{}
-	mi := &file_privatevm_v1_daemon_proto_msgTypes[18]
+	mi := &file_privatevm_v1_daemon_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1136,7 +1459,7 @@ func (x *CleanupSessionRequest) String() string {
 func (*CleanupSessionRequest) ProtoMessage() {}
 
 func (x *CleanupSessionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_privatevm_v1_daemon_proto_msgTypes[18]
+	mi := &file_privatevm_v1_daemon_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1149,7 +1472,7 @@ func (x *CleanupSessionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CleanupSessionRequest.ProtoReflect.Descriptor instead.
 func (*CleanupSessionRequest) Descriptor() ([]byte, []int) {
-	return file_privatevm_v1_daemon_proto_rawDescGZIP(), []int{18}
+	return file_privatevm_v1_daemon_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *CleanupSessionRequest) GetContext() *RequestContext {
@@ -1174,7 +1497,7 @@ type Session struct {
 
 func (x *Session) Reset() {
 	*x = Session{}
-	mi := &file_privatevm_v1_daemon_proto_msgTypes[19]
+	mi := &file_privatevm_v1_daemon_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1186,7 +1509,7 @@ func (x *Session) String() string {
 func (*Session) ProtoMessage() {}
 
 func (x *Session) ProtoReflect() protoreflect.Message {
-	mi := &file_privatevm_v1_daemon_proto_msgTypes[19]
+	mi := &file_privatevm_v1_daemon_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1199,7 +1522,7 @@ func (x *Session) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Session.ProtoReflect.Descriptor instead.
 func (*Session) Descriptor() ([]byte, []int) {
-	return file_privatevm_v1_daemon_proto_rawDescGZIP(), []int{19}
+	return file_privatevm_v1_daemon_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *Session) GetId() string {
@@ -1266,7 +1589,7 @@ type SessionEvent struct {
 
 func (x *SessionEvent) Reset() {
 	*x = SessionEvent{}
-	mi := &file_privatevm_v1_daemon_proto_msgTypes[20]
+	mi := &file_privatevm_v1_daemon_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1278,7 +1601,7 @@ func (x *SessionEvent) String() string {
 func (*SessionEvent) ProtoMessage() {}
 
 func (x *SessionEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_privatevm_v1_daemon_proto_msgTypes[20]
+	mi := &file_privatevm_v1_daemon_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1291,7 +1614,7 @@ func (x *SessionEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SessionEvent.ProtoReflect.Descriptor instead.
 func (*SessionEvent) Descriptor() ([]byte, []int) {
-	return file_privatevm_v1_daemon_proto_rawDescGZIP(), []int{20}
+	return file_privatevm_v1_daemon_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *SessionEvent) GetSequence() uint64 {
@@ -1353,7 +1676,7 @@ type ExportWorkspaceRequest struct {
 
 func (x *ExportWorkspaceRequest) Reset() {
 	*x = ExportWorkspaceRequest{}
-	mi := &file_privatevm_v1_daemon_proto_msgTypes[21]
+	mi := &file_privatevm_v1_daemon_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1365,7 +1688,7 @@ func (x *ExportWorkspaceRequest) String() string {
 func (*ExportWorkspaceRequest) ProtoMessage() {}
 
 func (x *ExportWorkspaceRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_privatevm_v1_daemon_proto_msgTypes[21]
+	mi := &file_privatevm_v1_daemon_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1378,7 +1701,7 @@ func (x *ExportWorkspaceRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ExportWorkspaceRequest.ProtoReflect.Descriptor instead.
 func (*ExportWorkspaceRequest) Descriptor() ([]byte, []int) {
-	return file_privatevm_v1_daemon_proto_rawDescGZIP(), []int{21}
+	return file_privatevm_v1_daemon_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *ExportWorkspaceRequest) GetContext() *RequestContext {
@@ -1405,7 +1728,7 @@ type ClaimUSBRequest struct {
 
 func (x *ClaimUSBRequest) Reset() {
 	*x = ClaimUSBRequest{}
-	mi := &file_privatevm_v1_daemon_proto_msgTypes[22]
+	mi := &file_privatevm_v1_daemon_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1417,7 +1740,7 @@ func (x *ClaimUSBRequest) String() string {
 func (*ClaimUSBRequest) ProtoMessage() {}
 
 func (x *ClaimUSBRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_privatevm_v1_daemon_proto_msgTypes[22]
+	mi := &file_privatevm_v1_daemon_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1430,7 +1753,7 @@ func (x *ClaimUSBRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ClaimUSBRequest.ProtoReflect.Descriptor instead.
 func (*ClaimUSBRequest) Descriptor() ([]byte, []int) {
-	return file_privatevm_v1_daemon_proto_rawDescGZIP(), []int{22}
+	return file_privatevm_v1_daemon_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *ClaimUSBRequest) GetContext() *RequestContext {
@@ -1457,7 +1780,7 @@ type USBClaim struct {
 
 func (x *USBClaim) Reset() {
 	*x = USBClaim{}
-	mi := &file_privatevm_v1_daemon_proto_msgTypes[23]
+	mi := &file_privatevm_v1_daemon_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1469,7 +1792,7 @@ func (x *USBClaim) String() string {
 func (*USBClaim) ProtoMessage() {}
 
 func (x *USBClaim) ProtoReflect() protoreflect.Message {
-	mi := &file_privatevm_v1_daemon_proto_msgTypes[23]
+	mi := &file_privatevm_v1_daemon_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1482,7 +1805,7 @@ func (x *USBClaim) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use USBClaim.ProtoReflect.Descriptor instead.
 func (*USBClaim) Descriptor() ([]byte, []int) {
-	return file_privatevm_v1_daemon_proto_rawDescGZIP(), []int{23}
+	return file_privatevm_v1_daemon_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *USBClaim) GetClaimId() string {
@@ -1509,7 +1832,7 @@ type ReleaseUSBRequest struct {
 
 func (x *ReleaseUSBRequest) Reset() {
 	*x = ReleaseUSBRequest{}
-	mi := &file_privatevm_v1_daemon_proto_msgTypes[24]
+	mi := &file_privatevm_v1_daemon_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1521,7 +1844,7 @@ func (x *ReleaseUSBRequest) String() string {
 func (*ReleaseUSBRequest) ProtoMessage() {}
 
 func (x *ReleaseUSBRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_privatevm_v1_daemon_proto_msgTypes[24]
+	mi := &file_privatevm_v1_daemon_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1534,7 +1857,7 @@ func (x *ReleaseUSBRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReleaseUSBRequest.ProtoReflect.Descriptor instead.
 func (*ReleaseUSBRequest) Descriptor() ([]byte, []int) {
-	return file_privatevm_v1_daemon_proto_rawDescGZIP(), []int{24}
+	return file_privatevm_v1_daemon_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *ReleaseUSBRequest) GetContext() *RequestContext {
@@ -1555,7 +1878,7 @@ var File_privatevm_v1_daemon_proto protoreflect.FileDescriptor
 
 const file_privatevm_v1_daemon_proto_rawDesc = "" +
 	"\n" +
-	"\x19privatevm/v1/daemon.proto\x12\fprivatevm.v1\x1a\x19privatevm/v1/common.proto\"~\n" +
+	"\x19privatevm/v1/daemon.proto\x12\fprivatevm.v1\x1a\x19privatevm/v1/common.proto\x1a\x18privatevm/v1/guest.proto\"~\n" +
 	"\x0fVersionResponse\x12\x18\n" +
 	"\aversion\x18\x01 \x01(\tR\aversion\x12\x16\n" +
 	"\x06commit\x18\x02 \x01(\tR\x06commit\x129\n" +
@@ -1624,7 +1947,21 @@ const file_privatevm_v1_daemon_proto_rawDesc = "" +
 	"\fipv6_enabled\x18\b \x01(\bR\vipv6Enabled\x126\n" +
 	"\x17interface_address_count\x18\t \x01(\rR\x15interfaceAddressCount\x12(\n" +
 	"\x10dns_server_count\x18\n" +
-	" \x01(\rR\x0ednsServerCount\"J\n" +
+	" \x01(\rR\x0ednsServerCount\"\x83\x01\n" +
+	"\x15HostTorrentInputBegin\x126\n" +
+	"\acontext\x18\x01 \x01(\v2\x1c.privatevm.v1.RequestContextR\acontext\x122\n" +
+	"\x04kind\x18\x02 \x01(\x0e2\x1e.privatevm.v1.TorrentInputKindR\x04kind\"&\n" +
+	"\x10HostTorrentChunk\x12\x12\n" +
+	"\x04data\x18\x01 \x01(\fR\x04data\"\x95\x01\n" +
+	"\x15HostTorrentInputFrame\x12;\n" +
+	"\x05begin\x18\x01 \x01(\v2#.privatevm.v1.HostTorrentInputBeginH\x00R\x05begin\x126\n" +
+	"\x05chunk\x18\x02 \x01(\v2\x1e.privatevm.v1.HostTorrentChunkH\x00R\x05chunkB\a\n" +
+	"\x05frame\"O\n" +
+	"\x15TorrentControlRequest\x126\n" +
+	"\acontext\x18\x01 \x01(\v2\x1c.privatevm.v1.RequestContextR\acontext\"q\n" +
+	"\x1dHostSelectTorrentFilesRequest\x126\n" +
+	"\acontext\x18\x01 \x01(\v2\x1c.privatevm.v1.RequestContextR\acontext\x12\x18\n" +
+	"\aindexes\x18\x02 \x03(\rR\aindexes\"J\n" +
 	"\x10StartRoleRequest\x126\n" +
 	"\acontext\x18\x01 \x01(\v2\x1c.privatevm.v1.RequestContextR\acontext\"\x9d\x01\n" +
 	"\x0fStopRoleRequest\x126\n" +
@@ -1668,7 +2005,11 @@ const file_privatevm_v1_daemon_proto_rawDesc = "" +
 	"\renrollment_id\x18\x02 \x01(\tR\fenrollmentId\"f\n" +
 	"\x11ReleaseUSBRequest\x126\n" +
 	"\acontext\x18\x01 \x01(\v2\x1c.privatevm.v1.RequestContextR\acontext\x12\x19\n" +
-	"\bclaim_id\x18\x02 \x01(\tR\aclaimId2\xda\v\n" +
+	"\bclaim_id\x18\x02 \x01(\tR\aclaimId*v\n" +
+	"\x10TorrentInputKind\x12\"\n" +
+	"\x1eTORRENT_INPUT_KIND_UNSPECIFIED\x10\x00\x12\x1d\n" +
+	"\x19TORRENT_INPUT_KIND_MAGNET\x10\x01\x12\x1f\n" +
+	"\x1bTORRENT_INPUT_KIND_METAINFO\x10\x022\xd0\x10\n" +
 	"\x16PrivateVMDaemonService\x12@\n" +
 	"\n" +
 	"GetVersion\x12\x13.privatevm.v1.Empty\x1a\x1d.privatevm.v1.VersionResponse\x12C\n" +
@@ -1681,7 +2022,15 @@ const file_privatevm_v1_daemon_proto_rawDesc = "" +
 	"\x10ImportVPNProfile\x12#.privatevm.v1.VPNProfileImportFrame\x1a\x1e.privatevm.v1.VPNProfileStatus(\x01\x12T\n" +
 	"\x11InspectVPNProfile\x12\x1f.privatevm.v1.VPNProfileRequest\x1a\x1e.privatevm.v1.VPNProfileStatus\x12Q\n" +
 	"\x0eTestVPNProfile\x12\x1f.privatevm.v1.VPNProfileRequest\x1a\x1e.privatevm.v1.VPNProfileStatus\x12S\n" +
-	"\x10RemoveVPNProfile\x12\x1f.privatevm.v1.VPNProfileRequest\x1a\x1e.privatevm.v1.VPNProfileStatus\x12B\n" +
+	"\x10RemoveVPNProfile\x12\x1f.privatevm.v1.VPNProfileRequest\x1a\x1e.privatevm.v1.VPNProfileStatus\x12R\n" +
+	"\n" +
+	"AddTorrent\x12#.privatevm.v1.HostTorrentInputFrame\x1a\x1d.privatevm.v1.TorrentMetadata(\x01\x12X\n" +
+	"\x12GetTorrentMetadata\x12#.privatevm.v1.TorrentControlRequest\x1a\x1d.privatevm.v1.TorrentMetadata\x12`\n" +
+	"\x12SelectTorrentFiles\x12+.privatevm.v1.HostSelectTorrentFilesRequest\x1a\x1d.privatevm.v1.TorrentMetadata\x12Y\n" +
+	"\x14StartTorrentDownload\x12#.privatevm.v1.TorrentControlRequest\x1a\x1a.privatevm.v1.TorrentEvent0\x01\x12X\n" +
+	"\x14PauseTorrentDownload\x12#.privatevm.v1.TorrentControlRequest\x1a\x1b.privatevm.v1.TorrentStatus\x12T\n" +
+	"\x10GetTorrentStatus\x12#.privatevm.v1.TorrentControlRequest\x1a\x1b.privatevm.v1.TorrentStatus\x12Y\n" +
+	"\x15SealTorrentQuarantine\x12#.privatevm.v1.TorrentControlRequest\x1a\x1b.privatevm.v1.TorrentStatus\x12B\n" +
 	"\tStartRole\x12\x1e.privatevm.v1.StartRoleRequest\x1a\x15.privatevm.v1.Session\x12@\n" +
 	"\bStopRole\x12\x1d.privatevm.v1.StopRoleRequest\x1a\x15.privatevm.v1.Session\x12H\n" +
 	"\fAbortSession\x12!.privatevm.v1.AbortSessionRequest\x1a\x15.privatevm.v1.Session\x12L\n" +
@@ -1705,118 +2054,148 @@ func file_privatevm_v1_daemon_proto_rawDescGZIP() []byte {
 	return file_privatevm_v1_daemon_proto_rawDescData
 }
 
-var file_privatevm_v1_daemon_proto_msgTypes = make([]protoimpl.MessageInfo, 25)
+var file_privatevm_v1_daemon_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
+var file_privatevm_v1_daemon_proto_msgTypes = make([]protoimpl.MessageInfo, 30)
 var file_privatevm_v1_daemon_proto_goTypes = []any{
-	(*VersionResponse)(nil),        // 0: privatevm.v1.VersionResponse
-	(*DoctorRequest)(nil),          // 1: privatevm.v1.DoctorRequest
-	(*DoctorResponse)(nil),         // 2: privatevm.v1.DoctorResponse
-	(*ResourceRequest)(nil),        // 3: privatevm.v1.ResourceRequest
-	(*PlanSessionRequest)(nil),     // 4: privatevm.v1.PlanSessionRequest
-	(*PlanSessionResponse)(nil),    // 5: privatevm.v1.PlanSessionResponse
-	(*CreateSessionRequest)(nil),   // 6: privatevm.v1.CreateSessionRequest
-	(*GetSessionRequest)(nil),      // 7: privatevm.v1.GetSessionRequest
-	(*ListSessionsRequest)(nil),    // 8: privatevm.v1.ListSessionsRequest
-	(*ListSessionsResponse)(nil),   // 9: privatevm.v1.ListSessionsResponse
-	(*VPNProfileImportBegin)(nil),  // 10: privatevm.v1.VPNProfileImportBegin
-	(*VPNProfileChunk)(nil),        // 11: privatevm.v1.VPNProfileChunk
-	(*VPNProfileImportFrame)(nil),  // 12: privatevm.v1.VPNProfileImportFrame
-	(*VPNProfileRequest)(nil),      // 13: privatevm.v1.VPNProfileRequest
-	(*VPNProfileStatus)(nil),       // 14: privatevm.v1.VPNProfileStatus
-	(*StartRoleRequest)(nil),       // 15: privatevm.v1.StartRoleRequest
-	(*StopRoleRequest)(nil),        // 16: privatevm.v1.StopRoleRequest
-	(*AbortSessionRequest)(nil),    // 17: privatevm.v1.AbortSessionRequest
-	(*CleanupSessionRequest)(nil),  // 18: privatevm.v1.CleanupSessionRequest
-	(*Session)(nil),                // 19: privatevm.v1.Session
-	(*SessionEvent)(nil),           // 20: privatevm.v1.SessionEvent
-	(*ExportWorkspaceRequest)(nil), // 21: privatevm.v1.ExportWorkspaceRequest
-	(*ClaimUSBRequest)(nil),        // 22: privatevm.v1.ClaimUSBRequest
-	(*USBClaim)(nil),               // 23: privatevm.v1.USBClaim
-	(*ReleaseUSBRequest)(nil),      // 24: privatevm.v1.ReleaseUSBRequest
-	(*ApiVersion)(nil),             // 25: privatevm.v1.ApiVersion
-	(*RequestContext)(nil),         // 26: privatevm.v1.RequestContext
-	(*Diagnostic)(nil),             // 27: privatevm.v1.Diagnostic
-	(GuestRole)(0),                 // 28: privatevm.v1.GuestRole
-	(SessionPhase)(0),              // 29: privatevm.v1.SessionPhase
-	(*Progress)(nil),               // 30: privatevm.v1.Progress
-	(*Empty)(nil),                  // 31: privatevm.v1.Empty
-	(*TransferFrame)(nil),          // 32: privatevm.v1.TransferFrame
-	(*TransferReceipt)(nil),        // 33: privatevm.v1.TransferReceipt
+	(TorrentInputKind)(0),                 // 0: privatevm.v1.TorrentInputKind
+	(*VersionResponse)(nil),               // 1: privatevm.v1.VersionResponse
+	(*DoctorRequest)(nil),                 // 2: privatevm.v1.DoctorRequest
+	(*DoctorResponse)(nil),                // 3: privatevm.v1.DoctorResponse
+	(*ResourceRequest)(nil),               // 4: privatevm.v1.ResourceRequest
+	(*PlanSessionRequest)(nil),            // 5: privatevm.v1.PlanSessionRequest
+	(*PlanSessionResponse)(nil),           // 6: privatevm.v1.PlanSessionResponse
+	(*CreateSessionRequest)(nil),          // 7: privatevm.v1.CreateSessionRequest
+	(*GetSessionRequest)(nil),             // 8: privatevm.v1.GetSessionRequest
+	(*ListSessionsRequest)(nil),           // 9: privatevm.v1.ListSessionsRequest
+	(*ListSessionsResponse)(nil),          // 10: privatevm.v1.ListSessionsResponse
+	(*VPNProfileImportBegin)(nil),         // 11: privatevm.v1.VPNProfileImportBegin
+	(*VPNProfileChunk)(nil),               // 12: privatevm.v1.VPNProfileChunk
+	(*VPNProfileImportFrame)(nil),         // 13: privatevm.v1.VPNProfileImportFrame
+	(*VPNProfileRequest)(nil),             // 14: privatevm.v1.VPNProfileRequest
+	(*VPNProfileStatus)(nil),              // 15: privatevm.v1.VPNProfileStatus
+	(*HostTorrentInputBegin)(nil),         // 16: privatevm.v1.HostTorrentInputBegin
+	(*HostTorrentChunk)(nil),              // 17: privatevm.v1.HostTorrentChunk
+	(*HostTorrentInputFrame)(nil),         // 18: privatevm.v1.HostTorrentInputFrame
+	(*TorrentControlRequest)(nil),         // 19: privatevm.v1.TorrentControlRequest
+	(*HostSelectTorrentFilesRequest)(nil), // 20: privatevm.v1.HostSelectTorrentFilesRequest
+	(*StartRoleRequest)(nil),              // 21: privatevm.v1.StartRoleRequest
+	(*StopRoleRequest)(nil),               // 22: privatevm.v1.StopRoleRequest
+	(*AbortSessionRequest)(nil),           // 23: privatevm.v1.AbortSessionRequest
+	(*CleanupSessionRequest)(nil),         // 24: privatevm.v1.CleanupSessionRequest
+	(*Session)(nil),                       // 25: privatevm.v1.Session
+	(*SessionEvent)(nil),                  // 26: privatevm.v1.SessionEvent
+	(*ExportWorkspaceRequest)(nil),        // 27: privatevm.v1.ExportWorkspaceRequest
+	(*ClaimUSBRequest)(nil),               // 28: privatevm.v1.ClaimUSBRequest
+	(*USBClaim)(nil),                      // 29: privatevm.v1.USBClaim
+	(*ReleaseUSBRequest)(nil),             // 30: privatevm.v1.ReleaseUSBRequest
+	(*ApiVersion)(nil),                    // 31: privatevm.v1.ApiVersion
+	(*RequestContext)(nil),                // 32: privatevm.v1.RequestContext
+	(*Diagnostic)(nil),                    // 33: privatevm.v1.Diagnostic
+	(GuestRole)(0),                        // 34: privatevm.v1.GuestRole
+	(SessionPhase)(0),                     // 35: privatevm.v1.SessionPhase
+	(*Progress)(nil),                      // 36: privatevm.v1.Progress
+	(*Empty)(nil),                         // 37: privatevm.v1.Empty
+	(*TransferFrame)(nil),                 // 38: privatevm.v1.TransferFrame
+	(*TorrentMetadata)(nil),               // 39: privatevm.v1.TorrentMetadata
+	(*TorrentEvent)(nil),                  // 40: privatevm.v1.TorrentEvent
+	(*TorrentStatus)(nil),                 // 41: privatevm.v1.TorrentStatus
+	(*TransferReceipt)(nil),               // 42: privatevm.v1.TransferReceipt
 }
 var file_privatevm_v1_daemon_proto_depIdxs = []int32{
-	25, // 0: privatevm.v1.VersionResponse.api_version:type_name -> privatevm.v1.ApiVersion
-	26, // 1: privatevm.v1.DoctorRequest.context:type_name -> privatevm.v1.RequestContext
-	27, // 2: privatevm.v1.DoctorResponse.diagnostics:type_name -> privatevm.v1.Diagnostic
-	26, // 3: privatevm.v1.PlanSessionRequest.context:type_name -> privatevm.v1.RequestContext
-	28, // 4: privatevm.v1.PlanSessionRequest.role:type_name -> privatevm.v1.GuestRole
-	3,  // 5: privatevm.v1.PlanSessionRequest.resources:type_name -> privatevm.v1.ResourceRequest
-	27, // 6: privatevm.v1.PlanSessionResponse.diagnostics:type_name -> privatevm.v1.Diagnostic
-	3,  // 7: privatevm.v1.PlanSessionResponse.resolved_resources:type_name -> privatevm.v1.ResourceRequest
-	26, // 8: privatevm.v1.CreateSessionRequest.context:type_name -> privatevm.v1.RequestContext
-	28, // 9: privatevm.v1.CreateSessionRequest.role:type_name -> privatevm.v1.GuestRole
-	3,  // 10: privatevm.v1.CreateSessionRequest.resources:type_name -> privatevm.v1.ResourceRequest
-	26, // 11: privatevm.v1.GetSessionRequest.context:type_name -> privatevm.v1.RequestContext
-	26, // 12: privatevm.v1.ListSessionsRequest.context:type_name -> privatevm.v1.RequestContext
-	19, // 13: privatevm.v1.ListSessionsResponse.sessions:type_name -> privatevm.v1.Session
-	26, // 14: privatevm.v1.VPNProfileImportBegin.context:type_name -> privatevm.v1.RequestContext
-	10, // 15: privatevm.v1.VPNProfileImportFrame.begin:type_name -> privatevm.v1.VPNProfileImportBegin
-	11, // 16: privatevm.v1.VPNProfileImportFrame.chunk:type_name -> privatevm.v1.VPNProfileChunk
-	26, // 17: privatevm.v1.VPNProfileRequest.context:type_name -> privatevm.v1.RequestContext
-	26, // 18: privatevm.v1.StartRoleRequest.context:type_name -> privatevm.v1.RequestContext
-	26, // 19: privatevm.v1.StopRoleRequest.context:type_name -> privatevm.v1.RequestContext
-	26, // 20: privatevm.v1.AbortSessionRequest.context:type_name -> privatevm.v1.RequestContext
-	26, // 21: privatevm.v1.CleanupSessionRequest.context:type_name -> privatevm.v1.RequestContext
-	28, // 22: privatevm.v1.Session.role:type_name -> privatevm.v1.GuestRole
-	29, // 23: privatevm.v1.Session.phase:type_name -> privatevm.v1.SessionPhase
-	27, // 24: privatevm.v1.Session.diagnostics:type_name -> privatevm.v1.Diagnostic
-	19, // 25: privatevm.v1.SessionEvent.session:type_name -> privatevm.v1.Session
-	30, // 26: privatevm.v1.SessionEvent.progress:type_name -> privatevm.v1.Progress
-	27, // 27: privatevm.v1.SessionEvent.diagnostic:type_name -> privatevm.v1.Diagnostic
-	26, // 28: privatevm.v1.ExportWorkspaceRequest.context:type_name -> privatevm.v1.RequestContext
-	26, // 29: privatevm.v1.ClaimUSBRequest.context:type_name -> privatevm.v1.RequestContext
-	26, // 30: privatevm.v1.ReleaseUSBRequest.context:type_name -> privatevm.v1.RequestContext
-	31, // 31: privatevm.v1.PrivateVMDaemonService.GetVersion:input_type -> privatevm.v1.Empty
-	1,  // 32: privatevm.v1.PrivateVMDaemonService.Doctor:input_type -> privatevm.v1.DoctorRequest
-	4,  // 33: privatevm.v1.PrivateVMDaemonService.PlanSession:input_type -> privatevm.v1.PlanSessionRequest
-	6,  // 34: privatevm.v1.PrivateVMDaemonService.CreateSession:input_type -> privatevm.v1.CreateSessionRequest
-	7,  // 35: privatevm.v1.PrivateVMDaemonService.GetSession:input_type -> privatevm.v1.GetSessionRequest
-	8,  // 36: privatevm.v1.PrivateVMDaemonService.ListSessions:input_type -> privatevm.v1.ListSessionsRequest
-	12, // 37: privatevm.v1.PrivateVMDaemonService.ImportVPNProfile:input_type -> privatevm.v1.VPNProfileImportFrame
-	13, // 38: privatevm.v1.PrivateVMDaemonService.InspectVPNProfile:input_type -> privatevm.v1.VPNProfileRequest
-	13, // 39: privatevm.v1.PrivateVMDaemonService.TestVPNProfile:input_type -> privatevm.v1.VPNProfileRequest
-	13, // 40: privatevm.v1.PrivateVMDaemonService.RemoveVPNProfile:input_type -> privatevm.v1.VPNProfileRequest
-	15, // 41: privatevm.v1.PrivateVMDaemonService.StartRole:input_type -> privatevm.v1.StartRoleRequest
-	16, // 42: privatevm.v1.PrivateVMDaemonService.StopRole:input_type -> privatevm.v1.StopRoleRequest
-	17, // 43: privatevm.v1.PrivateVMDaemonService.AbortSession:input_type -> privatevm.v1.AbortSessionRequest
-	18, // 44: privatevm.v1.PrivateVMDaemonService.CleanupSession:input_type -> privatevm.v1.CleanupSessionRequest
-	7,  // 45: privatevm.v1.PrivateVMDaemonService.StreamEvents:input_type -> privatevm.v1.GetSessionRequest
-	32, // 46: privatevm.v1.PrivateVMDaemonService.ImportWorkspaceFile:input_type -> privatevm.v1.TransferFrame
-	21, // 47: privatevm.v1.PrivateVMDaemonService.ExportWorkspaceFile:input_type -> privatevm.v1.ExportWorkspaceRequest
-	22, // 48: privatevm.v1.PrivateVMDaemonService.ClaimUSB:input_type -> privatevm.v1.ClaimUSBRequest
-	24, // 49: privatevm.v1.PrivateVMDaemonService.ReleaseUSB:input_type -> privatevm.v1.ReleaseUSBRequest
-	0,  // 50: privatevm.v1.PrivateVMDaemonService.GetVersion:output_type -> privatevm.v1.VersionResponse
-	2,  // 51: privatevm.v1.PrivateVMDaemonService.Doctor:output_type -> privatevm.v1.DoctorResponse
-	5,  // 52: privatevm.v1.PrivateVMDaemonService.PlanSession:output_type -> privatevm.v1.PlanSessionResponse
-	19, // 53: privatevm.v1.PrivateVMDaemonService.CreateSession:output_type -> privatevm.v1.Session
-	19, // 54: privatevm.v1.PrivateVMDaemonService.GetSession:output_type -> privatevm.v1.Session
-	9,  // 55: privatevm.v1.PrivateVMDaemonService.ListSessions:output_type -> privatevm.v1.ListSessionsResponse
-	14, // 56: privatevm.v1.PrivateVMDaemonService.ImportVPNProfile:output_type -> privatevm.v1.VPNProfileStatus
-	14, // 57: privatevm.v1.PrivateVMDaemonService.InspectVPNProfile:output_type -> privatevm.v1.VPNProfileStatus
-	14, // 58: privatevm.v1.PrivateVMDaemonService.TestVPNProfile:output_type -> privatevm.v1.VPNProfileStatus
-	14, // 59: privatevm.v1.PrivateVMDaemonService.RemoveVPNProfile:output_type -> privatevm.v1.VPNProfileStatus
-	19, // 60: privatevm.v1.PrivateVMDaemonService.StartRole:output_type -> privatevm.v1.Session
-	19, // 61: privatevm.v1.PrivateVMDaemonService.StopRole:output_type -> privatevm.v1.Session
-	19, // 62: privatevm.v1.PrivateVMDaemonService.AbortSession:output_type -> privatevm.v1.Session
-	19, // 63: privatevm.v1.PrivateVMDaemonService.CleanupSession:output_type -> privatevm.v1.Session
-	20, // 64: privatevm.v1.PrivateVMDaemonService.StreamEvents:output_type -> privatevm.v1.SessionEvent
-	33, // 65: privatevm.v1.PrivateVMDaemonService.ImportWorkspaceFile:output_type -> privatevm.v1.TransferReceipt
-	32, // 66: privatevm.v1.PrivateVMDaemonService.ExportWorkspaceFile:output_type -> privatevm.v1.TransferFrame
-	23, // 67: privatevm.v1.PrivateVMDaemonService.ClaimUSB:output_type -> privatevm.v1.USBClaim
-	31, // 68: privatevm.v1.PrivateVMDaemonService.ReleaseUSB:output_type -> privatevm.v1.Empty
-	50, // [50:69] is the sub-list for method output_type
-	31, // [31:50] is the sub-list for method input_type
-	31, // [31:31] is the sub-list for extension type_name
-	31, // [31:31] is the sub-list for extension extendee
-	0,  // [0:31] is the sub-list for field type_name
+	31, // 0: privatevm.v1.VersionResponse.api_version:type_name -> privatevm.v1.ApiVersion
+	32, // 1: privatevm.v1.DoctorRequest.context:type_name -> privatevm.v1.RequestContext
+	33, // 2: privatevm.v1.DoctorResponse.diagnostics:type_name -> privatevm.v1.Diagnostic
+	32, // 3: privatevm.v1.PlanSessionRequest.context:type_name -> privatevm.v1.RequestContext
+	34, // 4: privatevm.v1.PlanSessionRequest.role:type_name -> privatevm.v1.GuestRole
+	4,  // 5: privatevm.v1.PlanSessionRequest.resources:type_name -> privatevm.v1.ResourceRequest
+	33, // 6: privatevm.v1.PlanSessionResponse.diagnostics:type_name -> privatevm.v1.Diagnostic
+	4,  // 7: privatevm.v1.PlanSessionResponse.resolved_resources:type_name -> privatevm.v1.ResourceRequest
+	32, // 8: privatevm.v1.CreateSessionRequest.context:type_name -> privatevm.v1.RequestContext
+	34, // 9: privatevm.v1.CreateSessionRequest.role:type_name -> privatevm.v1.GuestRole
+	4,  // 10: privatevm.v1.CreateSessionRequest.resources:type_name -> privatevm.v1.ResourceRequest
+	32, // 11: privatevm.v1.GetSessionRequest.context:type_name -> privatevm.v1.RequestContext
+	32, // 12: privatevm.v1.ListSessionsRequest.context:type_name -> privatevm.v1.RequestContext
+	25, // 13: privatevm.v1.ListSessionsResponse.sessions:type_name -> privatevm.v1.Session
+	32, // 14: privatevm.v1.VPNProfileImportBegin.context:type_name -> privatevm.v1.RequestContext
+	11, // 15: privatevm.v1.VPNProfileImportFrame.begin:type_name -> privatevm.v1.VPNProfileImportBegin
+	12, // 16: privatevm.v1.VPNProfileImportFrame.chunk:type_name -> privatevm.v1.VPNProfileChunk
+	32, // 17: privatevm.v1.VPNProfileRequest.context:type_name -> privatevm.v1.RequestContext
+	32, // 18: privatevm.v1.HostTorrentInputBegin.context:type_name -> privatevm.v1.RequestContext
+	0,  // 19: privatevm.v1.HostTorrentInputBegin.kind:type_name -> privatevm.v1.TorrentInputKind
+	16, // 20: privatevm.v1.HostTorrentInputFrame.begin:type_name -> privatevm.v1.HostTorrentInputBegin
+	17, // 21: privatevm.v1.HostTorrentInputFrame.chunk:type_name -> privatevm.v1.HostTorrentChunk
+	32, // 22: privatevm.v1.TorrentControlRequest.context:type_name -> privatevm.v1.RequestContext
+	32, // 23: privatevm.v1.HostSelectTorrentFilesRequest.context:type_name -> privatevm.v1.RequestContext
+	32, // 24: privatevm.v1.StartRoleRequest.context:type_name -> privatevm.v1.RequestContext
+	32, // 25: privatevm.v1.StopRoleRequest.context:type_name -> privatevm.v1.RequestContext
+	32, // 26: privatevm.v1.AbortSessionRequest.context:type_name -> privatevm.v1.RequestContext
+	32, // 27: privatevm.v1.CleanupSessionRequest.context:type_name -> privatevm.v1.RequestContext
+	34, // 28: privatevm.v1.Session.role:type_name -> privatevm.v1.GuestRole
+	35, // 29: privatevm.v1.Session.phase:type_name -> privatevm.v1.SessionPhase
+	33, // 30: privatevm.v1.Session.diagnostics:type_name -> privatevm.v1.Diagnostic
+	25, // 31: privatevm.v1.SessionEvent.session:type_name -> privatevm.v1.Session
+	36, // 32: privatevm.v1.SessionEvent.progress:type_name -> privatevm.v1.Progress
+	33, // 33: privatevm.v1.SessionEvent.diagnostic:type_name -> privatevm.v1.Diagnostic
+	32, // 34: privatevm.v1.ExportWorkspaceRequest.context:type_name -> privatevm.v1.RequestContext
+	32, // 35: privatevm.v1.ClaimUSBRequest.context:type_name -> privatevm.v1.RequestContext
+	32, // 36: privatevm.v1.ReleaseUSBRequest.context:type_name -> privatevm.v1.RequestContext
+	37, // 37: privatevm.v1.PrivateVMDaemonService.GetVersion:input_type -> privatevm.v1.Empty
+	2,  // 38: privatevm.v1.PrivateVMDaemonService.Doctor:input_type -> privatevm.v1.DoctorRequest
+	5,  // 39: privatevm.v1.PrivateVMDaemonService.PlanSession:input_type -> privatevm.v1.PlanSessionRequest
+	7,  // 40: privatevm.v1.PrivateVMDaemonService.CreateSession:input_type -> privatevm.v1.CreateSessionRequest
+	8,  // 41: privatevm.v1.PrivateVMDaemonService.GetSession:input_type -> privatevm.v1.GetSessionRequest
+	9,  // 42: privatevm.v1.PrivateVMDaemonService.ListSessions:input_type -> privatevm.v1.ListSessionsRequest
+	13, // 43: privatevm.v1.PrivateVMDaemonService.ImportVPNProfile:input_type -> privatevm.v1.VPNProfileImportFrame
+	14, // 44: privatevm.v1.PrivateVMDaemonService.InspectVPNProfile:input_type -> privatevm.v1.VPNProfileRequest
+	14, // 45: privatevm.v1.PrivateVMDaemonService.TestVPNProfile:input_type -> privatevm.v1.VPNProfileRequest
+	14, // 46: privatevm.v1.PrivateVMDaemonService.RemoveVPNProfile:input_type -> privatevm.v1.VPNProfileRequest
+	18, // 47: privatevm.v1.PrivateVMDaemonService.AddTorrent:input_type -> privatevm.v1.HostTorrentInputFrame
+	19, // 48: privatevm.v1.PrivateVMDaemonService.GetTorrentMetadata:input_type -> privatevm.v1.TorrentControlRequest
+	20, // 49: privatevm.v1.PrivateVMDaemonService.SelectTorrentFiles:input_type -> privatevm.v1.HostSelectTorrentFilesRequest
+	19, // 50: privatevm.v1.PrivateVMDaemonService.StartTorrentDownload:input_type -> privatevm.v1.TorrentControlRequest
+	19, // 51: privatevm.v1.PrivateVMDaemonService.PauseTorrentDownload:input_type -> privatevm.v1.TorrentControlRequest
+	19, // 52: privatevm.v1.PrivateVMDaemonService.GetTorrentStatus:input_type -> privatevm.v1.TorrentControlRequest
+	19, // 53: privatevm.v1.PrivateVMDaemonService.SealTorrentQuarantine:input_type -> privatevm.v1.TorrentControlRequest
+	21, // 54: privatevm.v1.PrivateVMDaemonService.StartRole:input_type -> privatevm.v1.StartRoleRequest
+	22, // 55: privatevm.v1.PrivateVMDaemonService.StopRole:input_type -> privatevm.v1.StopRoleRequest
+	23, // 56: privatevm.v1.PrivateVMDaemonService.AbortSession:input_type -> privatevm.v1.AbortSessionRequest
+	24, // 57: privatevm.v1.PrivateVMDaemonService.CleanupSession:input_type -> privatevm.v1.CleanupSessionRequest
+	8,  // 58: privatevm.v1.PrivateVMDaemonService.StreamEvents:input_type -> privatevm.v1.GetSessionRequest
+	38, // 59: privatevm.v1.PrivateVMDaemonService.ImportWorkspaceFile:input_type -> privatevm.v1.TransferFrame
+	27, // 60: privatevm.v1.PrivateVMDaemonService.ExportWorkspaceFile:input_type -> privatevm.v1.ExportWorkspaceRequest
+	28, // 61: privatevm.v1.PrivateVMDaemonService.ClaimUSB:input_type -> privatevm.v1.ClaimUSBRequest
+	30, // 62: privatevm.v1.PrivateVMDaemonService.ReleaseUSB:input_type -> privatevm.v1.ReleaseUSBRequest
+	1,  // 63: privatevm.v1.PrivateVMDaemonService.GetVersion:output_type -> privatevm.v1.VersionResponse
+	3,  // 64: privatevm.v1.PrivateVMDaemonService.Doctor:output_type -> privatevm.v1.DoctorResponse
+	6,  // 65: privatevm.v1.PrivateVMDaemonService.PlanSession:output_type -> privatevm.v1.PlanSessionResponse
+	25, // 66: privatevm.v1.PrivateVMDaemonService.CreateSession:output_type -> privatevm.v1.Session
+	25, // 67: privatevm.v1.PrivateVMDaemonService.GetSession:output_type -> privatevm.v1.Session
+	10, // 68: privatevm.v1.PrivateVMDaemonService.ListSessions:output_type -> privatevm.v1.ListSessionsResponse
+	15, // 69: privatevm.v1.PrivateVMDaemonService.ImportVPNProfile:output_type -> privatevm.v1.VPNProfileStatus
+	15, // 70: privatevm.v1.PrivateVMDaemonService.InspectVPNProfile:output_type -> privatevm.v1.VPNProfileStatus
+	15, // 71: privatevm.v1.PrivateVMDaemonService.TestVPNProfile:output_type -> privatevm.v1.VPNProfileStatus
+	15, // 72: privatevm.v1.PrivateVMDaemonService.RemoveVPNProfile:output_type -> privatevm.v1.VPNProfileStatus
+	39, // 73: privatevm.v1.PrivateVMDaemonService.AddTorrent:output_type -> privatevm.v1.TorrentMetadata
+	39, // 74: privatevm.v1.PrivateVMDaemonService.GetTorrentMetadata:output_type -> privatevm.v1.TorrentMetadata
+	39, // 75: privatevm.v1.PrivateVMDaemonService.SelectTorrentFiles:output_type -> privatevm.v1.TorrentMetadata
+	40, // 76: privatevm.v1.PrivateVMDaemonService.StartTorrentDownload:output_type -> privatevm.v1.TorrentEvent
+	41, // 77: privatevm.v1.PrivateVMDaemonService.PauseTorrentDownload:output_type -> privatevm.v1.TorrentStatus
+	41, // 78: privatevm.v1.PrivateVMDaemonService.GetTorrentStatus:output_type -> privatevm.v1.TorrentStatus
+	41, // 79: privatevm.v1.PrivateVMDaemonService.SealTorrentQuarantine:output_type -> privatevm.v1.TorrentStatus
+	25, // 80: privatevm.v1.PrivateVMDaemonService.StartRole:output_type -> privatevm.v1.Session
+	25, // 81: privatevm.v1.PrivateVMDaemonService.StopRole:output_type -> privatevm.v1.Session
+	25, // 82: privatevm.v1.PrivateVMDaemonService.AbortSession:output_type -> privatevm.v1.Session
+	25, // 83: privatevm.v1.PrivateVMDaemonService.CleanupSession:output_type -> privatevm.v1.Session
+	26, // 84: privatevm.v1.PrivateVMDaemonService.StreamEvents:output_type -> privatevm.v1.SessionEvent
+	42, // 85: privatevm.v1.PrivateVMDaemonService.ImportWorkspaceFile:output_type -> privatevm.v1.TransferReceipt
+	38, // 86: privatevm.v1.PrivateVMDaemonService.ExportWorkspaceFile:output_type -> privatevm.v1.TransferFrame
+	29, // 87: privatevm.v1.PrivateVMDaemonService.ClaimUSB:output_type -> privatevm.v1.USBClaim
+	37, // 88: privatevm.v1.PrivateVMDaemonService.ReleaseUSB:output_type -> privatevm.v1.Empty
+	63, // [63:89] is the sub-list for method output_type
+	37, // [37:63] is the sub-list for method input_type
+	37, // [37:37] is the sub-list for extension type_name
+	37, // [37:37] is the sub-list for extension extendee
+	0,  // [0:37] is the sub-list for field type_name
 }
 
 func init() { file_privatevm_v1_daemon_proto_init() }
@@ -1825,22 +2204,28 @@ func file_privatevm_v1_daemon_proto_init() {
 		return
 	}
 	file_privatevm_v1_common_proto_init()
+	file_privatevm_v1_guest_proto_init()
 	file_privatevm_v1_daemon_proto_msgTypes[12].OneofWrappers = []any{
 		(*VPNProfileImportFrame_Begin)(nil),
 		(*VPNProfileImportFrame_Chunk)(nil),
+	}
+	file_privatevm_v1_daemon_proto_msgTypes[17].OneofWrappers = []any{
+		(*HostTorrentInputFrame_Begin)(nil),
+		(*HostTorrentInputFrame_Chunk)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_privatevm_v1_daemon_proto_rawDesc), len(file_privatevm_v1_daemon_proto_rawDesc)),
-			NumEnums:      0,
-			NumMessages:   25,
+			NumEnums:      1,
+			NumMessages:   30,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
 		GoTypes:           file_privatevm_v1_daemon_proto_goTypes,
 		DependencyIndexes: file_privatevm_v1_daemon_proto_depIdxs,
+		EnumInfos:         file_privatevm_v1_daemon_proto_enumTypes,
 		MessageInfos:      file_privatevm_v1_daemon_proto_msgTypes,
 	}.Build()
 	File_privatevm_v1_daemon_proto = out.File

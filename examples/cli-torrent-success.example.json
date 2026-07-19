@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "ok": true,
+  "code": "TORRENT_STATUS",
+  "data": {
+    "schema_version": 1,
+    "state": "FILE_SELECTION_REQUIRED",
+    "completed_bytes": 0,
+    "total_bytes": 134217728,
+    "file_count": 4,
+    "selected_count": 0,
+    "payload_paused": true,
+    "code": "TORRENT_SELECTION_REQUIRED",
+    "remediation": "Review the exact file list in the isolated downloader and select only approved indexes."
+  }
+}
