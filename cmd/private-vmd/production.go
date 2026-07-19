@@ -130,7 +130,7 @@ func composeProductionHost(ctx context.Context, cfg config.Config) (*productionH
 	}
 	scannerRuntime, err := orchestrator.NewProductionScannerRuntime(
 		roles, selector, storageStack, runtimeStack, promotion,
-		orchestrator.ScannerRuntimePlan{VCPUs: 4, MemoryBytes: 8 << 30, RootBytes: 32 << 30},
+		orchestrator.ScannerRuntimePlan{VCPUs: 4, MemoryBytes: 4 << 30, RootBytes: 32 << 30},
 	)
 	if err != nil {
 		profiles.Close()

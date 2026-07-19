@@ -550,10 +550,14 @@ func validateResources(value, defaults *privatevmv1.ResourceRequest) (*privatevm
 }
 
 func resourceDefaults(role session.Role, snapshot config.Config) *privatevmv1.ResourceRequest {
-	result := &privatevmv1.ResourceRequest{Vcpus: 4, MemoryBytes: 8 << 30, RootBytes: 32 << 30}
-	if role == session.RoleWorkstation {
+	result := &privatevmv1.ResourceRequest{Vcpus: 4, MemoryBytes: 4 << 30, RootBytes: 32 << 30}
+	switch role {
+	case session.RoleWorkstation:
 		result.Vcpus = snapshot.Desktop().VCPUs()
 		result.MemoryBytes = snapshot.Desktop().MemoryBytes()
+	case session.RoleExporter:
+		result.Vcpus = 2
+		result.MemoryBytes = 1 << 30
 	}
 	return result
 }

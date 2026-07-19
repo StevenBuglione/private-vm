@@ -112,6 +112,29 @@ func TestSessionContextAndResourceValidationFailClosed(t *testing.T) {
 	assertRPCError(t, err, codes.InvalidArgument, "RESOURCE_REQUEST_INVALID")
 }
 
+func TestPackagedRoleDefaultsFitTheSixteenGiBStrictBaseline(t *testing.T) {
+	configuration := config.Defaults()
+	tests := []struct {
+		role   session.Role
+		vcpus  uint32
+		memory uint64
+	}{
+		{session.RoleWorkstation, 2, 4 << 30},
+		{session.RoleDownloader, 4, 4 << 30},
+		{session.RoleScanner, 4, 4 << 30},
+		{session.RoleExporter, 2, 1 << 30},
+	}
+	for _, test := range tests {
+		resources := resourceDefaults(test.role, configuration)
+		if resources.GetVcpus() != test.vcpus || resources.GetMemoryBytes() != test.memory || resources.GetRootBytes() != 32<<30 {
+			t.Fatalf("%s defaults = %+v", test.role, resources)
+		}
+		if resources.GetMemoryBytes()+(4<<30) > 16<<30 {
+			t.Fatalf("%s defaults cannot preserve the strict host reserve", test.role)
+		}
+	}
+}
+
 func TestPlanUsesImmutableDaemonConfigAndStrictDoctor(t *testing.T) {
 	strictSeen := false
 	service := &Service{

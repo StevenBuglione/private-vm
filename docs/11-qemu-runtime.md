@@ -200,11 +200,17 @@ Defaults:
 
 | Role | vCPU | RAM |
 |---|---:|---:|
-| workstation-basic | 4 | 8 GiB |
-| workstation-development | 8 | 16 GiB |
-| downloader | 4 | 6 GiB |
-| scanner | 6 | 12 GiB |
+| workstation (all bundles) | 2 | 4 GiB |
+| downloader | 4 | 4 GiB |
+| scanner | 4 | 4 GiB |
 | exporter | 2 | 1 GiB |
+
+The workstation value is configurable within the bounds in
+`docs/08-config-policy.md`; the table records packaged defaults, not
+recommended overrides. Downloader and scanner use closed daemon-selected
+defaults. These defaults allow one role at a time to pass the non-overcommit
+planner on the supported 16 GiB baseline while retaining the mandatory 4 GiB
+host reserve. A larger request is never selected implicitly.
 
 The planner leaves host reserve:
 

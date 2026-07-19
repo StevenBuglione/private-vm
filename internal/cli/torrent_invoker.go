@@ -258,7 +258,7 @@ func (invoker *ProductionInvoker) startDownloader(ctx context.Context, intent To
 	if err != nil {
 		return Result{}, internalTorrentError()
 	}
-	resources := &privatevmv1.ResourceRequest{Vcpus: 4, MemoryBytes: 6 << 30, RootBytes: 32 << 30}
+	resources := &privatevmv1.ResourceRequest{Vcpus: 4, MemoryBytes: 4 << 30, RootBytes: 32 << 30}
 	plan, err := client.PlanSession(ctx, &privatevmv1.PlanSessionRequest{
 		Context: sessionRequestContext(requestID, ""), Role: privatevmv1.GuestRole_GUEST_ROLE_DOWNLOADER,
 		PolicyName: intent.Policy, Resources: resources,
