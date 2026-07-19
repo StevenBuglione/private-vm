@@ -220,30 +220,30 @@
         };
 
       workstationDesktopTestFor =
-        system:
+        system: bundle: module:
         let
           pkgs = pkgsFor system;
           bundleManifest = builtins.toJSON {
             schema_version = workstationBundleCatalog.schema_version;
             project = workstationBundleCatalog.project;
             role = workstationBundleCatalog.role;
-            bundle = "basic";
-            packages = workstationBundleCatalog.bundles.basic;
+            inherit bundle;
+            packages = workstationBundleCatalog.bundles.${bundle};
           };
           bundleManifestSHA256 = builtins.hashString "sha256" bundleManifest;
         in
         pkgs.testers.runNixOSTest {
-          name = "private-vm-workstation-desktop";
+          name = "private-vm-workstation-${bundle}-desktop";
           requiredFeatures.kvm = false;
           # The reduced qemu_test package intentionally omits SPICE. This gate
           # exercises the production Unix-SPICE configuration, so use the
           # pinned host-only QEMU build while retaining TCG acceleration.
           qemu.package = pkgs.qemu_kvm;
-          node.specialArgs = guestArgsFor system "workstation" "basic";
+          node.specialArgs = guestArgsFor system "workstation" bundle;
           nodes.machine = { lib, ... }: {
             imports = [
               ./nix/guests/image-base.nix
-              ./nix/guests/workstation-basic.nix
+              module
             ];
             users.users.root.hashedPasswordFile = lib.mkForce null;
             virtualisation.memorySize = 2048;
@@ -1064,7 +1064,12 @@
           scanner-update = scannerUpdateTestFor system;
           scanner-offline = scannerOfflineTestFor system;
           workstation-bundles = workstationBundlesCheckFor system;
-          workstation-desktop = workstationDesktopTestFor system;
+          workstation-desktop =
+            workstationDesktopTestFor system "basic" ./nix/guests/workstation-basic.nix;
+          workstation-office-desktop =
+            workstationDesktopTestFor system "office" ./nix/guests/workstation-office.nix;
+          workstation-development-desktop =
+            workstationDesktopTestFor system "development" ./nix/guests/workstation-development.nix;
         }
       );
 

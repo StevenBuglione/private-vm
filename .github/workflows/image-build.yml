@@ -1,0 +1,143 @@
+name: Image build
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/image-build.yml"
+      - "api/**"
+      - "cmd/private-vm-guestd/**"
+      - "flake.lock"
+      - "flake.nix"
+      - "gen/**"
+      - "go.mod"
+      - "go.sum"
+      - "internal/buildinfo/**"
+      - "internal/guest/**"
+      - "nix/**"
+      - "policies/**"
+      - "project/workstation-bundles.json"
+      - "schemas/exporter-tool-inventory.schema.json"
+      - "schemas/guest-image-identity.schema.json"
+      - "vendor/**"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/image-build.yml"
+      - "api/**"
+      - "cmd/private-vm-guestd/**"
+      - "flake.lock"
+      - "flake.nix"
+      - "gen/**"
+      - "go.mod"
+      - "go.sum"
+      - "internal/buildinfo/**"
+      - "internal/guest/**"
+      - "nix/**"
+      - "policies/**"
+      - "project/workstation-bundles.json"
+      - "schemas/exporter-tool-inventory.schema.json"
+      - "schemas/guest-image-identity.schema.json"
+      - "vendor/**"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: image-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  image:
+    name: image / ${{ matrix.image }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    permissions:
+      contents: read
+    env:
+      NIX_CONFIG: |
+        max-jobs = 1
+        cores = 2
+        keep-outputs = false
+        keep-derivations = false
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: workstation-basic
+            image_target: image-workstation-basic
+            contract_check: workstation-bundles
+            smoke_primary: workstation-desktop
+            smoke_secondary: ""
+          - image: workstation-office
+            image_target: image-workstation-office
+            contract_check: ""
+            smoke_primary: workstation-office-desktop
+            smoke_secondary: ""
+          - image: workstation-development
+            image_target: image-workstation-development
+            contract_check: ""
+            smoke_primary: workstation-development-desktop
+            smoke_secondary: ""
+          - image: downloader
+            image_target: image-downloader
+            contract_check: ""
+            smoke_primary: downloader-desktop
+            smoke_secondary: ""
+          - image: scanner
+            image_target: image-scanner
+            contract_check: scanner-image-contract
+            smoke_primary: scanner-update
+            smoke_secondary: scanner-offline
+          - image: exporter
+            image_target: image-exporter
+            contract_check: ""
+            smoke_primary: exporter
+            smoke_secondary: ""
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          persist-credentials: false
+      - uses: DeterminateSystems/nix-installer-action@ef8a148080ab6020fd15196c2084a2eea5ff2d25 # v22
+      - name: Reclaim disposable runner space and enforce capacity
+        run: |
+          sudo rm -rf -- /opt/ghc /usr/local/.ghcup /usr/local/lib/android /usr/share/dotnet
+          nix store gc
+          disk_available_kib="$(df --output=avail -k /nix | tail -n 1)"
+          memory_available_kib="$(awk '/^MemAvailable:/ { print $2 }' /proc/meminfo)"
+          test "$disk_available_kib" -ge 10485760
+          test "$memory_available_kib" -ge 10485760
+          df -h / /nix "$GITHUB_WORKSPACE"
+          free -h
+          test -z "$(git status --short)"
+      - name: Build one canonical image
+        run: nix build ".#${{ matrix.image_target }}" --no-link --print-build-logs
+      - name: Report canonical image closure
+        run: nix path-info -Sh ".#${{ matrix.image_target }}"
+      - name: Run image contract check
+        if: matrix.contract_check != ''
+        run: nix build ".#checks.x86_64-linux.${{ matrix.contract_check }}" --no-link --print-build-logs
+      - name: Boot primary smoke test under TCG
+        run: nix build ".#checks.x86_64-linux.${{ matrix.smoke_primary }}" --no-link --print-build-logs
+      - name: Boot secondary smoke test under TCG
+        if: matrix.smoke_secondary != ''
+        run: nix build ".#checks.x86_64-linux.${{ matrix.smoke_secondary }}" --no-link --print-build-logs
+      - name: Report bounded failure diagnostics
+        if: failure()
+        run: |
+          df -h / "$GITHUB_WORKSPACE"
+          test ! -d /nix || df -h /nix
+          free -h
+          echo "image=${{ matrix.image }}"
+          echo "image_target=${{ matrix.image_target }}"
+          echo "contract_check=${{ matrix.contract_check }}"
+          echo "smoke_primary=${{ matrix.smoke_primary }}"
+          echo "smoke_secondary=${{ matrix.smoke_secondary }}"
+      - name: Reclaim Nix outputs
+        if: always()
+        run: |
+          if command -v nix >/dev/null 2>&1; then
+            nix store gc
+          fi
+          df -h / "$GITHUB_WORKSPACE"
+          test ! -d /nix || df -h /nix
+          test -z "$(git status --short)"

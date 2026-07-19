@@ -118,6 +118,11 @@ PRIVATE_VM_DESTRUCTIVE_TESTS=1 go test -tags=usb_destructive ./integration/usb
 
 The implementation must verify the test device identity again inside the test.
 
+The active public image matrix is intentionally remote and independent from the
+16 GiB maintainer host. Continue dependency-safe source work while it runs, but
+do not merge a change until every affected `image / <role>` job passes. Never
+duplicate the image matrix locally in parallel merely to match GitHub timing.
+
 ## Privileged RPC boundary tests
 
 The daemon integration suite uses a temporary Unix socket and requires no root

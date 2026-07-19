@@ -38,6 +38,8 @@ checks.x86_64-linux.scanner-update
 checks.x86_64-linux.scanner-offline
 checks.x86_64-linux.workstation-bundles
 checks.x86_64-linux.workstation-desktop
+checks.x86_64-linux.workstation-office-desktop
+checks.x86_64-linux.workstation-development-desktop
 devShells.x86_64-linux.default
 ```
 
@@ -114,6 +116,8 @@ nix build .#image-workstation-basic
 nix build .#image-downloader
 nix build .#checks.x86_64-linux.guest-common
 nix build .#checks.x86_64-linux.workstation-desktop
+nix build .#checks.x86_64-linux.workstation-office-desktop
+nix build .#checks.x86_64-linux.workstation-development-desktop
 nix build .#checks.x86_64-linux.scanner-image-contract
 nix build .#checks.x86_64-linux.scanner-update
 nix build .#checks.x86_64-linux.scanner-offline
@@ -140,15 +144,17 @@ tmpfs-backed writable logs/temporary paths, volatile journald, an exact embedded
 role identity, a matching compiled guestd identity, no TCP/UDP listeners, and a
 VSOCK listener on port 4050. The role-specific image tests extend this baseline.
 
-The `workstation-desktop` test forces TCG, supplies a SPICE vdagent channel with
-clipboard and agent file transfer disabled, and proves LightDM autologin reaches
-an XFCE session for the locked `private` user. It also verifies both agent
-processes and the channel, workspace directory permissions, exact basic-bundle
-manifest, exact locked Firefox enterprise policy values and crash-reporter
-environment, client-only OpenSSH output, absence of implicit XFCE applications,
-SSH/sudo services, and TCP/UDP listeners. The separate
-`workstation-bundles` check evaluates and compares the embedded manifests for
-all three official workstation variants.
+The `workstation-desktop`, `workstation-office-desktop`, and
+`workstation-development-desktop` tests force TCG, supply a SPICE vdagent
+channel with clipboard and agent file transfer disabled, and prove LightDM
+autologin reaches an XFCE session for the locked `private` user. Each test
+imports the same module and exact bundle used by its canonical image, then
+checks the embedded bundle-manifest digest. The tests also verify both agent
+processes and the channel, workspace directory permissions, exact locked
+Firefox enterprise policy values and crash-reporter environment, client-only
+OpenSSH output, absence of implicit XFCE applications, SSH/sudo services, and
+TCP/UDP listeners. The separate `workstation-bundles` check evaluates and
+compares all three embedded manifests to the versioned catalog.
 
 The `desktop-role-isolation` check builds the downloader and scanner system
 paths, proves their role-required tools are installed, and rejects workstation
@@ -193,3 +199,12 @@ tools. It checks the exact package/version/store-path inventory embedded at
 the whole image closure to produce the SPDX SBOM. The harness explicitly
 requests no additional writable disk and proves no USB-backed block device is
 attached. This test neither attaches nor modifies a physical USB device.
+
+## Public-runner matrix
+
+`.github/workflows/image-build.yml` builds each canonical image in a separate
+fresh `ubuntu-24.04` standard public-runner job. Each job uses one Nix build at a
+time with two cores, creates no result symlink, and then runs only the TCG gates
+assigned to that role. Scanner update and offline gates run serially in the same
+scanner job. The workflow never requests KVM, credentials, artifact upload, or
+write permissions. REL-003, not this workflow version, owns publication.

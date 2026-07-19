@@ -45,7 +45,7 @@ continue to fail closed.
 
 ## What is included
 
-- 38 numbered design, operations, and acceptance-evidence documents
+- 39 numbered design, operations, and acceptance-evidence documents
 - 10 architecture decision records
 - complete v1 CLI and error catalog
 - host and guest protobuf contracts
@@ -53,7 +53,7 @@ continue to fail closed.
 - Go package boundaries, interfaces and tested starter implementations
 - NixOS host module and six image-output scaffolds
 - systemd, Polkit, tmpfiles and udev packaging assets
-- public GitHub CI plus secured image/release workflow templates
+- public source and image-build CI plus a secured release workflow template
 - machine-readable implementation backlog, milestones and acceptance suites
 - source drafts preserved under `references/`
 - validation report and archive manifest

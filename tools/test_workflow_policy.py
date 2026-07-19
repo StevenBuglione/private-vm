@@ -5,9 +5,15 @@ from __future__ import annotations
 
 import subprocess
 import unittest
+from pathlib import Path
 from unittest import mock
 
-from check_workflow_policy import PolicyError, _run_tool, validate_workflow_text
+from check_workflow_policy import (
+    PolicyError,
+    _run_tool,
+    validate_image_workflow_text,
+    validate_workflow_text,
+)
 
 
 PINNED_CHECKOUT = "actions/checkout@" + "a" * 40
@@ -32,6 +38,10 @@ jobs:
 
 
 class WorkflowPolicyTests(unittest.TestCase):
+    def image_workflow(self) -> str:
+        root = Path(__file__).resolve().parents[1]
+        return (root / ".github" / "workflows" / "image-build.yml").read_text()
+
     def test_accepts_fork_safe_pinned_workflow(self) -> None:
         validate_workflow_text(
             workflow(
@@ -209,6 +219,35 @@ jobs:
         run.side_effect = KeyboardInterrupt
         with self.assertRaises(KeyboardInterrupt):
             _run_tool(["actionlint", "workflow.yml"], timeout=60)
+
+    def test_accepts_official_build_only_image_matrix(self) -> None:
+        validate_image_workflow_text(self.image_workflow())
+
+    def test_image_matrix_rejects_duplicate_role(self) -> None:
+        source = self.image_workflow().replace(
+            "- image: exporter", "- image: scanner", 1
+        )
+        with self.assertRaisesRegex(PolicyError, "duplicate image matrix entry"):
+            validate_image_workflow_text(source)
+
+    def test_image_workflow_rejects_publication(self) -> None:
+        source = self.image_workflow().replace(
+            "permissions:\n  contents: read",
+            "permissions:\n  contents: read\n  packages: write",
+            1,
+        )
+        with self.assertRaisesRegex(PolicyError, "must not publish artifacts"):
+            validate_image_workflow_text(source)
+
+    def test_image_workflow_rejects_nonstandard_runner(self) -> None:
+        source = self.image_workflow().replace("ubuntu-24.04", "self-hosted", 1)
+        with self.assertRaisesRegex(PolicyError, "standard ubuntu-24.04"):
+            validate_image_workflow_text(source)
+
+    def test_image_workflow_requires_no_link_builds(self) -> None:
+        source = self.image_workflow().replace(" --no-link", "", 1)
+        with self.assertRaisesRegex(PolicyError, "canonical image must use"):
+            validate_image_workflow_text(source)
 
 
 if __name__ == "__main__":

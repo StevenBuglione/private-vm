@@ -17,6 +17,8 @@ Verified on 2026-07-18.
 
 - Standard public runner specifications and free/unlimited public use:
   https://docs.github.com/en/actions/how-tos/write-workflows/choose-where-workflows-run/choose-the-runner-for-a-job
+  (4 CPU, 16 GB RAM, 14 GB SSD and the `ubuntu-24.04` label rechecked
+  2026-07-19)
 - Container registry OCI support and anonymous public pulls:
   https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry
 - Artifact attestations:

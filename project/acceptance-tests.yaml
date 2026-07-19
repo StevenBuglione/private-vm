@@ -122,6 +122,39 @@
       ]
     },
     {
+      "id": "PUBLIC_IMAGE_CI",
+      "tests": [
+        {
+          "id": "CI-IMG-001",
+          "name": "One canonical image per fresh public runner",
+          "given": "the active image-build matrix on a public repository",
+          "when": "a canonical image input changes",
+          "then": "six independent ubuntu-24.04 jobs each build exactly one reviewed image output with serialized Nix limits"
+        },
+        {
+          "id": "CI-IMG-002",
+          "name": "Role image boots without nested KVM",
+          "given": "a canonical image built in its isolated matrix job",
+          "when": "the assigned role smoke gate runs",
+          "then": "the exact TCG check succeeds with requiredFeatures.kvm false and no self-hosted runner dependency"
+        },
+        {
+          "id": "CI-IMG-003",
+          "name": "Pull requests cannot publish image artifacts",
+          "given": "untrusted pull-request source",
+          "when": "the image workflow executes",
+          "then": "only contents read is granted and no package, OIDC, attestation, release, cache or artifact-upload path exists"
+        },
+        {
+          "id": "CI-IMG-004",
+          "name": "Image job cleanup and failure evidence are bounded",
+          "given": "a successful, failed or cancelled image build",
+          "when": "the job reaches finalization",
+          "then": "bounded capacity and target diagnostics are available and Nix outputs are garbage-collected without modifying the checkout"
+        }
+      ]
+    },
+    {
       "id": "EXPORTER",
       "tests": [
         {

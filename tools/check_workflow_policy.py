@@ -17,6 +17,48 @@ import yaml
 ACTION_SHA = re.compile(r"^[0-9a-f]{40}$")
 DOCKER_DIGEST = re.compile(r"^docker://[^@\s]+@sha256:[0-9a-fA-F]{64}$")
 MAX_WORKFLOW_BYTES = 1024 * 1024
+PINNED_IMAGE_ACTIONS = [
+    "actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10",
+    "DeterminateSystems/nix-installer-action@ef8a148080ab6020fd15196c2084a2eea5ff2d25",
+]
+IMAGE_MATRIX = {
+    "workstation-basic": {
+        "image_target": "image-workstation-basic",
+        "contract_check": "workstation-bundles",
+        "smoke_primary": "workstation-desktop",
+        "smoke_secondary": "",
+    },
+    "workstation-office": {
+        "image_target": "image-workstation-office",
+        "contract_check": "",
+        "smoke_primary": "workstation-office-desktop",
+        "smoke_secondary": "",
+    },
+    "workstation-development": {
+        "image_target": "image-workstation-development",
+        "contract_check": "",
+        "smoke_primary": "workstation-development-desktop",
+        "smoke_secondary": "",
+    },
+    "downloader": {
+        "image_target": "image-downloader",
+        "contract_check": "",
+        "smoke_primary": "downloader-desktop",
+        "smoke_secondary": "",
+    },
+    "scanner": {
+        "image_target": "image-scanner",
+        "contract_check": "scanner-image-contract",
+        "smoke_primary": "scanner-update",
+        "smoke_secondary": "scanner-offline",
+    },
+    "exporter": {
+        "image_target": "image-exporter",
+        "contract_check": "",
+        "smoke_primary": "exporter",
+        "smoke_secondary": "",
+    },
+}
 
 
 class PolicyError(ValueError):
@@ -180,6 +222,138 @@ def validate_workflow_text(source: str, name: str = "workflow") -> None:
             _validate_action(step, step_location)
 
 
+def validate_image_workflow_text(source: str, name: str = "image-build.yml") -> None:
+    """Validate the active REL-002 build-only image matrix."""
+    try:
+        document = yaml.load(source, Loader=yaml.BaseLoader)
+    except yaml.YAMLError as error:
+        raise PolicyError(f"{name}: invalid YAML: {error}") from error
+    document = _mapping(document, name)
+    triggers = _triggers(document)
+    if set(triggers) != {"pull_request", "push"}:
+        raise PolicyError(f"{name}: image builds must run only for pull requests and main pushes")
+    push = _mapping(triggers["push"], f"{name}.on.push")
+    if push.get("branches") != ["main"]:
+        raise PolicyError(f"{name}: push builds must target only main")
+
+    jobs = _mapping(document.get("jobs"), f"{name}.jobs")
+    if set(jobs) != {"image"}:
+        raise PolicyError(f"{name}: REL-002 permits only the build-only image job")
+    job = _mapping(jobs["image"], f"{name}.jobs.image")
+    if job.get("runs-on") != "ubuntu-24.04":
+        raise PolicyError(f"{name}: images must use the standard ubuntu-24.04 public runner")
+    if job.get("timeout-minutes") != "90":
+        raise PolicyError(f"{name}: image jobs must have the reviewed 90-minute ceiling")
+    if _permissions(job.get("permissions"), f"{name}.jobs.image.permissions") != {
+        "contents": "read"
+    }:
+        raise PolicyError(f"{name}: image jobs must have only contents: read")
+    for prohibited_key in ("container", "environment", "needs", "secrets", "services"):
+        if prohibited_key in job:
+            raise PolicyError(f"{name}: image job must not set {prohibited_key}")
+
+    strategy = _mapping(job.get("strategy"), f"{name}.jobs.image.strategy")
+    if _is_true(strategy.get("fail-fast", "true")):
+        raise PolicyError(f"{name}: one image failure must not cancel independent image jobs")
+    matrix = _mapping(strategy.get("matrix"), f"{name}.jobs.image.strategy.matrix")
+    include = matrix.get("include")
+    if not isinstance(include, list):
+        raise PolicyError(f"{name}: image matrix include must be a list")
+
+    actual: dict[str, dict[str, str]] = {}
+    required_fields = {
+        "image",
+        "image_target",
+        "contract_check",
+        "smoke_primary",
+        "smoke_secondary",
+    }
+    for index, raw_entry in enumerate(include):
+        entry = _mapping(raw_entry, f"{name}.matrix.include[{index}]")
+        if set(entry) != required_fields:
+            raise PolicyError(
+                f"{name}.matrix.include[{index}]: fields must be exactly {sorted(required_fields)}"
+            )
+        image = str(entry["image"])
+        if image in actual:
+            raise PolicyError(f"{name}: duplicate image matrix entry: {image}")
+        actual[image] = {
+            field: str(entry[field]) for field in required_fields if field != "image"
+        }
+    if actual != IMAGE_MATRIX:
+        raise PolicyError(f"{name}: image matrix does not match the six official images")
+
+    environment = _mapping(job.get("env"), f"{name}.jobs.image.env")
+    nix_config = str(environment.get("NIX_CONFIG", ""))
+    if "max-jobs = 1" not in nix_config or "cores = 2" not in nix_config:
+        raise PolicyError(f"{name}: public image builds must use the reviewed Nix limits")
+
+    steps = job.get("steps")
+    if not isinstance(steps, list):
+        raise PolicyError(f"{name}.jobs.image.steps: expected a list")
+    if len(steps) != 10:
+        raise PolicyError(f"{name}: image job must contain exactly ten reviewed steps")
+    actual_actions = [
+        str(_mapping(steps[index], f"{name}.jobs.image.steps[{index}]").get("uses", ""))
+        for index in range(2)
+    ]
+    if actual_actions != PINNED_IMAGE_ACTIONS:
+        raise PolicyError(f"{name}: image job action set does not match the reviewed pins")
+    if any(
+        "uses" in _mapping(steps[index], f"{name}.jobs.image.steps[{index}]")
+        for index in range(2, len(steps))
+    ):
+        raise PolicyError(f"{name}: image job permits actions only for checkout and Nix setup")
+    named_steps: dict[str, dict[str, Any]] = {}
+    for index, raw_step in enumerate(steps):
+        step = _mapping(raw_step, f"{name}.jobs.image.steps[{index}]")
+        step_name = str(step.get("name", ""))
+        if step_name:
+            if step_name in named_steps:
+                raise PolicyError(f"{name}: duplicate image step name: {step_name}")
+            named_steps[step_name] = step
+
+    required_step_names = {
+        "Reclaim disposable runner space and enforce capacity",
+        "Build one canonical image",
+        "Report canonical image closure",
+        "Run image contract check",
+        "Boot primary smoke test under TCG",
+        "Boot secondary smoke test under TCG",
+        "Report bounded failure diagnostics",
+        "Reclaim Nix outputs",
+    }
+    if set(named_steps) != required_step_names:
+        missing = sorted(required_step_names - set(named_steps))
+        extra = sorted(set(named_steps) - required_step_names)
+        raise PolicyError(f"{name}: image step set differs; missing={missing}, extra={extra}")
+    if str(named_steps["Report bounded failure diagnostics"].get("if")) != "failure()":
+        raise PolicyError(f"{name}: failure diagnostics must run only after failure")
+    if str(named_steps["Reclaim Nix outputs"].get("if")) != "always()":
+        raise PolicyError(f"{name}: final Nix reclamation must run on every outcome")
+
+    build_run = str(named_steps["Build one canonical image"].get("run", ""))
+    primary_run = str(named_steps["Boot primary smoke test under TCG"].get("run", ""))
+    secondary_run = str(named_steps["Boot secondary smoke test under TCG"].get("run", ""))
+    for location, command in (
+        ("canonical image", build_run),
+        ("primary TCG smoke", primary_run),
+        ("secondary TCG smoke", secondary_run),
+    ):
+        if "nix build" not in command or "--no-link" not in command:
+            raise PolicyError(f"{name}: {location} must use nix build --no-link")
+
+    prohibited_publication = re.compile(
+        r"(actions/upload-artifact|packages\s*:\s*write|id-token\s*:\s*write|"
+        r"attestations\s*:\s*write|\bghcr\.io\b|\boras\b|\bdocker\s+push\b|"
+        r"\bgh\s+|\bnix\s+copy\b|\bgit\s+push\b|\bcurl\b|\bwget\b|\bscp\b|"
+        r"\brsync\b|\bsocat\b)",
+        flags=re.IGNORECASE,
+    )
+    if prohibited_publication.search(source):
+        raise PolicyError(f"{name}: REL-002 image jobs must not publish artifacts")
+
+
 def workflow_paths(root: Path) -> list[Path]:
     workflow_dir = root / ".github" / "workflows"
     paths = sorted(workflow_dir.glob("*.yml"))
@@ -205,7 +379,11 @@ def _run_tool(command: list[str], timeout: int) -> None:
 def validate_repository(root: Path) -> None:
     paths = workflow_paths(root)
     for path in paths:
-        validate_workflow_text(path.read_text(), str(path.relative_to(root)))
+        source = path.read_text()
+        relative_name = str(path.relative_to(root))
+        validate_workflow_text(source, relative_name)
+        if path.name == "image-build.yml":
+            validate_image_workflow_text(source, relative_name)
 
     with tempfile.TemporaryDirectory(prefix="private-vm-workflows-") as temporary:
         audit_paths: list[str] = []

@@ -200,17 +200,20 @@ capability set. The harness adds no writable quarantine disk and rejects any
 USB-backed block device. It does not attach, inspect, format or write a USB
 device.
 
-The workstation desktop gate is run with:
+The three workstation desktop gates are run with:
 
 ```bash
 nix build .#checks.x86_64-linux.workstation-desktop
+nix build .#checks.x86_64-linux.workstation-office-desktop
+nix build .#checks.x86_64-linux.workstation-development-desktop
 ```
 
-It boots with explicit TCG and no test VLAN, waits for LightDM autologin and the
-XFCE session, verifies both SPICE agent processes and the virtio channel,
-validates the exact versioned basic-bundle manifest, installed/forbidden desktop
-applications, locked Firefox policy values, and crash-reporter environment, and
-repeats the no-SSH-server/sudo and no-TCP/UDP checks. The pure
+Each boots the exact canonical workstation module and bundle with explicit TCG
+and no test VLAN, waits for LightDM autologin and the XFCE session, verifies both
+SPICE agent processes and the virtio channel, validates its versioned bundle
+manifest, installed/forbidden desktop applications, locked Firefox policy
+values, and crash-reporter environment, and repeats the no-SSH-server/sudo and
+no-TCP/UDP checks. The pure
 `workstation-bundles` check compares all three embedded bundle manifests to the
 catalog. NixOS VM instrumentation uses its own test machine and devices, so this
 is an image boot gate rather than a production launch-spec proof. Host QEMU
@@ -241,6 +244,12 @@ Both scanner boots verify the compiled `scanner` role and the exact advertised
 common-plus-scanner capability list. They also reject SSH/sudo, credential
 directories and workstation/downloader commands. Run the VM checks one at a
 time; they are deliberately not a multi-node test.
+
+The public image workflow maps the six canonical image outputs to these exact
+TCG gates in six independent standard-runner jobs. It builds no two canonical
+images in one workspace. A scanner job is the sole exception to one boot per
+job: its update and offline phase tests execute serially because both phases
+belong to the same scanner image contract.
 
 ### KVM acceptance
 
