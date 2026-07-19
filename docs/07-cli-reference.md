@@ -308,8 +308,15 @@ private-vm system status
 private-vm system install --dry-run
 private-vm system install --accept
 private-vm system uninstall --dry-run
+private-vm system uninstall --accept
 private-vm system diagnostics [--export FILE]
 ```
+
+The generic Linux install and uninstall commands require exactly one of
+`--dry-run` and `--accept`. Both verify the closed bundle or installed manifest
+and produce the same exact mutation plan; `--accept` additionally records that
+the plan was applied. Uninstall preserves configuration, image cache, enrolled
+identity state and user exports.
 
 `system diagnostics` displays a redacted diagnostic-bundle manifest. With
 `--export`, the user must review that manifest before the bounded bundle is

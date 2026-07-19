@@ -223,6 +223,7 @@ func (SystemInstallIntent) privateVMIntent() {}
 
 type SystemUninstallIntent struct {
 	DryRun bool
+	Accept bool
 }
 
 func (SystemUninstallIntent) privateVMIntent() {}

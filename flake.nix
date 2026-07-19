@@ -133,6 +133,19 @@
           sourceDateEpoch = self.lastModified or 0;
         };
 
+      genericArchiveFor =
+        system:
+        let
+          pkgs = pkgsFor system;
+        in
+        import ./nix/generic-archive.nix {
+          inherit pkgs;
+          src = self;
+          application = privateVMFor system;
+          version = projectVersion;
+          sourceDateEpoch = self.lastModified or 0;
+        };
+
       guestdFor =
         system: role:
         let
@@ -1142,6 +1155,7 @@
           linuxDistributionPackages = nixpkgs.lib.optionalAttrs (system == "x86_64-linux") {
             deb = (linuxPackagesFor system).deb;
             rpm = (linuxPackagesFor system).rpm;
+            generic-archive = genericArchiveFor system;
           };
           imagePackages = nixpkgs.lib.optionalAttrs (system == "x86_64-linux") {
             image-workstation-basic = workstationBasic.config.system.build.images.qemu-efi;

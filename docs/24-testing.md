@@ -420,6 +420,23 @@ Run locally and optionally on a public documented volunteer/self-hosted runner:
 KVM acceptance is required before release but should be reproducible by
 maintainers; do not expose secrets to public PR jobs.
 
+### Packaging and generic-installer boundary
+
+The hook-free DEB/RPM source contract is validated by
+`tools/check_packaging_assets.py`. The Go generic installer is tested against a
+temporary synthetic root with an exact generated bundle. Tests cover closed
+manifest parsing, hash and symlink substitution, dry-run, install, preserved
+configuration/cache, uninstall, non-root refusal, active-daemon refusal,
+cancellation, timeout and activation rollback. No focused source test invokes
+systemd or mutates the host.
+
+Clean Ubuntu, Debian and Fedora VM tests remain release gates. They install the
+same digest-addressed artifacts, resolve real distribution dependencies, start
+and stop the daemon, validate the control socket and Doctor, test upgrade and
+uninstall, and record redacted JUnit/JSON evidence. See
+`docs/40-linux-package-acceptance.md` and
+`docs/41-generic-installer-acceptance.md`.
+
 ## Security fixtures
 
 - EICAR detection file

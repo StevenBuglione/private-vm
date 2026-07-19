@@ -260,6 +260,19 @@ func TestReferenceCommandsDoNotLoadConfiguration(t *testing.T) {
 	}
 }
 
+func TestGenericInstallCommandsDoNotDependOnUserConfiguration(t *testing.T) {
+	load := func(string, config.Overrides) (config.Config, error) {
+		t.Fatal("generic install command loaded user or daemon configuration")
+		return config.Config{}, errors.New("unreachable")
+	}
+	for _, args := range [][]string{{"system", "install", "--dry-run"}, {"system", "uninstall", "--dry-run"}} {
+		invoker := &recordingInvoker{}
+		if code := New(Dependencies{LoadConfig: load, Invoker: invoker}).Execute(context.Background(), args); code != exitcode.OK {
+			t.Fatalf("args=%v code=%d", args, code)
+		}
+	}
+}
+
 func TestJSONRejectsHumanOnlyHelpAndCompletion(t *testing.T) {
 	for _, args := range [][]string{
 		{"--json"},
@@ -340,6 +353,7 @@ func TestValidatedParametersReachSemanticInvoker(t *testing.T) {
 		{name: "policy name", args: []string{"policy", "show", "safe"}, want: PolicyNameIntent{Name: "safe"}},
 		{name: "policy file", args: []string{"policy", "validate", "/tmp/policy.toml"}, want: PolicyFileIntent{Path: "/tmp/policy.toml"}},
 		{name: "system install", args: []string{"system", "install", "--dry-run"}, want: SystemInstallIntent{DryRun: true}},
+		{name: "system uninstall", args: []string{"system", "uninstall", "--accept"}, want: SystemUninstallIntent{Accept: true}},
 		{name: "system diagnostics", args: []string{"system", "diagnostics", "--export", "/tmp/diagnostics.json"}, want: SystemDiagnosticsIntent{ExportPath: "/tmp/diagnostics.json"}},
 	}
 	for _, test := range tests {

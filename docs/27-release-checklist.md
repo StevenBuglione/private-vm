@@ -53,6 +53,9 @@
 - [ ] dependency install tests
 - [ ] upgrade/uninstall tests
 - [ ] completions and man pages
+- [ ] hook-free package contract check
+- [ ] generic install manifest and rollback tests
+- [ ] package runbook redacted JSON/JUnit evidence
 
 ## Supply chain
 

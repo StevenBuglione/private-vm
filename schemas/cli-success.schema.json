@@ -47,6 +47,12 @@
     },
     {
       "properties": {
+        "code": { "const": "SYSTEM_PLAN" },
+        "data": { "$ref": "#/$defs/system_plan" }
+      }
+    },
+    {
+      "properties": {
         "code": { "const": "TORRENT_STATUS" },
         "data": { "$ref": "#/$defs/torrent_status" }
       }
@@ -160,6 +166,33 @@
         "workflow_state": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]{2,63}$" }
       },
       "required": ["id", "role", "phase"]
+    },
+    "system_change": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "operation": {
+          "enum": ["create", "replace", "preserve", "remove", "ensure-group", "enable-service", "disable-service"]
+        },
+        "path": { "type": "string", "minLength": 1, "maxLength": 256 }
+      },
+      "required": ["operation", "path"]
+    },
+    "system_plan": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "action": { "enum": ["install", "uninstall"] },
+        "version": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "applied": { "type": "boolean" },
+        "changes": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 64,
+          "items": { "$ref": "#/$defs/system_change" }
+        }
+      },
+      "required": ["action", "version", "applied", "changes"]
     },
     "torrent_status": {
       "type": "object",

@@ -500,14 +500,14 @@ func (factory commandFactory) system() *cobra.Command {
 	install.Flags().BoolVar(&dryRun, "dry-run", false, "show the installation plan")
 	install.Flags().BoolVar(&accept, "accept", false, "apply the reviewed installation plan")
 
-	var uninstallDryRun bool
+	var uninstallDryRun, uninstallAccept bool
 	uninstall := factory.operation("uninstall", "Plan host integration removal", "system.uninstall", noArgs, func(*cobra.Command) error {
-		if !uninstallDryRun {
-			return usageError("System uninstall requires --dry-run in v1.", "Use --dry-run to inspect the bounded removal plan.")
-		}
-		return nil
-	}, func([]string) Intent { return SystemUninstallIntent{DryRun: uninstallDryRun} })
+		return validateExclusive(boolCount(uninstallDryRun, uninstallAccept), true,
+			"System uninstall requires exactly one execution mode.",
+			"Choose --dry-run to inspect removals or --accept to apply the reviewed plan.")
+	}, func([]string) Intent { return SystemUninstallIntent{DryRun: uninstallDryRun, Accept: uninstallAccept} })
 	uninstall.Flags().BoolVar(&uninstallDryRun, "dry-run", false, "show the removal plan")
+	uninstall.Flags().BoolVar(&uninstallAccept, "accept", false, "apply the reviewed removal plan")
 
 	var diagnosticsExport string
 	diagnostics := factory.operation("diagnostics", "Create a redacted diagnostic bundle", "system.diagnostics", noArgs, func(*cobra.Command) error {
