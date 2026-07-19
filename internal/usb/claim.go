@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
+	"sort"
 	"sync"
 	"time"
 )
@@ -25,7 +26,8 @@ type Claim struct {
 	OwnerUID     uint32
 	Device       Device
 
-	handle DeviceClaim
+	handle    DeviceClaim
+	cleanupMu *sync.Mutex
 }
 
 type ClaimManager struct {
@@ -106,7 +108,7 @@ func (m *ClaimManager) Claim(ctx context.Context, sessionID string, ownerUID uin
 	}
 	claim := &Claim{
 		ID: claimID, EnrollmentID: enrollment.EnrollmentID, SessionID: sessionID,
-		OwnerUID: ownerUID, Device: device, handle: handle,
+		OwnerUID: ownerUID, Device: device, handle: handle, cleanupMu: &sync.Mutex{},
 	}
 	m.mu.Lock()
 	m.claims[claimID] = claim
@@ -140,6 +142,15 @@ func (m *ClaimManager) Release(ctx context.Context, claimID, sessionID string, o
 		}
 		return err
 	}
+	claim.cleanupMu.Lock()
+	defer claim.cleanupMu.Unlock()
+	// A concurrent release may have completed while this caller waited.
+	m.mu.Lock()
+	current := m.claims[claimID]
+	m.mu.Unlock()
+	if current == nil {
+		return nil
+	}
 	if err := releaseAndAudit(ctx, claim.handle); err != nil {
 		return newError(CodeCleanupIncomplete, "The USB claim could not be fully released.", "Retry session cleanup before disconnecting the device.", err)
 	}
@@ -147,6 +158,28 @@ func (m *ClaimManager) Release(ctx context.Context, claimID, sessionID string, o
 	delete(m.claims, claim.ID)
 	delete(m.devices, claim.Device.Identity.USBGuardHash)
 	m.mu.Unlock()
+	return nil
+}
+
+// CleanupSession gives the session actor a recovery path for an acquisition
+// that allocated a physical claim but failed before a claim ID could be
+// returned to the caller. It visits only exact claims already owned by the
+// requested session and stops at the first incomplete dependent cleanup.
+func (m *ClaimManager) CleanupSession(ctx context.Context, sessionID string, ownerUID uint32) error {
+	m.mu.Lock()
+	claimIDs := make([]string, 0)
+	for claimID, claim := range m.claims {
+		if claim.SessionID == sessionID && claim.OwnerUID == ownerUID {
+			claimIDs = append(claimIDs, claimID)
+		}
+	}
+	m.mu.Unlock()
+	sort.Strings(claimIDs)
+	for _, claimID := range claimIDs {
+		if err := m.Release(ctx, claimID, sessionID, ownerUID); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -180,7 +213,7 @@ func releaseAndAuditWithTimeout(parent context.Context, claim DeviceClaim) error
 func (m *ClaimManager) retainFailedClaim(claimID, sessionID string, ownerUID uint32, enrollmentID string, device Device, handle DeviceClaim) {
 	claim := &Claim{
 		ID: claimID, EnrollmentID: enrollmentID, SessionID: sessionID,
-		OwnerUID: ownerUID, Device: device, handle: handle,
+		OwnerUID: ownerUID, Device: device, handle: handle, cleanupMu: &sync.Mutex{},
 	}
 	m.mu.Lock()
 	m.claims[claimID] = claim

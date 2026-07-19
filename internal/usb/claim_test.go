@@ -114,3 +114,49 @@ func TestReleaseFailureRetainsClaimForRetry(t *testing.T) {
 		t.Fatalf("release retry failed: %v", err)
 	}
 }
+
+func TestConcurrentReleaseHasOneCleanupOwner(t *testing.T) {
+	handle := &fakeDeviceClaim{}
+	manager, enrollment, _ := claimFixture(t, fakeDeviceClaimer{handle: handle})
+	claim, err := manager.Claim(t.Context(), "pvm-session", 1000, enrollment)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const callers = 32
+	errorsFound := make(chan error, callers)
+	var wait sync.WaitGroup
+	for range callers {
+		wait.Add(1)
+		go func() {
+			defer wait.Done()
+			errorsFound <- manager.Release(t.Context(), claim.ID, "pvm-session", 1000)
+		}()
+	}
+	wait.Wait()
+	close(errorsFound)
+	for err := range errorsFound {
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	if handle.releaseCalls != 1 {
+		t.Fatalf("physical claim released %d times", handle.releaseCalls)
+	}
+}
+
+func TestFailedAcquisitionRetainsSessionRecoveryOwner(t *testing.T) {
+	handle := &fakeDeviceClaim{releaseErr: errors.New("fixture rollback failure")}
+	manager, enrollment, _ := claimFixture(t, fakeDeviceClaimer{handle: handle, err: errors.New("fixture acquire failure")})
+	_, err := manager.Claim(t.Context(), "pvm-session", 1000, enrollment)
+	var usbError *Error
+	if !errors.As(err, &usbError) || usbError.Code != CodeCleanupIncomplete {
+		t.Fatalf("got %v", err)
+	}
+	handle.releaseErr = nil
+	if err := manager.CleanupSession(t.Context(), "pvm-session", 1000); err != nil {
+		t.Fatalf("session recovery failed: %v", err)
+	}
+	if handle.releaseCalls != 2 {
+		t.Fatalf("release attempts=%d, want 2", handle.releaseCalls)
+	}
+}

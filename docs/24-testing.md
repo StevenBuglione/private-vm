@@ -18,6 +18,10 @@
 - claim collision, cancellation rollback, absence audit, release retry, stale
   preparation challenges, two exact confirmation steps, final identity
   revalidation, Polkit-before-commit ordering and incomplete prepare evidence
+- one-way chunk sequencing and bounds, authenticated safe-policy eligibility,
+  scanner/relay/exporter/reread hash equality, source-close failure, timeout,
+  fsync/rename evidence, networkless role boundaries and retryable reverse-order
+  export cleanup without serializing filenames or hashes
 - scan report parser
 - policy decisions
 - stream framing/hash
