@@ -62,76 +62,8 @@ def release_matrix() -> str:
 
 
 def release_workflow() -> str:
-    matrix = release_matrix()
-    return f"""
-name: Release
-on:
-  push:
-    tags: ["v*"]
-permissions:
-  contents: read
-jobs:
-  publish:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 180
-    environment: image-publish
-    permissions:
-      contents: read
-      packages: write
-      id-token: write
-      attestations: write
-    env:
-      NIX_CONFIG: "max-jobs = 1 cores = 2"
-    strategy:
-      fail-fast: false
-      matrix:
-        include:{matrix}
-    steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
-        with:
-          persist-credentials: false
-          fetch-depth: 0
-      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
-        with:
-          go-version: "1.26.5"
-          cache: false
-      - uses: DeterminateSystems/nix-installer-action@ef8a148080ab6020fd15196c2084a2eea5ff2d25
-      - name: Prepare exact image release
-        id: prepare
-        run: private-vm-image-release prepare --image-target "${{{{ matrix.image_target }}}}" --closure-target "${{{{ matrix.closure_target }}}}"
-      - name: Attest compressed image
-        id: attest
-        uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6
-        with:
-          subject-name: image.qcow2.zst
-          subject-digest: ${{{{ steps.prepare.outputs.subject_digest }}}}
-          predicate-type: https://slsa.dev/provenance/v1
-          predicate-path: ${{{{ steps.prepare.outputs.predicate_path }}}}
-      - name: Publish exact OCI artifact
-        run: |
-          set +x
-          printf '%s' '${{{{ github.token }}}}' | private-vm-image-release publish --prepared prepared --provenance '${{{{ steps.attest.outputs.bundle-path }}}}' --token-stdin
-  verify:
-    needs: publish
-    runs-on: ubuntu-24.04
-    timeout-minutes: 60
-    permissions:
-      contents: read
-    strategy:
-      fail-fast: false
-      matrix:
-        include:{matrix}
-    steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
-        with:
-          persist-credentials: false
-      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
-        with:
-          go-version: "1.26.5"
-          cache: false
-      - name: Verify public artifact anonymously
-        run: private-vm-image-release verify-anonymous --repository "${{{{ matrix.repository }}}}" --tag "${{{{ github.ref_name }}}}"
-"""
+    root = Path(__file__).resolve().parents[1]
+    return (root / ".github" / "workflows" / "release.yml").read_text()
 
 
 def workflow(
@@ -564,8 +496,8 @@ jobs:
             (
                 "ignored failure",
                 release_workflow().replace(
-                    'private-vm-image-release verify-anonymous --repository "${{ matrix.repository }}" --tag "${{ github.ref_name }}"',
-                    'private-vm-image-release verify-anonymous --repository "${{ matrix.repository }}" --tag "${{ github.ref_name }}" || true',
+                    '--bundle \'${{ matrix.bundle }}\' --timeout 30m',
+                    '--bundle \'${{ matrix.bundle }}\' --timeout 30m || true',
                     1,
                 ),
                 "fail closed",

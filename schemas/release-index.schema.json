@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://private-vm.dev/schema/release-index-v1.json",
+  "title": "private-vm immutable whole-release index",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "project", "release_tag", "source_repository", "source_commit", "source_ref", "workflow", "created_at", "packages", "images"],
+  "properties": {
+    "schema_version": {"const": 1}, "project": {"const": "private-vm"},
+    "release_tag": {"$ref": "#/$defs/tag"}, "source_repository": {"const": "StevenBuglione/private-vm"},
+    "source_commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "source_ref": {"type": "string", "pattern": "^refs/tags/v(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(-rc\\.(0|[1-9][0-9]*))?$"},
+    "workflow": {"const": ".github/workflows/release.yml"}, "created_at": {"type": "string", "format": "date-time"},
+    "packages": {"type": "array", "minItems": 3, "maxItems": 3, "prefixItems": [
+      {"$ref": "#/$defs/package"}, {"$ref": "#/$defs/package"}, {"$ref": "#/$defs/package"}
+    ], "items": false},
+    "images": {"type": "array", "minItems": 6, "maxItems": 6, "items": {"type": "object", "additionalProperties": false, "required": ["name", "repository", "manifest_digest"], "properties": {"name": {"enum": ["workstation-basic", "workstation-office", "workstation-development", "downloader", "scanner", "exporter"]}, "repository": {"type": "string", "pattern": "^ghcr\\.io/stevenbuglione/private-vm/(workstation-basic|workstation-office|workstation-development|downloader|scanner|exporter)$"}, "manifest_digest": {"$ref": "#/$defs/digest"}}}}
+  },
+  "$defs": {
+    "tag": {"type": "string", "pattern": "^v(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(-rc\\.(0|[1-9][0-9]*))?$"},
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "name": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,254}$"},
+    "package": {"type": "object", "additionalProperties": false, "required": ["kind", "file", "size_bytes", "sha256", "manifest", "manifest_sha256", "sbom", "sbom_sha256", "provenance"], "properties": {"kind": {"enum": ["deb", "rpm", "generic-archive"]}, "file": {"$ref": "#/$defs/name"}, "size_bytes": {"type": "integer", "minimum": 1, "maximum": 536870912}, "sha256": {"$ref": "#/$defs/digest"}, "manifest": {"$ref": "#/$defs/name"}, "manifest_sha256": {"$ref": "#/$defs/digest"}, "sbom": {"$ref": "#/$defs/name"}, "sbom_sha256": {"$ref": "#/$defs/digest"}, "provenance": {"$ref": "#/$defs/name"}}}
+  }
+}

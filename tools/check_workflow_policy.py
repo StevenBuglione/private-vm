@@ -180,7 +180,6 @@ def _validate_protected_permissions(
     expected = (
         {
             "contents": "write",
-            "packages": "write",
             "id-token": "write",
             "attestations": "write",
         }
@@ -590,9 +589,11 @@ def _validate_stdin_publish_token(
     source: str, steps: list[dict[str, Any]], publish_index: int, name: str
 ) -> None:
     token = "${{ github.token }}"
-    if source.count(token) != 1 or re.search(
+
+    scoped_source = "\n".join(str(step) for step in steps)
+    if scoped_source.count(token) != 1 or re.search(
         r"\$\{\{\s*secrets(?:\.|\[)|\b(?:GITHUB_TOKEN|GH_TOKEN|CR_PAT)\b",
-        source,
+        scoped_source,
         flags=re.IGNORECASE,
     ):
         raise PolicyError(
@@ -613,7 +614,7 @@ def _validate_stdin_publish_token(
     token_line = token_lines[0]
     direct_pipe = re.compile(
         r"^printf '%s' '\$\{\{ github\.token \}\}' \| "
-        r"(?:\./)?private-vm-image-release publish\b.*\s--token-stdin(?:\s|$)"
+        r"(?:\./)?private-vm(?:-image)?-release publish\b.*\s--token-stdin(?:\s|$)"
     )
     if not direct_pipe.fullmatch(token_line):
         raise PolicyError(
@@ -645,21 +646,26 @@ def validate_release_workflow_text(source: str, name: str = "release.yml") -> No
         raise PolicyError(f"{name}: workflow permissions must be exactly contents: read")
 
     jobs = _mapping(document.get("jobs"), f"{name}.jobs")
-    if set(jobs) != {"publish", "verify"}:
-        raise PolicyError(f"{name}: REL-003 permits only publish and verify jobs")
+    if set(jobs) != {"publish", "verify", "packages", "verify-release"}:
+        raise PolicyError(f"{name}: release workflow must contain only the four reviewed jobs")
     publish = _mapping(jobs["publish"], f"{name}.jobs.publish")
     verify = _mapping(jobs["verify"], f"{name}.jobs.verify")
+    packages = _mapping(jobs["packages"], f"{name}.jobs.packages")
+    verify_release = _mapping(jobs["verify-release"], f"{name}.jobs.verify-release")
 
     for job_name, job, maximum_timeout in (
         ("publish", publish, 180),
         ("verify", verify, 60),
+        ("packages", packages, 90),
+        ("verify-release", verify_release, 60),
     ):
         if job.get("runs-on") != "ubuntu-24.04":
             raise PolicyError(
                 f"{name}: {job_name} must use the standard ubuntu-24.04 public runner"
             )
         _bounded_release_timeout(job, name, job_name, maximum_timeout)
-        _validate_release_matrix(job, name, job_name)
+        if job_name in ("publish", "verify"):
+            _validate_release_matrix(job, name, job_name)
         if "if" in job:
             raise PolicyError(f"{name}: {job_name} must not override normal success gating")
         for prohibited_key in ("container", "secrets", "services"):
@@ -688,17 +694,56 @@ def validate_release_workflow_text(source: str, name: str = "release.yml") -> No
     }:
         raise PolicyError(f"{name}: anonymous verification must have only contents: read")
 
+    if packages.get("needs") != "verify" or packages.get("environment") != "release":
+        raise PolicyError(f"{name}: packages must follow image verification in the protected release environment")
+    if _permissions(packages.get("permissions"), f"{name}.jobs.packages.permissions") != {
+        "contents": "write", "id-token": "write", "attestations": "write"
+    }:
+        raise PolicyError(f"{name}: package publication permissions exceed the reviewed set")
+    package_environment = _mapping(packages.get("env"), f"{name}.jobs.packages.env")
+    package_nix = str(package_environment.get("NIX_CONFIG", ""))
+    if set(package_environment) != {"NIX_CONFIG"} or "max-jobs = 1" not in package_nix or "cores = 2" not in package_nix:
+        raise PolicyError(f"{name}: packages must use serialized Nix limits")
+    if verify_release.get("needs") != "packages" or "environment" in verify_release or "env" in verify_release:
+        raise PolicyError(f"{name}: whole-release verification must use a fresh unprotected job")
+    if _permissions(verify_release.get("permissions"), f"{name}.jobs.verify-release.permissions") != {"contents": "read"}:
+        raise PolicyError(f"{name}: whole-release verification must have only contents: read")
+
     publish_steps = _release_steps(publish, name, "publish")
     verify_steps = _release_steps(verify, name, "verify")
+    package_steps = _release_steps(packages, name, "packages")
+    verify_release_steps = _release_steps(verify_release, name, "verify-release")
     _release_action_set(
         publish_steps, PINNED_RELEASE_PUBLISH_ACTIONS, name, "publish"
     )
     _release_action_set(verify_steps, PINNED_RELEASE_VERIFY_ACTIONS, name, "verify")
+    _release_action_set(package_steps, PINNED_RELEASE_PUBLISH_ACTIONS[:3] + [PINNED_RELEASE_PUBLISH_ACTIONS[3]] * 3, name, "packages")
+    _release_action_set(verify_release_steps, PINNED_RELEASE_VERIFY_ACTIONS, name, "verify-release")
     _validate_release_setup_go(publish_steps, name, "publish")
     _validate_release_setup_go(verify_steps, name, "verify")
+    _validate_release_setup_go(package_steps, name, "packages")
+    _validate_release_setup_go(verify_release_steps, name, "verify-release")
     _validate_release_checkout_history(publish_steps, name)
+    _validate_release_checkout_history(package_steps, name)
     publish_index = _validate_release_attestation(publish_steps, name)
     _validate_stdin_publish_token(source, publish_steps, publish_index, name)
+
+    package_prepare = _step_runs(package_steps, "private-vm-release prepare")
+    package_publish = _step_runs(package_steps, "private-vm-release publish")
+    package_attests = [step for step in package_steps if str(step.get("uses", "")).startswith("actions/attest@")]
+    if len(package_prepare) != 1 or len(package_publish) != 1 or len(package_attests) != 3:
+        raise PolicyError(f"{name}: package job requires one prepare, three attest and one publish operation")
+    package_publish_index = package_publish[0][0]
+    _validate_stdin_publish_token(source, package_steps, package_publish_index, name)
+    if any("continue-on-error" in step for step in package_steps):
+        raise PolicyError(f"{name}: package release steps must fail closed")
+
+    whole_verify = _step_runs(verify_release_steps, "private-vm-release verify")
+    if len(whole_verify) != 1 or re.search(r"(?:\|\||&&|[|;>])", whole_verify[0][1]):
+        raise PolicyError(f"{name}: whole-release verification must execute once and fail closed")
+    whole_verify_text = "\n".join(str(step.get("run", "")) + "\n" + str(step.get("env", "")) for step in verify_release_steps).lower()
+    if re.search(r"(secrets|github\.token|authorization|credential|password|login|\bcurl\b|\bwget\b|\bgh\b|\boras\b|packages\s*:\s*(?:read|write)|id-token|attestations)", whole_verify_text):
+        raise PolicyError(f"{name}: whole-release verification contains an authentication fallback")
 
     anonymous = _step_runs(verify_steps, "private-vm-image-release verify-anonymous")
     if len(anonymous) != 1:

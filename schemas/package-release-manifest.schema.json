@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://private-vm.dev/schema/package-release-manifest-v1.json",
+  "title": "private-vm package release build manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "project", "release_tag", "kind", "artifact", "size_bytes", "sha256", "sbom", "sbom_sha256", "source_repository", "source_commit", "source_ref", "workflow", "architecture", "os"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "project": {"const": "private-vm"},
+    "release_tag": {"$ref": "#/$defs/tag"},
+    "kind": {"enum": ["deb", "rpm", "generic-archive"]},
+    "artifact": {"$ref": "#/$defs/name"},
+    "size_bytes": {"type": "integer", "minimum": 1, "maximum": 536870912},
+    "sha256": {"$ref": "#/$defs/digest"},
+    "sbom": {"$ref": "#/$defs/name"},
+    "sbom_sha256": {"$ref": "#/$defs/digest"},
+    "source_repository": {"const": "StevenBuglione/private-vm"},
+    "source_commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "source_ref": {"type": "string", "pattern": "^refs/tags/v(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(-rc\\.(0|[1-9][0-9]*))?$"},
+    "workflow": {"const": ".github/workflows/release.yml"},
+    "architecture": {"const": "amd64"},
+    "os": {"const": "linux"}
+  },
+  "$defs": {
+    "tag": {"type": "string", "pattern": "^v(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(-rc\\.(0|[1-9][0-9]*))?$"},
+    "name": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,254}$"},
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+  }
+}
