@@ -131,6 +131,33 @@ provides no block encryption and expands host/destination parser exposure.
 19. stop exporter
 20. release host claim
 
+The source implementation represents each of these boundaries with typed,
+bounded interfaces. Before boot it revalidates the enrolled claim and requires
+an independent boundary audit that the host has not mounted the device and the
+scanner has not received it. The lifecycle adapter may then boot only the
+networkless exporter, attach the revalidated device through the typed QEMU
+hotplug boundary, and verify the same identity inside the guest.
+
+The relay accepts one authenticated, complete, policy-approved reconstructed
+output. Each chunk is at most 1 MiB, has a monotonic sequence, and is cleared
+from the relay's owned buffer after the destination consumes it. Overall byte,
+idle and operation deadlines are mandatory. Raw names and hashes never enter
+events or the export receipt.
+
+The scanner digest, relay digest, exporter receive digest and exporter reread
+digest remain internal redacted values. A successful receipt exposes only the
+three equality results and requires all of them to be true. It also requires
+file and filesystem `fsync`, atomic rename, unmount, LUKS close, USB detach,
+exporter stop, claim release and an absence audit. Any missing field or false
+value makes the closed `usb-export-receipt` invalid.
+
+The export operation is the single cleanup owner for its writer, exporter,
+destination and claim. Failure cleanup runs in dependency order: remove a
+partial writer, unmount/close, detach, stop, release and audit. It stops at the
+first dependent failure and retains state so the same operation can retry the
+incomplete step. Cancellation or caller loss cannot turn incomplete cleanup
+into a success receipt.
+
 ## Interrupted export
 
 The report is `INCOMPLETE`. The USB must be reverified in exporter before use.

@@ -51,6 +51,7 @@ pairs = [
     ("schemas/vpn-profile-status.schema.json", "examples/vpn-profile-status.example.json", "json"),
     ("schemas/recovery-report.schema.json", "examples/recovery-report.example.json", "json"),
     ("schemas/usb-enrollment.schema.json", "examples/usb-enrollment.example.json", "json"),
+    ("schemas/usb-export-receipt.schema.json", "examples/usb-export-receipt.example.json", "json"),
     ("schemas/usb-prepare-plan.schema.json", "examples/usb-prepare-plan.example.json", "json"),
     ("schemas/usb-prepare-receipt.schema.json", "examples/usb-prepare-receipt.example.json", "json"),
     ("schemas/workstation-bundles.schema.json", "project/workstation-bundles.json", "json"),
@@ -128,6 +129,24 @@ recovery_report_schema = json.loads(
 )
 recovery_report = json.loads(
     (ROOT / "examples/recovery-report.example.json").read_text(encoding="utf-8")
+)
+usb_enrollment_schema = json.loads(
+    (ROOT / "schemas/usb-enrollment.schema.json").read_text(encoding="utf-8")
+)
+usb_enrollment = json.loads(
+    (ROOT / "examples/usb-enrollment.example.json").read_text(encoding="utf-8")
+)
+usb_prepare_plan_schema = json.loads(
+    (ROOT / "schemas/usb-prepare-plan.schema.json").read_text(encoding="utf-8")
+)
+usb_prepare_plan = json.loads(
+    (ROOT / "examples/usb-prepare-plan.example.json").read_text(encoding="utf-8")
+)
+usb_export_receipt_schema = json.loads(
+    (ROOT / "schemas/usb-export-receipt.schema.json").read_text(encoding="utf-8")
+)
+usb_export_receipt = json.loads(
+    (ROOT / "examples/usb-export-receipt.example.json").read_text(encoding="utf-8")
 )
 
 negative_cases = []
@@ -317,6 +336,21 @@ recovery_unknown_failure["failures"] = [{
     "retryable": True,
 }]
 negative_cases.append(("unknown recovery failure", recovery_report_schema, recovery_unknown_failure))
+composite_usb = deepcopy(usb_enrollment)
+composite_usb["identity"]["interfaces"].append("03:01:01")
+negative_cases.append(("composite USB enrollment", usb_enrollment_schema, composite_usb))
+usb_passphrase = deepcopy(usb_enrollment)
+usb_passphrase["luks_passphrase"] = "forbidden"
+negative_cases.append(("USB enrollment secret field", usb_enrollment_schema, usb_passphrase))
+usb_prepare_path = deepcopy(usb_prepare_plan)
+usb_prepare_path["device_path"] = "/dev/sdz"
+negative_cases.append(("USB prepare kernel path", usb_prepare_plan_schema, usb_prepare_path))
+usb_raw_hash = deepcopy(usb_export_receipt)
+usb_raw_hash["sha256"] = "0" * 64
+negative_cases.append(("USB receipt raw hash", usb_export_receipt_schema, usb_raw_hash))
+usb_hash_mismatch = deepcopy(usb_export_receipt)
+usb_hash_mismatch["relay_exporter_hash_equal"] = False
+negative_cases.append(("USB receipt hash mismatch", usb_export_receipt_schema, usb_hash_mismatch))
 
 for label, schema, value in negative_cases:
     if Draft202012Validator(schema).is_valid(value):

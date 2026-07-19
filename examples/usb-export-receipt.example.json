@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "enrollment_id": "usb-4568eb4a9e23aaa5",
+  "bytes_written": 1048576,
+  "scanner_relay_hash_equal": true,
+  "relay_exporter_hash_equal": true,
+  "exporter_reread_hash_equal": true,
+  "file_synced": true,
+  "filesystem_synced": true,
+  "atomic_rename": true,
+  "usb_unmounted": true,
+  "usb_detached": true,
+  "exporter_stopped": true,
+  "cleanup_complete": true
+}
