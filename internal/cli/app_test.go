@@ -155,7 +155,7 @@ func TestCLIConfigLayerIsLoadedBeforeDispatch(t *testing.T) {
 		t.Fatalf("dispatch calls=%#v", invoker.calls)
 	}
 	intent, ok := invoker.calls[0].intent.(WorkstationIntent)
-	if !ok || intent.Bundle != "development" || intent.Memory != "17179869184B" || intent.CPUs != 8 {
+	if !ok || intent.Bundle != "development" || intent.Memory != "4294967296B" || intent.CPUs != 2 {
 		t.Fatalf("configuration defaults did not reach dispatch: %#v", invoker.calls[0].intent)
 	}
 }

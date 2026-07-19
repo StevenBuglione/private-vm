@@ -61,6 +61,10 @@ The default controlled fixtures are Cloudflare's documented public DNS-over-TLS
 name and IPv4/IPv6 endpoints on port 853. Operators may replace all three with
 their own public global-unicast fixtures. They cross only the authenticated
 host-to-guest request and are never returned in status, events or logs.
+
+The packaged workstation default is 4 GiB and 2 vCPUs. Larger values remain
+available within the documented bounds, but operators must leave capacity for
+the host and any concurrently required workflow role.
 | `usb` | `require_usbguard`, `default_filesystem` | USBGuard mandatory; `luks2-ext4` only |
 | `logging` | `persistent_lifecycle_metadata`, `telemetry` | lifecycle metadata contains no session data; telemetry is always disabled |
 

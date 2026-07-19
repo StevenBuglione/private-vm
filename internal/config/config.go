@@ -197,7 +197,7 @@ func Defaults() Config {
 		},
 		Desktop: wireDesktop{
 			Bundle: "development", Viewer: "remote-viewer",
-			MemoryBytes: 16 << 30, VCPUs: 8,
+			MemoryBytes: 4 << 30, VCPUs: 2,
 		},
 		VPN: wireVPN{
 			ProfileName: "proton-p2p", DisableIPv6IfNotTunneled: true,

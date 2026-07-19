@@ -19,6 +19,9 @@ func TestDefaultsAreValidAndImmutableValues(t *testing.T) {
 	if configuration.SchemaVersion() != 1 || !configuration.Strict() {
 		t.Fatalf("unexpected defaults: %#v", configuration)
 	}
+	if configuration.Desktop().MemoryBytes() != 4<<30 || configuration.Desktop().VCPUs() != 2 {
+		t.Fatalf("unsafe workstation defaults: memory=%d vcpus=%d", configuration.Desktop().MemoryBytes(), configuration.Desktop().VCPUs())
+	}
 	runtimeCopy := configuration.Runtime()
 	if runtimeCopy.Directory() != DefaultRuntimePath || configuration.Runtime().Directory() != DefaultRuntimePath {
 		t.Fatal("runtime getter did not return the immutable value")

@@ -18,8 +18,8 @@ cleanup_timeout_seconds = 30
 bundle = "development"
 viewer = "remote-viewer"
 audio = false
-memory_bytes = 17179869184
-vcpus = 8
+memory_bytes = 4294967296
+vcpus = 2
 
 [vpn]
 profile_name = "proton-p2p"
