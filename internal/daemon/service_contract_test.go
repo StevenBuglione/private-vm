@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -241,6 +242,84 @@ func TestStreamEventsReturnsTypedNotFoundForMissingInitialSession(t *testing.T) 
 	assertRPCError(t, err, codes.NotFound, "SESSION_NOT_FOUND")
 }
 
+func TestStreamEventsReplaysFollowsAndDeliversTerminalEvent(t *testing.T) {
+	store, err := session.NewStore(filepath.Join(t.TempDir(), "run"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	manager, err := session.NewManager(store, session.DefaultMaxSessionsPerOwner)
+	if err != nil {
+		t.Fatal(err)
+	}
+	snapshot, err := manager.Create(uint32(os.Geteuid()), session.RoleWorkstation)
+	if err != nil {
+		t.Fatal(err)
+	}
+	identity := currentProcessIdentity(t)
+	ctx := context.WithValue(t.Context(), identityContextKey{}, identity)
+	stream := &recordingEventStream{ctx: ctx, events: make(chan *privatevmv1.SessionEvent, 8)}
+	service := &Service{Sessions: manager}
+	done := make(chan error, 1)
+	go func() {
+		done <- service.StreamEvents(
+			&privatevmv1.GetSessionRequest{Context: validRequestContext(snapshot.ID)},
+			stream,
+		)
+	}()
+	assertEvent := func(sequence uint64, code string) {
+		t.Helper()
+		select {
+		case event := <-stream.events:
+			if event.GetSequence() != sequence || event.GetEventCode() != code || event.GetSafeMessage() == "" {
+				t.Fatalf("unexpected event: %+v", event)
+			}
+		case <-time.After(time.Second):
+			t.Fatalf("event %d was not delivered", sequence)
+		}
+	}
+	assertEvent(1, "SESSION_CREATED")
+	if _, err := manager.Transition(t.Context(), snapshot.ID, identity.UID, session.PhasePreflighted); err != nil {
+		t.Fatal(err)
+	}
+	assertEvent(2, "SESSION_PREFLIGHTED")
+	if _, err := manager.Cleanup(t.Context(), snapshot.ID, identity.UID); err != nil {
+		t.Fatal(err)
+	}
+	assertEvent(3, "SESSION_ABORTING")
+	assertEvent(4, "SESSION_DESTROYING")
+	assertEvent(5, "SESSION_DESTROYED")
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("terminal stream error: %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("event stream did not close after the terminal event")
+	}
+}
+
+func TestStreamEventsRejectsFutureCursor(t *testing.T) {
+	store, err := session.NewStore(filepath.Join(t.TempDir(), "run"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	manager, err := session.NewManager(store, session.DefaultMaxSessionsPerOwner)
+	if err != nil {
+		t.Fatal(err)
+	}
+	identity := currentProcessIdentity(t)
+	snapshot, err := manager.Create(identity.UID, session.RoleWorkstation)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.WithValue(t.Context(), identityContextKey{}, identity)
+	err = (&Service{Sessions: manager}).StreamEvents(
+		&privatevmv1.GetSessionRequest{Context: validRequestContext(snapshot.ID), AfterSequence: 99},
+		&eventFixtureStream{ctx: ctx},
+	)
+	assertRPCError(t, err, codes.InvalidArgument, "EVENT_CURSOR_INVALID")
+}
+
 func TestStreamInputsRequireValidContextBeforeUnimplementedBoundary(t *testing.T) {
 	service := &Service{}
 	for _, test := range []struct {
@@ -340,3 +419,15 @@ type eventFixtureStream struct {
 
 func (s *eventFixtureStream) Context() context.Context             { return s.ctx }
 func (s *eventFixtureStream) Send(*privatevmv1.SessionEvent) error { return nil }
+
+type recordingEventStream struct {
+	grpc.ServerStream
+	ctx    context.Context
+	events chan *privatevmv1.SessionEvent
+}
+
+func (s *recordingEventStream) Context() context.Context { return s.ctx }
+func (s *recordingEventStream) Send(event *privatevmv1.SessionEvent) error {
+	s.events <- event
+	return nil
+}

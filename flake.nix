@@ -856,6 +856,20 @@
               }
             ];
           };
+          markedHost = nixpkgs.lib.nixosSystem {
+            inherit system;
+            modules = [
+              ./nix/modules/host.nix
+              {
+                services.private-vm = {
+                  enable = true;
+                  package = customApplication;
+                  scratchBackupExcluded = true;
+                };
+                system.stateVersion = "26.05";
+              }
+            ];
+          };
           service = host.config.systemd.services.private-vmd;
           policies = builtins.filter (
             package: nixpkgs.lib.hasPrefix "private-vm-polkit-policy" package.name
@@ -872,6 +886,7 @@
             util-linux
           ];
           policySource = builtins.readFile ./packaging/polkit/org.private-vm.policy;
+          markerRule = "f /var/lib/private-vm/scratch/.private-vm-no-backup 0600 root root - private-vm-ephemeral-scratch-v1";
         in
         assert host.config.users.groups ? pvm-custom;
         assert service.serviceConfig.Group == "pvm-custom";
@@ -883,6 +898,8 @@
         assert builtins.length (nixpkgs.lib.splitString "<action id=" policySource) == 2;
         assert nixpkgs.lib.hasInfix "<action id=\"org.private-vm.usb.prepare\">" policySource;
         assert !nixpkgs.lib.hasInfix "org.private-vm.session.manage" policySource;
+        assert !nixpkgs.lib.elem markerRule host.config.systemd.tmpfiles.rules;
+        assert nixpkgs.lib.elem markerRule markedHost.config.systemd.tmpfiles.rules;
         pkgs.writeText "private-vm-host-module-contract" (
           builtins.toJSON {
             group = service.serviceConfig.Group;
@@ -1023,6 +1040,10 @@
             '';
             daemon-rpc-fuzz = sourceCheck "private-vm-daemon-rpc-fuzz" ''
               go test ./internal/daemon -run='^$' -fuzz='^FuzzDaemonRPCInputs$' -fuzztime=2s -parallel=1
+            '';
+            runtime-fuzz = sourceCheck "private-vm-runtime-fuzz" ''
+              go test ./internal/session -run='^$' -fuzz='^FuzzDecodeVolatileSessionJournal$' -fuzztime=2s -parallel=1
+              go test ./internal/qemu -run='^$' -fuzz='^FuzzQMPEnvelope$' -fuzztime=2s -parallel=1
             '';
             host-module-contract = hostModuleContractCheckFor system;
             static-binaries = staticBinariesCheckFor system;

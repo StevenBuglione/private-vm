@@ -2,19 +2,32 @@ package qemu
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net"
+	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"sync"
+	"sync/atomic"
+	"syscall"
 	"time"
+
+	"golang.org/x/sys/unix"
 )
 
-const DefaultQMPFrameLimit = 1 << 20
+const (
+	DefaultQMPFrameLimit = 1 << 20
+	qmpOperationLimit    = 5 * time.Second
+	runtimeSocketMode    = 0o600
+)
+
+var qmpIdentifierPattern = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_-]{0,63}$`)
 
 type QMPEvent struct {
 	Name      string
@@ -27,13 +40,17 @@ type QEMUStatus struct {
 }
 
 type QMPClient struct {
-	mu     sync.Mutex
-	conn   *net.UnixConn
-	reader *bufio.Reader
-	limit  int
-	nextID uint64
-	events []QMPEvent
-	closed bool
+	mu             sync.Mutex
+	conn           *net.UnixConn
+	reader         *bufio.Reader
+	limit          int
+	nextID         uint64
+	events         []QMPEvent
+	closed         atomic.Bool
+	disconnect     chan struct{}
+	monitorStop    chan struct{}
+	disconnectOnce sync.Once
+	monitorOnce    sync.Once
 }
 
 type qmpEnvelope struct {
@@ -41,6 +58,7 @@ type qmpEnvelope struct {
 	Return    json.RawMessage `json:"return,omitempty"`
 	Error     *qmpError       `json:"error,omitempty"`
 	Event     string          `json:"event,omitempty"`
+	Data      json.RawMessage `json:"data,omitempty"`
 	Timestamp *qmpTimestamp   `json:"timestamp,omitempty"`
 	ID        string          `json:"id,omitempty"`
 }
@@ -52,12 +70,14 @@ type qmpGreeting struct {
 			Minor int `json:"minor"`
 			Micro int `json:"micro"`
 		} `json:"qemu"`
+		Package string `json:"package"`
 	} `json:"version"`
 	Capabilities []string `json:"capabilities"`
 }
 
 type qmpError struct {
 	Class string `json:"class"`
+	Desc  string `json:"desc"`
 }
 
 type qmpTimestamp struct {
@@ -65,9 +85,12 @@ type qmpTimestamp struct {
 	Microseconds int64 `json:"microseconds"`
 }
 
-func DialQMP(ctx context.Context, socketPath string, frameLimit int) (*QMPClient, error) {
+func DialQMP(ctx context.Context, socketPath string, frameLimit int, expectedPID ...int) (*QMPClient, error) {
 	if !filepath.IsAbs(socketPath) || filepath.Clean(socketPath) != socketPath {
 		return nil, errors.New("QMP socket path must be a clean absolute path")
+	}
+	if err := validateExistingUnixSocket(socketPath, runtimeSocketMode); err != nil {
+		return nil, err
 	}
 	if frameLimit <= 0 {
 		frameLimit = DefaultQMPFrameLimit
@@ -77,18 +100,35 @@ func DialQMP(ctx context.Context, socketPath string, frameLimit int) (*QMPClient
 	}
 	connection, err := (&net.Dialer{}).DialContext(ctx, "unix", socketPath)
 	if err != nil {
-		return nil, fmt.Errorf("connect QMP socket: %w", err)
+		if ctx.Err() != nil {
+			return nil, fmt.Errorf("connect QMP socket: %w", ctx.Err())
+		}
+		return nil, errors.New("connect QMP socket failed")
 	}
 	unixConnection, ok := connection.(*net.UnixConn)
 	if !ok {
 		_ = connection.Close()
 		return nil, errors.New("QMP connection is not a Unix socket")
 	}
-	client := &QMPClient{conn: unixConnection, reader: bufio.NewReaderSize(unixConnection, frameLimit+1), limit: frameLimit}
+	if len(expectedPID) > 1 || (len(expectedPID) == 1 && expectedPID[0] <= 1) {
+		_ = connection.Close()
+		return nil, errors.New("QMP expected peer PID is invalid")
+	}
+	if len(expectedPID) == 1 {
+		if err := verifyQMPPeer(unixConnection, expectedPID[0]); err != nil {
+			_ = connection.Close()
+			return nil, err
+		}
+	}
+	client := &QMPClient{
+		conn: unixConnection, reader: bufio.NewReaderSize(unixConnection, frameLimit+1), limit: frameLimit,
+		disconnect: make(chan struct{}), monitorStop: make(chan struct{}),
+	}
 	if err := client.handshake(ctx); err != nil {
 		_ = client.Close()
 		return nil, err
 	}
+	client.startDisconnectMonitor()
 	return client, nil
 }
 
@@ -117,7 +157,13 @@ func (c *QMPClient) QueryStatus(ctx context.Context) (QEMUStatus, error) {
 		return QEMUStatus{}, err
 	}
 	var result QEMUStatus
-	if err := json.Unmarshal(raw, &result); err != nil || result.Status == "" || len(result.Status) > 64 {
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&result); err != nil || !qmpIdentifierPattern.MatchString(result.Status) {
+		return QEMUStatus{}, errors.New("QMP query-status returned an invalid response")
+	}
+	var trailing any
+	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
 		return QEMUStatus{}, errors.New("QMP query-status returned an invalid response")
 	}
 	return result, nil
@@ -156,7 +202,7 @@ func (c *QMPClient) NextEvent(ctx context.Context) (QMPEvent, error) {
 }
 
 func (c *QMPClient) executeLocked(ctx context.Context, name string, arguments any) (json.RawMessage, error) {
-	if c.closed {
+	if c.closed.Load() {
 		return nil, errors.New("QMP client is closed")
 	}
 	switch name {
@@ -179,11 +225,16 @@ func (c *QMPClient) executeLocked(ctx context.Context, name string, arguments an
 		return nil, errors.New("QMP command exceeds frame limit")
 	}
 	data = append(data, '\n')
-	if err := setWriteDeadline(c.conn, ctx); err != nil {
+	stopDeadline, err := setWriteDeadline(c.conn, ctx)
+	if err != nil {
 		return nil, err
 	}
-	if _, err := c.conn.Write(data); err != nil {
-		return nil, fmt.Errorf("write QMP command: %w", err)
+	defer stopDeadline()
+	if err := writeQMPFrame(c.conn, data); err != nil {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		return nil, errors.New("write QMP command failed")
 	}
 	for {
 		envelope, err := c.readEnvelope(ctx)
@@ -202,7 +253,7 @@ func (c *QMPClient) executeLocked(ctx context.Context, name string, arguments an
 		}
 		if envelope.Error != nil {
 			class := envelope.Error.Class
-			if class == "" || len(class) > 64 {
+			if !qmpIdentifierPattern.MatchString(class) {
 				class = "unknown"
 			}
 			return nil, fmt.Errorf("QMP command rejected with class %s", class)
@@ -215,9 +266,11 @@ func (c *QMPClient) executeLocked(ctx context.Context, name string, arguments an
 }
 
 func (c *QMPClient) readEnvelope(ctx context.Context) (qmpEnvelope, error) {
-	if err := setReadDeadline(c.conn, ctx); err != nil {
+	stopDeadline, err := setReadDeadline(c.conn, ctx)
+	if err != nil {
 		return qmpEnvelope{}, err
 	}
+	defer stopDeadline()
 	line, err := c.reader.ReadSlice('\n')
 	if errors.Is(err, bufio.ErrBufferFull) {
 		return qmpEnvelope{}, errors.New("QMP frame exceeds configured limit")
@@ -226,32 +279,101 @@ func (c *QMPClient) readEnvelope(ctx context.Context) (qmpEnvelope, error) {
 		if errors.Is(err, io.EOF) {
 			return qmpEnvelope{}, errors.New("QMP connection closed")
 		}
-		return qmpEnvelope{}, fmt.Errorf("read QMP frame: %w", err)
+		if ctx.Err() != nil {
+			return qmpEnvelope{}, ctx.Err()
+		}
+		if networkError, ok := err.(net.Error); ok && networkError.Timeout() {
+			return qmpEnvelope{}, errors.New("QMP read deadline exceeded")
+		}
+		return qmpEnvelope{}, errors.New("read QMP frame failed")
 	}
 	if len(line) > c.limit {
 		return qmpEnvelope{}, errors.New("QMP frame exceeds configured limit")
 	}
+	decoder := json.NewDecoder(bytes.NewReader(line))
+	decoder.DisallowUnknownFields()
 	var envelope qmpEnvelope
-	if err := json.Unmarshal(line, &envelope); err != nil {
+	if err := decoder.Decode(&envelope); err != nil {
 		return qmpEnvelope{}, errors.New("QMP frame is malformed JSON")
+	}
+	var trailing any
+	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
+		return qmpEnvelope{}, errors.New("QMP frame contains trailing JSON")
+	}
+	if err := validateQMPEnvelope(envelope); err != nil {
+		return qmpEnvelope{}, err
 	}
 	return envelope, nil
 }
 
 func (c *QMPClient) Close() error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if c.closed {
+	if !c.closed.CompareAndSwap(false, true) {
 		return nil
 	}
-	c.closed = true
+	close(c.monitorStop)
 	return c.conn.Close()
+}
+
+func (c *QMPClient) Disconnected() <-chan struct{} { return c.disconnect }
+
+func (c *QMPClient) startDisconnectMonitor() {
+	c.monitorOnce.Do(func() {
+		go func() {
+			raw, err := c.conn.SyscallConn()
+			if err != nil {
+				c.signalDisconnect()
+				return
+			}
+			monitorFD := -1
+			if err := raw.Control(func(fd uintptr) {
+				monitorFD, err = unix.Dup(int(fd))
+			}); err != nil || monitorFD < 0 {
+				c.signalDisconnect()
+				return
+			}
+			defer unix.Close(monitorFD)
+			for {
+				select {
+				case <-c.monitorStop:
+					return
+				default:
+				}
+				poll := []unix.PollFd{{Fd: int32(monitorFD), Events: unix.POLLERR | unix.POLLHUP | unix.POLLRDHUP}}
+				if _, pollErr := unix.Poll(poll, 200); pollErr != nil || poll[0].Revents&(unix.POLLERR|unix.POLLHUP|unix.POLLRDHUP|unix.POLLNVAL) != 0 {
+					c.signalDisconnect()
+					return
+				}
+			}
+		}()
+	})
+}
+
+func (c *QMPClient) signalDisconnect() {
+	c.disconnectOnce.Do(func() { close(c.disconnect) })
+}
+
+func verifyQMPPeer(connection *net.UnixConn, expectedPID int) error {
+	raw, err := connection.SyscallConn()
+	if err != nil {
+		return errors.New("inspect QMP peer credentials failed")
+	}
+	var credentials *unix.Ucred
+	var socketErr error
+	if err := raw.Control(func(fd uintptr) {
+		credentials, socketErr = unix.GetsockoptUcred(int(fd), unix.SOL_SOCKET, unix.SO_PEERCRED)
+	}); err != nil || socketErr != nil || credentials == nil {
+		return errors.New("inspect QMP peer credentials failed")
+	}
+	if credentials.Pid != int32(expectedPID) || credentials.Uid != uint32(os.Geteuid()) || credentials.Gid != uint32(os.Getegid()) {
+		return errors.New("QMP peer process identity does not match the launched QEMU")
+	}
+	return nil
 }
 
 func safeEvent(envelope qmpEnvelope) QMPEvent {
 	name := envelope.Event
-	if len(name) > 64 {
-		name = "OVERSIZED_EVENT_NAME"
+	if !qmpIdentifierPattern.MatchString(name) {
+		name = "INVALID_EVENT_NAME"
 	}
 	timestamp := time.Time{}
 	if envelope.Timestamp != nil {
@@ -260,18 +382,181 @@ func safeEvent(envelope qmpEnvelope) QMPEvent {
 	return QMPEvent{Name: name, Timestamp: timestamp}
 }
 
-func setReadDeadline(conn *net.UnixConn, ctx context.Context) error {
-	deadline, ok := ctx.Deadline()
-	if !ok {
-		deadline = time.Now().Add(10 * time.Second)
+func setReadDeadline(conn *net.UnixConn, ctx context.Context) (func() bool, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
-	return conn.SetReadDeadline(deadline)
+	deadline, ok := ctx.Deadline()
+	maximum := time.Now().Add(qmpOperationLimit)
+	if !ok || maximum.Before(deadline) {
+		deadline = maximum
+	}
+	if err := conn.SetReadDeadline(deadline); err != nil {
+		return nil, errors.New("set QMP read bound failed")
+	}
+	return context.AfterFunc(ctx, func() { _ = conn.SetReadDeadline(time.Now()) }), nil
 }
 
-func setWriteDeadline(conn *net.UnixConn, ctx context.Context) error {
-	deadline, ok := ctx.Deadline()
-	if !ok {
-		deadline = time.Now().Add(10 * time.Second)
+func setWriteDeadline(conn *net.UnixConn, ctx context.Context) (func() bool, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
-	return conn.SetWriteDeadline(deadline)
+	deadline, ok := ctx.Deadline()
+	maximum := time.Now().Add(qmpOperationLimit)
+	if !ok || maximum.Before(deadline) {
+		deadline = maximum
+	}
+	if err := conn.SetWriteDeadline(deadline); err != nil {
+		return nil, errors.New("set QMP write bound failed")
+	}
+	return context.AfterFunc(ctx, func() { _ = conn.SetWriteDeadline(time.Now()) }), nil
+}
+
+func writeQMPFrame(connection *net.UnixConn, data []byte) error {
+	for len(data) > 0 {
+		written, err := connection.Write(data)
+		if err != nil {
+			return err
+		}
+		if written == 0 {
+			return io.ErrShortWrite
+		}
+		data = data[written:]
+	}
+	return nil
+}
+
+func validateQMPEnvelope(envelope qmpEnvelope) error {
+	categories := 0
+	if envelope.QMP != nil {
+		categories++
+		if envelope.QMP.Version.QEMU.Major < 1 || len(envelope.QMP.Version.Package) > 256 || len(envelope.QMP.Capabilities) > 32 {
+			return errors.New("QMP greeting has invalid bounded version data")
+		}
+		for _, capability := range envelope.QMP.Capabilities {
+			if !qmpIdentifierPattern.MatchString(capability) {
+				return errors.New("QMP greeting has an invalid capability")
+			}
+		}
+	}
+	if envelope.Event != "" {
+		categories++
+		if !qmpIdentifierPattern.MatchString(envelope.Event) {
+			return errors.New("QMP event name is invalid")
+		}
+		if envelope.Timestamp != nil && (envelope.Timestamp.Microseconds < 0 || envelope.Timestamp.Microseconds > 999999) {
+			return errors.New("QMP event timestamp is invalid")
+		}
+	}
+	response := envelope.Return != nil || envelope.Error != nil
+	if response {
+		categories++
+		if envelope.ID == "" || (envelope.Return != nil) == (envelope.Error != nil) {
+			return errors.New("QMP response shape is invalid")
+		}
+		if envelope.Error != nil && (!qmpIdentifierPattern.MatchString(envelope.Error.Class) || len(envelope.Error.Desc) > 512) {
+			return errors.New("QMP error shape is invalid")
+		}
+	}
+	if categories != 1 {
+		return errors.New("QMP envelope has an ambiguous or missing message type")
+	}
+	if envelope.QMP != nil && (envelope.ID != "" || envelope.Timestamp != nil || envelope.Data != nil) {
+		return errors.New("QMP greeting contains response or event fields")
+	}
+	if envelope.Event != "" && envelope.ID != "" {
+		return errors.New("QMP event contains a response ID")
+	}
+	if response && (envelope.Timestamp != nil || envelope.Data != nil) {
+		return errors.New("QMP response contains event fields")
+	}
+	return nil
+}
+
+func validateExistingUnixSocket(path string, mode os.FileMode) error {
+	if !filepath.IsAbs(path) || filepath.Clean(path) != path || len(path) > maxUnixSocketPath {
+		return errors.New("QMP socket path must be a bounded clean absolute path")
+	}
+	if err := validateSocketParent(filepath.Dir(path)); err != nil {
+		return fmt.Errorf("QMP socket parent is unsafe: %w", err)
+	}
+	info, err := os.Lstat(path)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return os.ErrNotExist
+		}
+		return errors.New("inspect QMP socket failed")
+	}
+	stat, ok := info.Sys().(*syscall.Stat_t)
+	if !ok || info.Mode()&os.ModeSocket == 0 || stat.Uid != uint32(os.Geteuid()) || stat.Gid != uint32(os.Getegid()) || info.Mode().Perm() != mode {
+		return errors.New("QMP socket type, owner, group, or mode is unsafe")
+	}
+	return nil
+}
+
+func secureRuntimeSocket(path string) error {
+	if !filepath.IsAbs(path) || filepath.Clean(path) != path || len(path) > maxUnixSocketPath {
+		return errors.New("runtime socket path is unsafe")
+	}
+	if err := validateSocketParent(filepath.Dir(path)); err != nil {
+		return fmt.Errorf("runtime socket parent is unsafe: %w", err)
+	}
+	before, err := os.Lstat(path)
+	if err != nil {
+		return err
+	}
+	beforeStat, ok := before.Sys().(*syscall.Stat_t)
+	if !ok || before.Mode()&os.ModeSocket == 0 || beforeStat.Uid != uint32(os.Geteuid()) || beforeStat.Gid != uint32(os.Getegid()) {
+		return errors.New("runtime socket type, owner, or group is unsafe")
+	}
+	if err := os.Chmod(path, runtimeSocketMode); err != nil {
+		return errors.New("secure runtime socket mode failed")
+	}
+	after, err := os.Lstat(path)
+	if err != nil {
+		return errors.New("reinspect runtime socket failed")
+	}
+	afterStat, ok := after.Sys().(*syscall.Stat_t)
+	if !ok || after.Mode()&os.ModeSocket == 0 || after.Mode().Perm() != runtimeSocketMode || beforeStat.Dev != afterStat.Dev || beforeStat.Ino != afterStat.Ino {
+		return errors.New("runtime socket identity changed while securing it")
+	}
+	return nil
+}
+
+func removeRuntimeSocket(path string) error {
+	if !filepath.IsAbs(path) || filepath.Clean(path) != path || len(path) > maxUnixSocketPath {
+		return errors.New("refusing to remove an unsafe runtime socket")
+	}
+	parentPath := filepath.Dir(path)
+	if err := validateSocketParent(parentPath); err != nil {
+		return errors.New("refusing to remove an unsafe runtime socket")
+	}
+	directory, err := unix.Open(parentPath, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0)
+	if err != nil {
+		return errors.New("open runtime socket parent failed")
+	}
+	defer unix.Close(directory)
+	var parentStat unix.Stat_t
+	if err := unix.Fstat(directory, &parentStat); err != nil || parentStat.Mode&unix.S_IFMT != unix.S_IFDIR || parentStat.Mode&0o777 != 0o700 || parentStat.Uid != uint32(os.Geteuid()) || parentStat.Gid != uint32(os.Getegid()) {
+		return errors.New("runtime socket parent identity is unsafe")
+	}
+	base := filepath.Base(path)
+	var socketStat unix.Stat_t
+	err = unix.Fstatat(directory, base, &socketStat, unix.AT_SYMLINK_NOFOLLOW)
+	if errors.Is(err, unix.ENOENT) {
+		return nil
+	}
+	if err != nil {
+		return errors.New("inspect runtime socket for removal failed")
+	}
+	if socketStat.Mode&unix.S_IFMT != unix.S_IFSOCK || socketStat.Mode&0o777 != uint32(runtimeSocketMode) || socketStat.Uid != uint32(os.Geteuid()) || socketStat.Gid != uint32(os.Getegid()) {
+		return errors.New("refusing to remove an unsafe runtime socket")
+	}
+	if err := unix.Unlinkat(directory, base, 0); err != nil && !errors.Is(err, unix.ENOENT) {
+		return errors.New("remove runtime socket failed")
+	}
+	if err := unix.Fstatat(directory, base, &socketStat, unix.AT_SYMLINK_NOFOLLOW); err == nil || !errors.Is(err, unix.ENOENT) {
+		return errors.New("runtime socket remains after removal")
+	}
+	return nil
 }

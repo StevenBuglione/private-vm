@@ -4,7 +4,7 @@
   "project": "private-vm",
   "execution_rules": [
     "Implement tasks in dependency order unless a task explicitly says otherwise.",
-    "One pull request should normally contain one task.",
+    "An approved dependency-ordered batch may share one pull request only when every task retains a focused commit, acceptance matrix, documentation and independent closure evidence.",
     "A task is incomplete until every listed acceptance criterion passes.",
     "Security-boundary changes require threat-model and ADR review.",
     "No shell scripts may implement product logic."

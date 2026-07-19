@@ -141,6 +141,9 @@ func (s *Service) GetSession(ctx context.Context, request *privatevmv1.GetSessio
 	if err := validateRequestContext(request.GetContext(), true); err != nil {
 		return nil, err
 	}
+	if request.GetAfterSequence() != 0 {
+		return nil, rpcError(codes.InvalidArgument, "EVENT_CURSOR_NOT_ALLOWED", "An event cursor is not valid for GetSession.", "Use after_sequence only with StreamEvents.", false)
+	}
 	identity, err := identityFromContext(ctx)
 	if err != nil {
 		return nil, sessionError(err)
@@ -217,33 +220,42 @@ func (s *Service) StreamEvents(request *privatevmv1.GetSessionRequest, stream pr
 	if err != nil {
 		return sessionError(err)
 	}
-	var sent uint64
-	ticker := time.NewTicker(100 * time.Millisecond)
-	defer ticker.Stop()
+	subscription, err := s.Sessions.Subscribe(ctx, request.GetContext().GetSessionId(), identity.UID, request.GetAfterSequence())
+	if err != nil {
+		return sessionError(err)
+	}
+	defer subscription.Close()
+	snapshot := subscription.Snapshot()
+	expected := request.GetAfterSequence() + 1
+	send := func(event session.Event) error {
+		if event.Sequence != expected {
+			return sessionError(session.ErrEventCursor)
+		}
+		if err := stream.Send(eventToProto(snapshot, event)); err != nil {
+			return sessionError(err)
+		}
+		expected++
+		return nil
+	}
+	for _, event := range subscription.Replay() {
+		if err := send(event); err != nil {
+			return err
+		}
+	}
 	for {
-		snapshot, getErr := s.Sessions.Get(request.GetContext().GetSessionId(), identity.UID)
-		if errors.Is(getErr, session.ErrNotFound) {
-			return sessionError(getErr)
-		}
-		if getErr != nil {
-			return sessionError(getErr)
-		}
-		for _, event := range snapshot.Events {
-			if event.Sequence <= sent {
-				continue
-			}
-			if err := stream.Send(eventToProto(snapshot, event)); err != nil {
-				return sessionError(err)
-			}
-			sent = event.Sequence
-		}
-		if snapshot.Phase == session.PhaseDestroyed {
-			return nil
-		}
 		select {
 		case <-ctx.Done():
 			return sessionError(ctx.Err())
-		case <-ticker.C:
+		case event, ok := <-subscription.Events():
+			if !ok {
+				if err := subscription.Err(); err != nil {
+					return sessionError(err)
+				}
+				return nil
+			}
+			if err := send(event); err != nil {
+				return err
+			}
 		}
 	}
 }
@@ -475,7 +487,10 @@ func eventToProto(snapshot session.Snapshot, event session.Event) *privatevmv1.S
 	copy := snapshot
 	copy.Phase = event.Phase
 	copy.WorkflowState = event.WorkflowState
-	return &privatevmv1.SessionEvent{Sequence: event.Sequence, EventCode: event.Code, Session: sessionToProto(copy), UnixNanos: event.Time.UnixNano()}
+	return &privatevmv1.SessionEvent{
+		Sequence: event.Sequence, EventCode: event.Code, Session: sessionToProto(copy),
+		UnixNanos: event.Time.UnixNano(), SafeMessage: event.Message,
+	}
 }
 
 func diagnosticsToProto(values []preflight.Diagnostic) []*privatevmv1.Diagnostic {

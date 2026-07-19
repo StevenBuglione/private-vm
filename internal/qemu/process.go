@@ -50,19 +50,24 @@ type Process struct {
 	pidfdMu  sync.Mutex
 	pidfd    int
 	cgroup   CgroupHandle
+	sockets  []string
 	qmpMu    sync.Mutex
 	qmp      *QMPClient
 
-	waitDone     chan struct{}
-	waitMu       sync.RWMutex
-	waitErr      error
-	stopMu       sync.Mutex
-	expectedStop atomic.Bool
-	graceWait    time.Duration
-	termWait     time.Duration
+	waitDone      chan struct{}
+	processExited chan struct{}
+	waitMu        sync.RWMutex
+	waitErr       error
+	cleanupErr    error
+	failureMu     sync.Mutex
+	failure       error
+	stopMu        sync.Mutex
+	expectedStop  atomic.Bool
+	graceWait     time.Duration
+	termWait      time.Duration
 }
 
-func (l *Launcher) Launch(ctx context.Context, spec Spec, capability *os.File) (*Process, error) {
+func (l *Launcher) Launch(ctx context.Context, spec Spec, capability *os.File) (launched *Process, returnErr error) {
 	if capability == nil {
 		return nil, errors.New("inherited fw_cfg capability file is required")
 	}
@@ -91,8 +96,9 @@ func (l *Launcher) Launch(ctx context.Context, spec Spec, capability *os.File) (
 		return nil, fmt.Errorf("start QEMU: %w", err)
 	}
 	process := &Process{
-		command: command, pidfd: -1, waitDone: make(chan struct{}),
+		command: command, pidfd: -1, waitDone: make(chan struct{}), processExited: make(chan struct{}),
 		graceWait: l.graceWait, termWait: l.termWait,
+		sockets: compactStrings(spec.QMPSocket, spec.SPICESocket),
 	}
 	rollback := true
 	waitStarted := false
@@ -100,7 +106,9 @@ func (l *Launcher) Launch(ctx context.Context, spec Spec, capability *os.File) (
 		if rollback {
 			_ = command.Process.Kill()
 			if waitStarted {
-				_ = process.Wait(context.Background())
+				if err := process.Wait(context.Background()); err != nil {
+					returnErr = errors.Join(returnErr, errors.New("QEMU launch rollback cleanup was incomplete"))
+				}
 			} else {
 				_, _ = command.Process.Wait()
 			}
@@ -127,14 +135,14 @@ func (l *Launcher) Launch(ctx context.Context, spec Spec, capability *os.File) (
 	waitStarted = true
 	qmpContext, cancel := context.WithTimeout(ctx, l.qmpWait)
 	defer cancel()
-	qmp, err := waitForQMP(qmpContext, spec.QMPSocket, l.qmpLimit, process.waitDone)
+	qmp, err := waitForQMP(qmpContext, spec.QMPSocket, l.qmpLimit, process.processExited, command.Process.Pid)
 	if err != nil {
 		process.expectedStop.Store(true)
 		return nil, err
 	}
 	process.qmpMu.Lock()
 	process.qmp = qmp
-	alreadyExited := exited(process.waitDone)
+	alreadyExited := exited(process.processExited)
 	if alreadyExited {
 		process.qmp = nil
 	}
@@ -143,6 +151,13 @@ func (l *Launcher) Launch(ctx context.Context, spec Spec, capability *os.File) (
 		_ = qmp.Close()
 		process.expectedStop.Store(true)
 		return nil, errors.New("QEMU exited during QMP startup")
+	}
+	go process.watchQMP(qmp)
+	if spec.SPICESocket != "" {
+		if err := waitForRuntimeSocket(qmpContext, spec.SPICESocket, process.processExited); err != nil {
+			process.expectedStop.Store(true)
+			return nil, fmt.Errorf("SPICE startup failed: %w", err)
+		}
 	}
 	rollback = false
 	return process, nil
@@ -174,6 +189,32 @@ func (p *Process) Wait(ctx context.Context) error {
 	}
 }
 
+// Cleanup converges the process and returns only resource-cleanup failure. A
+// prior unexpected guest failure remains observable through Wait but does not
+// make an already absent process impossible for the session owner to clean.
+func (p *Process) Cleanup(ctx context.Context) error {
+	cleanupContext, cancel := boundedChildContext(ctx, 20*time.Second)
+	defer cancel()
+	_ = p.Stop(cleanupContext)
+	select {
+	case <-p.waitDone:
+		p.waitMu.RLock()
+		defer p.waitMu.RUnlock()
+		return p.cleanupErr
+	case <-cleanupContext.Done():
+		return cleanupContext.Err()
+	}
+}
+
+func (p *Process) Audit(context.Context) error {
+	if !exited(p.waitDone) {
+		return errors.New("QEMU cleanup has not completed")
+	}
+	p.waitMu.RLock()
+	defer p.waitMu.RUnlock()
+	return p.cleanupErr
+}
+
 func (p *Process) Stop(ctx context.Context) error {
 	p.stopMu.Lock()
 	defer p.stopMu.Unlock()
@@ -192,16 +233,28 @@ func (p *Process) Stop(ctx context.Context) error {
 	if waitForDone(ctx, p.waitDone, p.graceWait) {
 		return p.Wait(context.Background())
 	}
+	callerErr := ctx.Err()
+	if callerErr == nil && qmp != nil {
+		quitContext, quitCancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
+		_ = qmp.Quit(quitContext)
+		quitCancel()
+		if waitForDone(context.Background(), p.waitDone, minDuration(p.termWait/2, 500*time.Millisecond)) {
+			return p.Wait(context.Background())
+		}
+	}
 	if err := p.signal(syscall.SIGTERM); err != nil && !errors.Is(err, os.ErrProcessDone) {
 		return err
 	}
-	if waitForDone(ctx, p.waitDone, p.termWait) {
-		return p.Wait(context.Background())
+	if waitForDone(context.Background(), p.waitDone, p.termWait) {
+		waitErr := p.Wait(context.Background())
+		return errors.Join(callerErr, waitErr)
 	}
 	if err := p.signal(syscall.SIGKILL); err != nil && !errors.Is(err, os.ErrProcessDone) {
 		return err
 	}
-	return p.Wait(ctx)
+	cleanupContext, cleanupCancel := context.WithTimeout(context.Background(), 7*time.Second)
+	defer cleanupCancel()
+	return errors.Join(callerErr, p.Wait(cleanupContext))
 }
 
 func (p *Process) signal(signal syscall.Signal) error {
@@ -221,11 +274,14 @@ func (p *Process) signal(signal syscall.Signal) error {
 
 func (p *Process) waitOwner() {
 	err := p.command.Wait()
+	close(p.processExited)
 	if p.expectedStop.Load() {
 		var exitError *exec.ExitError
 		if errors.As(err, &exitError) {
 			err = nil
 		}
+	} else if err == nil {
+		err = errors.New("QEMU exited unexpectedly")
 	}
 	p.qmpMu.Lock()
 	if p.qmp != nil {
@@ -239,21 +295,50 @@ func (p *Process) waitOwner() {
 		p.pidfd = -1
 	}
 	p.pidfdMu.Unlock()
-	if p.cgroup != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		cleanupErr := p.cgroup.Cleanup(ctx)
-		cancel()
-		if cleanupErr != nil {
-			err = errors.Join(err, cleanupErr)
+	var cleanupErr error
+	for _, socketPath := range p.sockets {
+		if socketErr := removeRuntimeSocket(socketPath); socketErr != nil {
+			cleanupErr = errors.Join(cleanupErr, socketErr)
 		}
 	}
+	if p.cgroup != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		cgroupErr := p.cgroup.Cleanup(ctx)
+		cancel()
+		if cgroupErr != nil {
+			cleanupErr = errors.Join(cleanupErr, cgroupErr)
+		}
+	}
+	p.failureMu.Lock()
+	failure := p.failure
+	p.failureMu.Unlock()
 	p.waitMu.Lock()
-	p.waitErr = err
+	p.cleanupErr = cleanupErr
+	p.waitErr = errors.Join(failure, err, cleanupErr)
 	p.waitMu.Unlock()
 	close(p.waitDone)
 }
 
+func (p *Process) watchQMP(client *QMPClient) {
+	select {
+	case <-client.Disconnected():
+		if p.expectedStop.Load() || exited(p.processExited) {
+			return
+		}
+		p.failureMu.Lock()
+		p.failure = errors.Join(p.failure, errors.New("QMP supervision connection was lost"))
+		p.failureMu.Unlock()
+		cleanupContext, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		_ = p.Stop(cleanupContext)
+		cancel()
+	case <-p.processExited:
+	}
+}
+
 func inspectProcessIdentity(pid int, expectedBinary string) (ProcessIdentity, error) {
+	if err := validateExecutable(expectedBinary); err != nil {
+		return ProcessIdentity{}, err
+	}
 	start, err := processStartTime(pid)
 	if err != nil {
 		return ProcessIdentity{}, err
@@ -261,6 +346,9 @@ func inspectProcessIdentity(pid int, expectedBinary string) (ProcessIdentity, er
 	info, err := os.Stat("/proc/" + strconv.Itoa(pid) + "/exe")
 	if err != nil {
 		return ProcessIdentity{}, fmt.Errorf("inspect QEMU executable identity: %w", err)
+	}
+	if err := validateExecutableInfo(info); err != nil {
+		return ProcessIdentity{}, err
 	}
 	stat, ok := info.Sys().(*syscall.Stat_t)
 	if !ok {
@@ -290,6 +378,9 @@ func verifyProcessIdentity(identity ProcessIdentity) error {
 		return err
 	}
 	stat, ok := info.Sys().(*syscall.Stat_t)
+	if err := validateExecutableInfo(info); err != nil {
+		return err
+	}
 	if !ok || uint64(stat.Dev) != identity.ExecutableDev || stat.Ino != identity.ExecutableInode {
 		return errors.New("refusing to signal a process with changed executable identity")
 	}
@@ -316,11 +407,14 @@ func processStartTime(pid int) (uint64, error) {
 	return value, nil
 }
 
-func waitForQMP(ctx context.Context, path string, limit int, exited <-chan struct{}) (*QMPClient, error) {
+func waitForQMP(ctx context.Context, path string, limit int, exited <-chan struct{}, expectedPID ...int) (*QMPClient, error) {
+	if err := waitForRuntimeSocket(ctx, path, exited); err != nil {
+		return nil, fmt.Errorf("QMP socket readiness failed: %w", err)
+	}
 	ticker := time.NewTicker(20 * time.Millisecond)
 	defer ticker.Stop()
 	for {
-		client, err := DialQMP(ctx, path, limit)
+		client, err := DialQMP(ctx, path, limit, expectedPID...)
 		if err == nil {
 			return client, nil
 		}
@@ -329,6 +423,27 @@ func waitForQMP(ctx context.Context, path string, limit int, exited <-chan struc
 			return nil, fmt.Errorf("QMP startup timeout: %w", ctx.Err())
 		case <-exited:
 			return nil, errors.New("QEMU exited before QMP became ready")
+		case <-ticker.C:
+		}
+	}
+}
+
+func waitForRuntimeSocket(ctx context.Context, path string, exited <-chan struct{}) error {
+	ticker := time.NewTicker(20 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		err := secureRuntimeSocket(path)
+		if err == nil {
+			return nil
+		}
+		if !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("runtime socket startup timeout: %w", ctx.Err())
+		case <-exited:
+			return errors.New("QEMU exited before runtime socket became ready")
 		case <-ticker.C:
 		}
 	}
@@ -362,4 +477,21 @@ func exited(done <-chan struct{}) bool {
 	default:
 		return false
 	}
+}
+
+func minDuration(left, right time.Duration) time.Duration {
+	if left < right {
+		return left
+	}
+	return right
+}
+
+func compactStrings(values ...string) []string {
+	result := make([]string, 0, len(values))
+	for _, value := range values {
+		if value != "" {
+			result = append(result, value)
+		}
+	}
+	return result
 }
