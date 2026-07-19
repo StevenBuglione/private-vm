@@ -138,6 +138,13 @@ func (s *Service) ExportApprovedToUSB(ctx context.Context, request *privatevmv1.
 	if err != nil || scanner.Role != session.RoleScanner || scanner.WorkflowState != "POLICY_APPROVED" {
 		return nil, rpcError(codes.FailedPrecondition, "USB_SCANNER_APPROVAL_REQUIRED", "The source is not owned by an approved scanner session.", "Complete the authenticated scanner report and approve one reconstructed output.", false)
 	}
+	sourceLock := s.roleOperation(scanner.ID)
+	sourceLock.Lock()
+	defer sourceLock.Unlock()
+	scanner, err = s.Sessions.Get(scanner.ID, identity.UID)
+	if err != nil || scanner.Role != session.RoleScanner || scanner.Phase != session.PhaseActive || scanner.WorkflowState != "POLICY_APPROVED" {
+		return nil, rpcError(codes.FailedPrecondition, "USB_SCANNER_APPROVAL_REQUIRED", "The source is not owned by an approved scanner session.", "Complete the authenticated scanner report and approve one reconstructed output.", false)
+	}
 	receipt, err := s.USBWorkflows.Export(ctx, snapshot, request.GetClaimId(), usb.SourceSelection{Role: usb.SourceScanner, SessionID: scanner.ID, OutputID: request.GetOutputId()}, enrollment)
 	if err != nil {
 		return nil, usbRPCError(err)
@@ -148,6 +155,17 @@ func (s *Service) ExportApprovedToUSB(ctx context.Context, request *privatevmv1.
 	for _, state := range []string{"STREAMING", "STREAM_COMPLETE", "FLUSHED", "POST_WRITE_VERIFIED", "USB_UNMOUNTED", "USB_DETACHED", "EXPORTER_STOPPED"} {
 		if _, err := s.Sessions.TransitionWorkflow(ctx, snapshot.ID, identity.UID, state); err != nil {
 			return nil, sessionError(err)
+		}
+	}
+	if s.Scanners != nil {
+		if err := s.Scanners.StopOffline(context.WithoutCancel(ctx), scanner); err != nil {
+			return nil, scannerServiceError(err)
+		}
+		if scanner, err = s.Sessions.TransitionWorkflow(context.WithoutCancel(ctx), scanner.ID, identity.UID, "SCAN_VM_STOPPED"); err != nil {
+			return nil, sessionError(err)
+		}
+		if _, err := s.cleanupScanner(scanner.ID, identity.UID); err != nil {
+			return nil, err
 		}
 	}
 	destroyed, cleanupErr := s.Sessions.Cleanup(context.WithoutCancel(ctx), snapshot.ID, identity.UID)
@@ -167,7 +185,7 @@ func (authorizer peerPrepareAuthorizer) AuthorizePrepare(ctx context.Context) er
 }
 
 func (s *Service) usbWorkflowAdmission(ctx context.Context, sessionID, claimID, workflow string) (PeerIdentity, session.Snapshot, usb.Enrollment, error) {
-	if s.USBEnrollments == nil || s.USBClaims == nil || s.USBWorkflows == nil {
+	if s.USBEnrollments == nil && s.USBRegistry == nil || s.USBClaims == nil || s.USBWorkflows == nil {
 		return PeerIdentity{}, session.Snapshot{}, usb.Enrollment{}, rpcError(codes.Unavailable, "USB_WORKFLOW_UNAVAILABLE", "The fixed-policy USB exporter integration is unavailable.", "Install the exporter image and configure exact claim, Polkit and guest transport adapters.", false)
 	}
 	identity, err := identityFromContext(ctx)
@@ -181,7 +199,12 @@ func (s *Service) usbWorkflowAdmission(ctx context.Context, sessionID, claimID, 
 	if snapshot.Role != session.RoleExporter || snapshot.WorkflowState != workflow || claimID == "" {
 		return PeerIdentity{}, session.Snapshot{}, usb.Enrollment{}, rpcError(codes.FailedPrecondition, "USB_EXPORTER_STATE_INVALID", "The owning exporter session is not ready for this operation.", "Inspect the exporter session and follow the documented claim, prepare and export order.", false)
 	}
-	enrollment, err := s.USBEnrollments.Load()
+	var enrollment usb.Enrollment
+	if s.USBRegistry != nil {
+		enrollment, err = s.USBRegistry.Load(identity.UID)
+	} else {
+		enrollment, err = s.USBEnrollments.Load()
+	}
 	if err != nil {
 		return PeerIdentity{}, session.Snapshot{}, usb.Enrollment{}, usbRPCError(err)
 	}

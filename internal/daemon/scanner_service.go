@@ -360,6 +360,12 @@ func (s *Service) ApproveScanner(ctx context.Context, request *privatevmv1.HostS
 	if scanner, err = s.Sessions.TransitionWorkflow(ctx, scanner.ID, identity.UID, "POLICY_APPROVED"); err != nil {
 		return nil, sessionError(cleanupTarget(err))
 	}
+	if destination == ScannerDestinationUSB {
+		// The one-use source factory streams from this authenticated offline
+		// scanner. Its actor remains the cleanup owner until USB export consumes
+		// the factory or the user explicitly cleans the scanner session.
+		return scannerStatusProto(scanner, &evidence), nil
+	}
 	if err := s.Scanners.StopOffline(ctx, scanner); err != nil {
 		return nil, cleanupTarget(s.failedScanner(scanner.ID, identity.UID, err))
 	}

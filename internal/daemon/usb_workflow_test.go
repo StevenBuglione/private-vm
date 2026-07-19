@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"os"
+	"slices"
 	"testing"
 	"time"
 
@@ -72,9 +73,11 @@ func TestUSBSemanticPlanPrepareAndExportTransport(t *testing.T) {
 	}
 	claims := &usbClaimsFixture{claim: usb.Claim{ID: "usbclaim-0123456789abcdef0123456789abcdef", EnrollmentID: enrollment.EnrollmentID, SessionID: exporter.ID, OwnerUID: owner}}
 	workflow := &usbWorkflowFixture{}
+	scannerRuntime := &fakeScannerOrchestrator{}
 	server.options.Service.USBEnrollments = usbEnrollmentFixture{enrollment: enrollment}
 	server.options.Service.USBClaims = claims
 	server.options.Service.USBWorkflows = workflow
+	server.options.Service.Scanners = scannerRuntime
 	done := startTestServer(t, server)
 	connection, client := dialTestDaemon(t, socket)
 	defer connection.Close()
@@ -105,6 +108,12 @@ func TestUSBSemanticPlanPrepareAndExportTransport(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	for _, phase := range []session.Phase{session.PhasePreflighted, session.PhaseImagesVerified, session.PhaseStorageReady, session.PhaseActive} {
+		scanner, err = manager.Transition(t.Context(), scanner.ID, owner, phase)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
 	for _, state := range []string{"UPDATE_VM_BOOTING", "DEFINITIONS_UPDATING", "DEFINITIONS_VERIFIED", "UPDATE_VM_STOPPED", "SCAN_VM_BOOTING_OFFLINE", "OFFLINE_VERIFIED", "QUARANTINE_ATTACHED_READ_ONLY", "INVENTORY_COMPLETE", "MALWARE_SCAN_COMPLETE", "RECONSTRUCTION_COMPLETE", "REPORT_COMPLETE", "POLICY_APPROVED"} {
 		if _, err := manager.TransitionWorkflow(t.Context(), scanner.ID, owner, state); err != nil {
 			t.Fatal(err)
@@ -117,6 +126,10 @@ func TestUSBSemanticPlanPrepareAndExportTransport(t *testing.T) {
 	current, _ := manager.Get(exporter.ID, owner)
 	if current.WorkflowState != "EXPORTER_STOPPED" {
 		t.Fatalf("workflow=%s", current.WorkflowState)
+	}
+	cleanedScanner, scannerErr := manager.Get(scanner.ID, owner)
+	if scannerErr != nil || cleanedScanner.Phase != session.PhaseDestroyed || !slices.Contains(scannerRuntime.log(), "stop-offline") {
+		t.Fatalf("scanner cleanup=%+v log=%v err=%v", cleanedScanner, scannerRuntime.log(), scannerErr)
 	}
 	stopTestServer(t, server, done)
 }

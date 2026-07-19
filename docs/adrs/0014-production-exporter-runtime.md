@@ -35,6 +35,15 @@ policy-approved reconstruction. Workstation entries require authenticated
 ready Export state. The interface cannot represent a path, mount, device,
 command or QEMU argument.
 
+The scanner adapter is registered only from the MAC-verified report promotion
+path and permits exactly one report-listed reconstructed output. Its offline VM
+remains actor-owned until the factory is consumed or cleanup invalidates every
+entry for that scanner. The workstation adapter is registered only after the
+guest rehashes and marks one export current; it rechecks exported/unchanged
+inventory and pins the new stream descriptor to that verified digest. A common
+bounded frame validator requires begin, monotonic chunks, exact end and clean
+EOF before either adapter can close successfully.
+
 ## Consequences
 
 Preparation/export and their cleanup remain owned by the serialized exporter

@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"sync"
+
+	"github.com/StevenBuglione/private-vm/internal/session"
 )
 
 // ApprovedSourceFactory is registered only by an authenticated role runtime
@@ -35,12 +37,42 @@ func (registry *ApprovedSourceRegistry) Register(selection SourceSelection, fact
 	return nil
 }
 
+// Replace installs the newest authenticated identity for an exact source.
+// It is used only after a fresh scanner report or workstation rehash proves
+// that a previously registered identity is stale.
+func (registry *ApprovedSourceRegistry) Replace(selection SourceSelection, factory ApprovedSourceFactory) error {
+	if registry == nil || selection.validate() != nil || factory == nil {
+		return errors.New("approved source registration is invalid")
+	}
+	registry.mu.Lock()
+	defer registry.mu.Unlock()
+	if registry.sources == nil {
+		return errors.New("approved source registry is unavailable")
+	}
+	registry.sources[selection] = factory
+	return nil
+}
+
 func (registry *ApprovedSourceRegistry) Remove(selection SourceSelection) {
 	if registry == nil {
 		return
 	}
 	registry.mu.Lock()
 	delete(registry.sources, selection)
+	registry.mu.Unlock()
+}
+
+// RemoveSession invalidates every volatile factory owned by one role session.
+func (registry *ApprovedSourceRegistry) RemoveSession(role SourceRole, sessionID string) {
+	if registry == nil || role != SourceScanner && role != SourceWorkstation || session.ValidateID(sessionID) != nil {
+		return
+	}
+	registry.mu.Lock()
+	for selection := range registry.sources {
+		if selection.Role == role && selection.SessionID == sessionID {
+			delete(registry.sources, selection)
+		}
+	}
 	registry.mu.Unlock()
 }
 

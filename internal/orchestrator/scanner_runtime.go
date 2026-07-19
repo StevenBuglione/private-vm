@@ -77,6 +77,10 @@ type ScannerPromotionRelay interface {
 	Promote(context.Context, session.Snapshot, scan.ScanReport, string, session.Snapshot, privatevmv1.ScannerGuestServiceClient) error
 }
 
+type scannerPromotionCleanup interface {
+	ForgetScanner(string)
+}
+
 // FailClosedScannerPromotion keeps scanner approval unavailable until the
 // workstation/exporter destination owner is composed. It is safe to install in
 // production while rejection and cleanup remain fully operational.
@@ -192,6 +196,9 @@ func (runtime *ProductionScannerRuntime) StorageAllocation(source, scanner sessi
 				return err
 			}
 			runtime.VMs.Forget(scanner.ID)
+			if promotion, ok := runtime.Promotion.(scannerPromotionCleanup); ok {
+				promotion.ForgetScanner(scanner.ID)
+			}
 			runtime.mu.Lock()
 			if runtime.states[scanner.ID] == state {
 				delete(runtime.states, scanner.ID)

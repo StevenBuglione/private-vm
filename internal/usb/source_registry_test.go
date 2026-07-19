@@ -60,3 +60,27 @@ func TestApprovedOutputRequiresWorkstationExportState(t *testing.T) {
 		t.Fatalf("authenticated workstation Export state rejected: %v", err)
 	}
 }
+
+func TestApprovedSourceRegistryReplacesVerifiedIdentityAndForgetsSession(t *testing.T) {
+	registry := NewApprovedSourceRegistry()
+	selection := SourceSelection{Role: SourceWorkstation, SessionID: "pvm-0123456789abcdef0123456789abcdef", OutputID: "output-opaque-01"}
+	oldSource := &fakeApprovedSource{}
+	newSource := &fakeApprovedSource{}
+	if err := registry.Replace(selection, func(context.Context) (ApprovedSource, error) { return oldSource, nil }); err != nil {
+		t.Fatal(err)
+	}
+	if err := registry.Replace(selection, func(context.Context) (ApprovedSource, error) { return newSource, nil }); err != nil {
+		t.Fatal(err)
+	}
+	opened, err := registry.OpenApproved(t.Context(), selection)
+	if err != nil || opened != newSource {
+		t.Fatalf("replacement source=%p err=%v", opened, err)
+	}
+	if err := registry.Replace(selection, func(context.Context) (ApprovedSource, error) { return newSource, nil }); err != nil {
+		t.Fatal(err)
+	}
+	registry.RemoveSession(SourceWorkstation, selection.SessionID)
+	if _, err := registry.OpenApproved(t.Context(), selection); err == nil {
+		t.Fatal("forgotten workstation source opened")
+	}
+}

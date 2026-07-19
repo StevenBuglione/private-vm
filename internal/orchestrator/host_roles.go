@@ -12,6 +12,7 @@ import (
 	"github.com/StevenBuglione/private-vm/internal/qemu"
 	"github.com/StevenBuglione/private-vm/internal/session"
 	"github.com/StevenBuglione/private-vm/internal/torrent"
+	"github.com/StevenBuglione/private-vm/internal/usb"
 )
 
 var (
@@ -97,11 +98,12 @@ type hostRoleState struct {
 type HostRoles struct {
 	mu sync.Mutex
 
-	PreflightCheck func(context.Context, session.Snapshot, session.LaunchPlan) error
-	Images         HostImageSelector
-	Storage        HostStorageAllocator
-	Runtime        HostRuntimeStarter
-	states         map[string]*hostRoleState
+	PreflightCheck  func(context.Context, session.Snapshot, session.LaunchPlan) error
+	Images          HostImageSelector
+	Storage         HostStorageAllocator
+	Runtime         HostRuntimeStarter
+	approvedSources *usb.ApprovedSourceRegistry
+	states          map[string]*hostRoleState
 }
 
 func NewHostRoles(images HostImageSelector, storage HostStorageAllocator, runtime HostRuntimeStarter) (*HostRoles, error) {
@@ -109,6 +111,22 @@ func NewHostRoles(images HostImageSelector, storage HostStorageAllocator, runtim
 		return nil, errors.New("host role composition is incomplete")
 	}
 	return &HostRoles{Images: images, Storage: storage, Runtime: runtime, states: make(map[string]*hostRoleState)}, nil
+}
+
+// ConfigureApprovedSources installs the volatile one-use export handoff. It
+// may be configured once by the daemon composition root and is never exposed
+// through an RPC or launch plan.
+func (roles *HostRoles) ConfigureApprovedSources(sources *usb.ApprovedSourceRegistry) error {
+	if roles == nil || sources == nil {
+		return ErrApprovedSourceUnavailable
+	}
+	roles.mu.Lock()
+	defer roles.mu.Unlock()
+	if roles.approvedSources != nil && roles.approvedSources != sources {
+		return ErrApprovedSourceUnavailable
+	}
+	roles.approvedSources = sources
+	return nil
 }
 
 func (roles *HostRoles) PlanAllocation(snapshot session.Snapshot, plan session.LaunchPlan) session.AllocateFunc {
@@ -137,7 +155,11 @@ func (roles *HostRoles) PlanAllocation(snapshot session.Snapshot, plan session.L
 				return ErrHostPlanUnavailable
 			}
 			delete(roles.states, snapshot.ID)
+			sources := roles.approvedSources
 			roles.mu.Unlock()
+			if sources != nil && snapshot.Role == session.RoleWorkstation {
+				sources.RemoveSession(usb.SourceWorkstation, snapshot.ID)
+			}
 			if preparer, ok := roles.Runtime.(HostRuntimePreparer); ok {
 				preparer.Forget(snapshot.ID)
 			}

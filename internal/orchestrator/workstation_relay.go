@@ -88,7 +88,19 @@ func (roles *HostRoles) VerifyWorkspaceExport(ctx context.Context, snapshot sess
 	if err != nil {
 		return nil, err
 	}
-	return relay.Verify(ctx, outputID, daemonDigest, receiverDigest)
+	state, err := relay.Verify(ctx, outputID, daemonDigest, receiverDigest)
+	if err != nil {
+		return nil, err
+	}
+	roles.mu.Lock()
+	sources := roles.approvedSources
+	roles.mu.Unlock()
+	if sources != nil {
+		if err := registerWorkstationApprovedSource(sources, roles, snapshot, outputID, receiverDigest, state); err != nil {
+			return nil, err
+		}
+	}
+	return state, nil
 }
 
 func (roles *HostRoles) PromoteApprovedWorkspace(ctx context.Context, snapshot session.Snapshot, source ScannerApprovedWorkspaceSource) (*privatevmv1.TransferReceipt, error) {

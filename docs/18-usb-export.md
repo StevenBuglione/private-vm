@@ -178,6 +178,25 @@ relay's owned buffer after the destination consumes it. Overall byte, idle and
 operation deadlines are mandatory. Raw names and hashes never enter events or
 the export receipt.
 
+The production scanner registrar is reached only through `GuestScannerRelay`
+after the per-boot token has MAC-verified the complete canonical report. USB
+approval requires exactly one report-listed sanitized output and retains that
+authenticated offline scanner until the one-use source is consumed or the
+scanner actor is explicitly cleaned. Opening the source invokes only
+`ExportApprovedFile(output_id)` on the role-restricted scanner service. The
+begin descriptor, every sequence, total size, end digest and clean stream end
+must match the report. Successful USB verification then stops and cleans the
+scanner as well as the exporter.
+
+The production workstation registrar runs only after
+`VerifyWorkspaceExport` has compared daemon and receiver digests and the guest
+has rehashed and marked one opaque output current. Opening it re-reads the
+authenticated workspace inventory, requires the same exported/unchanged byte
+identity, and re-streams only that output through the workstation relay. A
+changed entry or changed begin/end digest fails before exporter commit. Both
+registrars use a one-frame backpressure channel; neither buffers a file or
+accepts a host path, guest path, mount, or shared folder.
+
 The scanner digest, relay digest, exporter receive digest and exporter reread
 digest remain internal redacted values. A successful receipt exposes only the
 three equality results and requires all of them to be true. It also requires

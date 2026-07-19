@@ -274,6 +274,48 @@ func TestScannerPromotionFailureCancellationAndTimeoutCleanFreshWorkstation(t *t
 	}
 }
 
+func TestScannerUSBApprovalRetainsAuthenticatedOfflineSourceUntilConsumption(t *testing.T) {
+	server, socket, _ := newUnstartedTestServer(t, 0)
+	fake := &fakeScannerOrchestrator{}
+	server.options.Service.Scanners = fake
+	source := sealedDownloaderSession(t, server.options.Service.Sessions)
+	done := startTestServer(t, server)
+	connection, client := dialTestDaemon(t, socket)
+	defer connection.Close()
+
+	stream, err := client.StartScanner(t.Context(), &privatevmv1.HostScannerStartRequest{Context: validRequestContext(source.ID), PolicyName: "safe"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var scannerID string
+	for {
+		event, receiveErr := stream.Recv()
+		if event != nil && event.GetStatus() != nil {
+			scannerID = event.GetStatus().GetScannerSessionId()
+		}
+		if errors.Is(receiveErr, io.EOF) {
+			break
+		}
+		if receiveErr != nil {
+			t.Fatal(receiveErr)
+		}
+	}
+	approved, err := client.ApproveScanner(t.Context(), &privatevmv1.HostScannerApprovalRequest{
+		Context: validRequestContext(scannerID), Destination: privatevmv1.ScannerApprovalDestination_SCANNER_APPROVAL_DESTINATION_USB,
+	})
+	if err != nil || approved.GetWorkflowState() != "POLICY_APPROVED" || !approved.GetPolicyApproved() {
+		t.Fatalf("approval=%+v err=%v", approved, err)
+	}
+	retained, err := server.options.Service.Sessions.Get(scannerID, uint32(os.Geteuid()))
+	if err != nil || retained.Phase != session.PhaseActive || retained.WorkflowState != "POLICY_APPROVED" {
+		t.Fatalf("retained scanner=%+v err=%v", retained, err)
+	}
+	if slices.Contains(fake.log(), "stop-offline") || slices.Contains(fake.log(), "offline-runtime.cleanup") {
+		t.Fatalf("USB approval destroyed its source: %v", fake.log())
+	}
+	stopTestServer(t, server, done)
+}
+
 func TestScannerHostFailureCancellationTimeoutAndCleanupFailClosed(t *testing.T) {
 	for _, test := range []struct {
 		name       string

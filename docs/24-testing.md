@@ -333,6 +333,14 @@ requires the role-specific guest VPN RPC implementation to consume the typed
 underlay and fixed probe targets; a host build paired with an older guestd must
 fail the authenticated readiness gate and is not release evidence.
 
+The approved-source tests additionally prove scanner registration requires one
+complete approved report output, binds the authenticated scanner role/context,
+accepts the exact begin/chunk/end/EOF sequence only, and is one-use. The
+workstation case proves registration occurs only after guest export
+verification, repeats current exported/unchanged inventory validation at open,
+and rejects a changed identity. Daemon tests prove USB approval retains the
+offline scanner and a successful exporter receipt stops and cleans it.
+
 The bounded fuzz smoke is reproducible with:
 
 ```bash

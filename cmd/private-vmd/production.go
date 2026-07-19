@@ -127,13 +127,28 @@ func composeProductionHost(ctx context.Context, cfg config.Config) (*productionH
 		profiles.Close()
 		return nil, err
 	}
-	promotion, err := orchestrator.NewWorkstationScannerPromotion(roles)
+	approvedSources := usb.NewApprovedSourceRegistry()
+	if err := roles.ConfigureApprovedSources(approvedSources); err != nil {
+		profiles.Close()
+		return nil, err
+	}
+	workstationPromotion, err := orchestrator.NewWorkstationScannerPromotion(roles)
+	if err != nil {
+		profiles.Close()
+		return nil, err
+	}
+	usbPromotion, err := orchestrator.NewUSBScannerPromotion(approvedSources)
+	if err != nil {
+		profiles.Close()
+		return nil, err
+	}
+	scannerPromotion, err := orchestrator.NewScannerPromotionRouter(workstationPromotion, usbPromotion)
 	if err != nil {
 		profiles.Close()
 		return nil, err
 	}
 	scannerRuntime, err := orchestrator.NewProductionScannerRuntime(
-		roles, selector, storageStack, runtimeStack, promotion,
+		roles, selector, storageStack, runtimeStack, scannerPromotion,
 		orchestrator.ScannerRuntimePlan{VCPUs: 4, MemoryBytes: 4 << 30, RootBytes: 32 << 30},
 	)
 	if err != nil {
@@ -150,7 +165,7 @@ func composeProductionHost(ctx context.Context, cfg config.Config) (*productionH
 		profiles.Close()
 		return nil, err
 	}
-	return &productionHostServices{profiles: profiles, resolver: resolver, roles: roles, scanners: scanners, exporters: exporters, usbSources: usb.NewApprovedSourceRegistry()}, nil
+	return &productionHostServices{profiles: profiles, resolver: resolver, roles: roles, scanners: scanners, exporters: exporters, usbSources: approvedSources}, nil
 }
 
 func productionProbeTargets(configuration config.VPN) (guestvpn.ProbeTargets, error) {
