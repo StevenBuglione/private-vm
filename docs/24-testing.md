@@ -25,6 +25,12 @@
   scanner/relay/exporter/reread hash equality, source-close failure, timeout,
   fsync/rename evidence, networkless role boundaries and retryable reverse-order
   export cleanup without serializing filenames or hashes
+- authenticated exporter-only prepare/write/verify/finalize RPC composition,
+  first-frame and passphrase bounds, fixed identity expectation, receive/reread
+  equality, fsync/rename/unmount/LUKS-close evidence, timeout cleanup and generic
+  exporter composition that fails closed without its fixed-path adapter
+- daemon session/claim-bound USB plan, secret-stream preparation and approved
+  scanner-to-exporter bridge, including complete workflow-state evidence
 - scan report parser
 - policy decisions
 - stream framing/hash

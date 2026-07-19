@@ -41,6 +41,9 @@ service PrivateVMDaemonService {
   rpc VerifyWorkspaceExport(VerifyWorkspaceExportRequest) returns (WorkspaceState);
   rpc ExportWorkspaceToDestination(ExportWorkspaceToDestinationRequest) returns (WorkspaceState);
   rpc ClaimUSB(ClaimUSBRequest) returns (USBClaim);
+  rpc PlanUSBPreparation(PlanUSBPreparationRequest) returns (USBPreparePlan);
+  rpc PrepareUSB(stream HostUSBPrepareFrame) returns (USBPrepareReceipt);
+  rpc ExportApprovedToUSB(USBExportRequest) returns (USBExportReceipt);
   rpc ReleaseUSB(ReleaseUSBRequest) returns (Empty);
 }
 
@@ -296,6 +299,72 @@ message ClaimUSBRequest {
 message USBClaim {
   string claim_id = 1;
   string enrollment_id = 2;
+}
+
+message PlanUSBPreparationRequest {
+  RequestContext context = 1;
+  string claim_id = 2;
+}
+
+message USBPreparePlan {
+  uint32 schema_version = 1;
+  string enrollment_id = 2;
+  string identity_fingerprint = 3;
+  uint64 capacity_bytes = 4;
+  string filesystem = 5;
+  string challenge = 6;
+  int64 created_unix_seconds = 7;
+  string first_confirmation = 8;
+  string second_confirmation = 9;
+}
+
+message HostUSBPrepareBegin {
+  RequestContext context = 1;
+  string claim_id = 2;
+  string challenge = 3;
+  string first_confirmation = 4;
+  string second_confirmation = 5;
+}
+
+message HostUSBPrepareSecretChunk { bytes data = 1; }
+
+message HostUSBPrepareFrame {
+  oneof frame {
+    HostUSBPrepareBegin begin = 1;
+    HostUSBPrepareSecretChunk passphrase_chunk = 2;
+  }
+}
+
+message USBPrepareReceipt {
+  uint32 schema_version = 1;
+  string enrollment_id = 2;
+  string filesystem = 3;
+  uint64 capacity_bytes = 4;
+  string identity_fingerprint = 5;
+  string state = 6;
+}
+
+message USBExportRequest {
+  RequestContext context = 1;
+  string claim_id = 2;
+  string scanner_session_id = 3;
+  string output_id = 4;
+}
+
+message USBExportReceipt {
+  uint32 schema_version = 1;
+  string enrollment_id = 2;
+  uint64 bytes_written = 3;
+  bool scanner_relay_hash_equal = 4;
+  bool relay_exporter_hash_equal = 5;
+  bool exporter_reread_hash_equal = 6;
+  bool file_synced = 7;
+  bool filesystem_synced = 8;
+  bool atomic_rename = 9;
+  bool usb_unmounted = 10;
+  bool usb_detached = 11;
+  bool exporter_stopped = 12;
+  bool cleanup_complete = 13;
 }
 
 message ReleaseUSBRequest {

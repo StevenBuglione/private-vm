@@ -52,6 +52,9 @@ const (
 	PrivateVMDaemonService_VerifyWorkspaceExport_FullMethodName        = "/privatevm.v1.PrivateVMDaemonService/VerifyWorkspaceExport"
 	PrivateVMDaemonService_ExportWorkspaceToDestination_FullMethodName = "/privatevm.v1.PrivateVMDaemonService/ExportWorkspaceToDestination"
 	PrivateVMDaemonService_ClaimUSB_FullMethodName                     = "/privatevm.v1.PrivateVMDaemonService/ClaimUSB"
+	PrivateVMDaemonService_PlanUSBPreparation_FullMethodName           = "/privatevm.v1.PrivateVMDaemonService/PlanUSBPreparation"
+	PrivateVMDaemonService_PrepareUSB_FullMethodName                   = "/privatevm.v1.PrivateVMDaemonService/PrepareUSB"
+	PrivateVMDaemonService_ExportApprovedToUSB_FullMethodName          = "/privatevm.v1.PrivateVMDaemonService/ExportApprovedToUSB"
 	PrivateVMDaemonService_ReleaseUSB_FullMethodName                   = "/privatevm.v1.PrivateVMDaemonService/ReleaseUSB"
 )
 
@@ -92,6 +95,9 @@ type PrivateVMDaemonServiceClient interface {
 	VerifyWorkspaceExport(ctx context.Context, in *VerifyWorkspaceExportRequest, opts ...grpc.CallOption) (*WorkspaceState, error)
 	ExportWorkspaceToDestination(ctx context.Context, in *ExportWorkspaceToDestinationRequest, opts ...grpc.CallOption) (*WorkspaceState, error)
 	ClaimUSB(ctx context.Context, in *ClaimUSBRequest, opts ...grpc.CallOption) (*USBClaim, error)
+	PlanUSBPreparation(ctx context.Context, in *PlanUSBPreparationRequest, opts ...grpc.CallOption) (*USBPreparePlan, error)
+	PrepareUSB(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[HostUSBPrepareFrame, USBPrepareReceipt], error)
+	ExportApprovedToUSB(ctx context.Context, in *USBExportRequest, opts ...grpc.CallOption) (*USBExportReceipt, error)
 	ReleaseUSB(ctx context.Context, in *ReleaseUSBRequest, opts ...grpc.CallOption) (*Empty, error)
 }
 
@@ -478,6 +484,39 @@ func (c *privateVMDaemonServiceClient) ClaimUSB(ctx context.Context, in *ClaimUS
 	return out, nil
 }
 
+func (c *privateVMDaemonServiceClient) PlanUSBPreparation(ctx context.Context, in *PlanUSBPreparationRequest, opts ...grpc.CallOption) (*USBPreparePlan, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(USBPreparePlan)
+	err := c.cc.Invoke(ctx, PrivateVMDaemonService_PlanUSBPreparation_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *privateVMDaemonServiceClient) PrepareUSB(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[HostUSBPrepareFrame, USBPrepareReceipt], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &PrivateVMDaemonService_ServiceDesc.Streams[7], PrivateVMDaemonService_PrepareUSB_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[HostUSBPrepareFrame, USBPrepareReceipt]{ClientStream: stream}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type PrivateVMDaemonService_PrepareUSBClient = grpc.ClientStreamingClient[HostUSBPrepareFrame, USBPrepareReceipt]
+
+func (c *privateVMDaemonServiceClient) ExportApprovedToUSB(ctx context.Context, in *USBExportRequest, opts ...grpc.CallOption) (*USBExportReceipt, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(USBExportReceipt)
+	err := c.cc.Invoke(ctx, PrivateVMDaemonService_ExportApprovedToUSB_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *privateVMDaemonServiceClient) ReleaseUSB(ctx context.Context, in *ReleaseUSBRequest, opts ...grpc.CallOption) (*Empty, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(Empty)
@@ -525,6 +564,9 @@ type PrivateVMDaemonServiceServer interface {
 	VerifyWorkspaceExport(context.Context, *VerifyWorkspaceExportRequest) (*WorkspaceState, error)
 	ExportWorkspaceToDestination(context.Context, *ExportWorkspaceToDestinationRequest) (*WorkspaceState, error)
 	ClaimUSB(context.Context, *ClaimUSBRequest) (*USBClaim, error)
+	PlanUSBPreparation(context.Context, *PlanUSBPreparationRequest) (*USBPreparePlan, error)
+	PrepareUSB(grpc.ClientStreamingServer[HostUSBPrepareFrame, USBPrepareReceipt]) error
+	ExportApprovedToUSB(context.Context, *USBExportRequest) (*USBExportReceipt, error)
 	ReleaseUSB(context.Context, *ReleaseUSBRequest) (*Empty, error)
 	mustEmbedUnimplementedPrivateVMDaemonServiceServer()
 }
@@ -634,6 +676,15 @@ func (UnimplementedPrivateVMDaemonServiceServer) ExportWorkspaceToDestination(co
 }
 func (UnimplementedPrivateVMDaemonServiceServer) ClaimUSB(context.Context, *ClaimUSBRequest) (*USBClaim, error) {
 	return nil, status.Error(codes.Unimplemented, "method ClaimUSB not implemented")
+}
+func (UnimplementedPrivateVMDaemonServiceServer) PlanUSBPreparation(context.Context, *PlanUSBPreparationRequest) (*USBPreparePlan, error) {
+	return nil, status.Error(codes.Unimplemented, "method PlanUSBPreparation not implemented")
+}
+func (UnimplementedPrivateVMDaemonServiceServer) PrepareUSB(grpc.ClientStreamingServer[HostUSBPrepareFrame, USBPrepareReceipt]) error {
+	return status.Error(codes.Unimplemented, "method PrepareUSB not implemented")
+}
+func (UnimplementedPrivateVMDaemonServiceServer) ExportApprovedToUSB(context.Context, *USBExportRequest) (*USBExportReceipt, error) {
+	return nil, status.Error(codes.Unimplemented, "method ExportApprovedToUSB not implemented")
 }
 func (UnimplementedPrivateVMDaemonServiceServer) ReleaseUSB(context.Context, *ReleaseUSBRequest) (*Empty, error) {
 	return nil, status.Error(codes.Unimplemented, "method ReleaseUSB not implemented")
@@ -1193,6 +1244,49 @@ func _PrivateVMDaemonService_ClaimUSB_Handler(srv interface{}, ctx context.Conte
 	return interceptor(ctx, in, info, handler)
 }
 
+func _PrivateVMDaemonService_PlanUSBPreparation_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PlanUSBPreparationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PrivateVMDaemonServiceServer).PlanUSBPreparation(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PrivateVMDaemonService_PlanUSBPreparation_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PrivateVMDaemonServiceServer).PlanUSBPreparation(ctx, req.(*PlanUSBPreparationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PrivateVMDaemonService_PrepareUSB_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(PrivateVMDaemonServiceServer).PrepareUSB(&grpc.GenericServerStream[HostUSBPrepareFrame, USBPrepareReceipt]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type PrivateVMDaemonService_PrepareUSBServer = grpc.ClientStreamingServer[HostUSBPrepareFrame, USBPrepareReceipt]
+
+func _PrivateVMDaemonService_ExportApprovedToUSB_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(USBExportRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PrivateVMDaemonServiceServer).ExportApprovedToUSB(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PrivateVMDaemonService_ExportApprovedToUSB_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PrivateVMDaemonServiceServer).ExportApprovedToUSB(ctx, req.(*USBExportRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _PrivateVMDaemonService_ReleaseUSB_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ReleaseUSBRequest)
 	if err := dec(in); err != nil {
@@ -1323,6 +1417,14 @@ var PrivateVMDaemonService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _PrivateVMDaemonService_ClaimUSB_Handler,
 		},
 		{
+			MethodName: "PlanUSBPreparation",
+			Handler:    _PrivateVMDaemonService_PlanUSBPreparation_Handler,
+		},
+		{
+			MethodName: "ExportApprovedToUSB",
+			Handler:    _PrivateVMDaemonService_ExportApprovedToUSB_Handler,
+		},
+		{
 			MethodName: "ReleaseUSB",
 			Handler:    _PrivateVMDaemonService_ReleaseUSB_Handler,
 		},
@@ -1362,6 +1464,11 @@ var PrivateVMDaemonService_ServiceDesc = grpc.ServiceDesc{
 			StreamName:    "ExportWorkspaceFile",
 			Handler:       _PrivateVMDaemonService_ExportWorkspaceFile_Handler,
 			ServerStreams: true,
+		},
+		{
+			StreamName:    "PrepareUSB",
+			Handler:       _PrivateVMDaemonService_PrepareUSB_Handler,
+			ClientStreams: true,
 		},
 	},
 	Metadata: "privatevm/v1/daemon.proto",

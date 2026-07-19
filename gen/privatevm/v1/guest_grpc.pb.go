@@ -1484,9 +1484,9 @@ const (
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type ExporterGuestServiceClient interface {
 	InspectUSB(ctx context.Context, in *ExporterRequest, opts ...grpc.CallOption) (*USBStatus, error)
-	PrepareUSB(ctx context.Context, in *PrepareUSBRequest, opts ...grpc.CallOption) (*USBStatus, error)
-	WriteFile(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[TransferFrame, TransferReceipt], error)
-	VerifyFile(ctx context.Context, in *VerifyExportRequest, opts ...grpc.CallOption) (*TransferReceipt, error)
+	PrepareUSB(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[PrepareUSBFrame, USBStatus], error)
+	WriteFile(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[TransferFrame, USBTransferReceipt], error)
+	VerifyFile(ctx context.Context, in *VerifyExportRequest, opts ...grpc.CallOption) (*USBTransferReceipt, error)
 	FinalizeUSB(ctx context.Context, in *ExporterRequest, opts ...grpc.CallOption) (*USBStatus, error)
 }
 
@@ -1508,32 +1508,35 @@ func (c *exporterGuestServiceClient) InspectUSB(ctx context.Context, in *Exporte
 	return out, nil
 }
 
-func (c *exporterGuestServiceClient) PrepareUSB(ctx context.Context, in *PrepareUSBRequest, opts ...grpc.CallOption) (*USBStatus, error) {
+func (c *exporterGuestServiceClient) PrepareUSB(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[PrepareUSBFrame, USBStatus], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(USBStatus)
-	err := c.cc.Invoke(ctx, ExporterGuestService_PrepareUSB_FullMethodName, in, out, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &ExporterGuestService_ServiceDesc.Streams[0], ExporterGuestService_PrepareUSB_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
-	return out, nil
-}
-
-func (c *exporterGuestServiceClient) WriteFile(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[TransferFrame, TransferReceipt], error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &ExporterGuestService_ServiceDesc.Streams[0], ExporterGuestService_WriteFile_FullMethodName, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	x := &grpc.GenericClientStream[TransferFrame, TransferReceipt]{ClientStream: stream}
+	x := &grpc.GenericClientStream[PrepareUSBFrame, USBStatus]{ClientStream: stream}
 	return x, nil
 }
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type ExporterGuestService_WriteFileClient = grpc.ClientStreamingClient[TransferFrame, TransferReceipt]
+type ExporterGuestService_PrepareUSBClient = grpc.ClientStreamingClient[PrepareUSBFrame, USBStatus]
 
-func (c *exporterGuestServiceClient) VerifyFile(ctx context.Context, in *VerifyExportRequest, opts ...grpc.CallOption) (*TransferReceipt, error) {
+func (c *exporterGuestServiceClient) WriteFile(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[TransferFrame, USBTransferReceipt], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(TransferReceipt)
+	stream, err := c.cc.NewStream(ctx, &ExporterGuestService_ServiceDesc.Streams[1], ExporterGuestService_WriteFile_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[TransferFrame, USBTransferReceipt]{ClientStream: stream}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type ExporterGuestService_WriteFileClient = grpc.ClientStreamingClient[TransferFrame, USBTransferReceipt]
+
+func (c *exporterGuestServiceClient) VerifyFile(ctx context.Context, in *VerifyExportRequest, opts ...grpc.CallOption) (*USBTransferReceipt, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(USBTransferReceipt)
 	err := c.cc.Invoke(ctx, ExporterGuestService_VerifyFile_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
@@ -1556,9 +1559,9 @@ func (c *exporterGuestServiceClient) FinalizeUSB(ctx context.Context, in *Export
 // for forward compatibility.
 type ExporterGuestServiceServer interface {
 	InspectUSB(context.Context, *ExporterRequest) (*USBStatus, error)
-	PrepareUSB(context.Context, *PrepareUSBRequest) (*USBStatus, error)
-	WriteFile(grpc.ClientStreamingServer[TransferFrame, TransferReceipt]) error
-	VerifyFile(context.Context, *VerifyExportRequest) (*TransferReceipt, error)
+	PrepareUSB(grpc.ClientStreamingServer[PrepareUSBFrame, USBStatus]) error
+	WriteFile(grpc.ClientStreamingServer[TransferFrame, USBTransferReceipt]) error
+	VerifyFile(context.Context, *VerifyExportRequest) (*USBTransferReceipt, error)
 	FinalizeUSB(context.Context, *ExporterRequest) (*USBStatus, error)
 	mustEmbedUnimplementedExporterGuestServiceServer()
 }
@@ -1573,13 +1576,13 @@ type UnimplementedExporterGuestServiceServer struct{}
 func (UnimplementedExporterGuestServiceServer) InspectUSB(context.Context, *ExporterRequest) (*USBStatus, error) {
 	return nil, status.Error(codes.Unimplemented, "method InspectUSB not implemented")
 }
-func (UnimplementedExporterGuestServiceServer) PrepareUSB(context.Context, *PrepareUSBRequest) (*USBStatus, error) {
-	return nil, status.Error(codes.Unimplemented, "method PrepareUSB not implemented")
+func (UnimplementedExporterGuestServiceServer) PrepareUSB(grpc.ClientStreamingServer[PrepareUSBFrame, USBStatus]) error {
+	return status.Error(codes.Unimplemented, "method PrepareUSB not implemented")
 }
-func (UnimplementedExporterGuestServiceServer) WriteFile(grpc.ClientStreamingServer[TransferFrame, TransferReceipt]) error {
+func (UnimplementedExporterGuestServiceServer) WriteFile(grpc.ClientStreamingServer[TransferFrame, USBTransferReceipt]) error {
 	return status.Error(codes.Unimplemented, "method WriteFile not implemented")
 }
-func (UnimplementedExporterGuestServiceServer) VerifyFile(context.Context, *VerifyExportRequest) (*TransferReceipt, error) {
+func (UnimplementedExporterGuestServiceServer) VerifyFile(context.Context, *VerifyExportRequest) (*USBTransferReceipt, error) {
 	return nil, status.Error(codes.Unimplemented, "method VerifyFile not implemented")
 }
 func (UnimplementedExporterGuestServiceServer) FinalizeUSB(context.Context, *ExporterRequest) (*USBStatus, error) {
@@ -1624,30 +1627,19 @@ func _ExporterGuestService_InspectUSB_Handler(srv interface{}, ctx context.Conte
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ExporterGuestService_PrepareUSB_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(PrepareUSBRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ExporterGuestServiceServer).PrepareUSB(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ExporterGuestService_PrepareUSB_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ExporterGuestServiceServer).PrepareUSB(ctx, req.(*PrepareUSBRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ExporterGuestService_WriteFile_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(ExporterGuestServiceServer).WriteFile(&grpc.GenericServerStream[TransferFrame, TransferReceipt]{ServerStream: stream})
+func _ExporterGuestService_PrepareUSB_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(ExporterGuestServiceServer).PrepareUSB(&grpc.GenericServerStream[PrepareUSBFrame, USBStatus]{ServerStream: stream})
 }
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type ExporterGuestService_WriteFileServer = grpc.ClientStreamingServer[TransferFrame, TransferReceipt]
+type ExporterGuestService_PrepareUSBServer = grpc.ClientStreamingServer[PrepareUSBFrame, USBStatus]
+
+func _ExporterGuestService_WriteFile_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(ExporterGuestServiceServer).WriteFile(&grpc.GenericServerStream[TransferFrame, USBTransferReceipt]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type ExporterGuestService_WriteFileServer = grpc.ClientStreamingServer[TransferFrame, USBTransferReceipt]
 
 func _ExporterGuestService_VerifyFile_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(VerifyExportRequest)
@@ -1697,10 +1689,6 @@ var ExporterGuestService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _ExporterGuestService_InspectUSB_Handler,
 		},
 		{
-			MethodName: "PrepareUSB",
-			Handler:    _ExporterGuestService_PrepareUSB_Handler,
-		},
-		{
 			MethodName: "VerifyFile",
 			Handler:    _ExporterGuestService_VerifyFile_Handler,
 		},
@@ -1710,6 +1698,11 @@ var ExporterGuestService_ServiceDesc = grpc.ServiceDesc{
 		},
 	},
 	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "PrepareUSB",
+			Handler:       _ExporterGuestService_PrepareUSB_Handler,
+			ClientStreams: true,
+		},
 		{
 			StreamName:    "WriteFile",
 			Handler:       _ExporterGuestService_WriteFile_Handler,

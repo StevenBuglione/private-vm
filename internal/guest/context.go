@@ -69,6 +69,21 @@ func (s *contextServerStream) RecvMsg(message any) error {
 		}
 		s.validated = true
 		return nil
+	case *privatevmv1.PrepareUSBFrame:
+		if s.validated {
+			return nil
+		}
+		if request.GetBegin() == nil {
+			if chunk := request.GetPassphraseChunk(); chunk != nil {
+				clear(chunk.Data)
+			}
+			return guestRPCError(codes.InvalidArgument, "USB_PREPARE_BEGIN_REQUIRED", "USB preparation must begin with an authenticated identity expectation.", "Retry through the private-vm daemon from a fresh preparation plan.", false)
+		}
+		if err := ValidateGuestContext(request.GetBegin().GetContext(), s.role); err != nil {
+			return err
+		}
+		s.validated = true
+		return nil
 	default:
 		if s.validated {
 			return nil
@@ -114,8 +129,6 @@ func unaryGuestContext(request any) (*privatevmv1.GuestContext, error) {
 	case *privatevmv1.NetworkWarningRequest:
 		return value.GetContext(), nil
 	case *privatevmv1.ExporterRequest:
-		return value.GetContext(), nil
-	case *privatevmv1.PrepareUSBRequest:
 		return value.GetContext(), nil
 	case *privatevmv1.VerifyExportRequest:
 		return value.GetContext(), nil

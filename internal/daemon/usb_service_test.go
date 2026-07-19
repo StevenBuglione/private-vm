@@ -32,6 +32,13 @@ func (f *usbClaimsFixture) Claim(context.Context, string, uint32, usb.Enrollment
 	return f.claim, f.claimErr
 }
 
+func (f *usbClaimsFixture) Revalidate(_ context.Context, claimID, sessionID string, ownerUID uint32, _ usb.Enrollment) (usb.Claim, error) {
+	if !f.present || f.claim.ID != claimID || f.claim.SessionID != sessionID || f.claim.OwnerUID != ownerUID {
+		return usb.Claim{}, errors.New("claim is absent or changed")
+	}
+	return f.claim, nil
+}
+
 func (f *usbClaimsFixture) Release(context.Context, string, string, uint32) error {
 	f.releaseRuns++
 	f.present = false

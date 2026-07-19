@@ -51,11 +51,10 @@ protobuf fields are never trusted as identity. Per-session access is then
 restricted to the creating UID, with UID 0 reserved for recovery
 administration.
 
-Polkit is not part of socket admission or `ClaimUSB`. The current `ClaimUSB`
-method is a fail-closed `NOT_IMPLEMENTED` stub and does not invoke Polkit. The
-only permitted Polkit action is `org.private-vm.usb.prepare`; an implemented
-destructive USB-prepare transition must request it immediately before the
-destructive step. Its process subject is the revalidated PID, kernel start time,
+Polkit is not part of socket admission or `ClaimUSB`; claiming is
+non-destructive. The only permitted Polkit action is
+`org.private-vm.usb.prepare`; a destructive USB-prepare transition requests it
+immediately before the destructive step. Its process subject is the revalidated PID, kernel start time,
 and UID. `pkcheck` receives an empty environment, has a 30-second ceiling, and
 has stdout and stderr discarded; its raw output and wrapped failure are never
 returned through RPC or logs.
@@ -225,6 +224,9 @@ Core methods:
 - `VerifyWorkspaceExport`
 - `ExportWorkspaceToDestination`
 - `ClaimUSB`
+- `PlanUSBPreparation`
+- `PrepareUSB`
+- `ExportApprovedToUSB`
 - `ReleaseUSB`
 
 Scanner workflow methods:
@@ -283,6 +285,15 @@ is admitted to the same cleanup owner before an error is returned. `ReleaseUSB`
 is owner- and session-bound and proves the exact claim absent; it never accepts
 a kernel device path. Neither method requests destructive Polkit authorization.
 That authorization belongs immediately before exporter-side preparation.
+
+`PlanUSBPreparation` is session/claim bound and returns one daemon-owned,
+five-minute plan. `PrepareUSB` is a client stream whose first frame carries the
+session, claim, plan challenge and both exact confirmations. It then accepts at
+most four non-empty passphrase chunks of at most 256 bytes and 1024 bytes total.
+Every receiving buffer is cleared and the protected secret is destroyed when
+the synchronous operation returns. `ExportApprovedToUSB` accepts only opaque
+exporter-session, claim, approved-scanner-session and output IDs. It returns
+aggregate equality/flush/cleanup booleans, never a filename or digest.
 
 The host torrent surface is session-scoped and downloader-only. `AddTorrent`
 starts with one contextual begin frame selecting magnet or metainfo, followed
@@ -379,6 +390,18 @@ Exporter:
 - `WriteFile`
 - `VerifyFile`
 - `FinalizeUSB`
+
+Exporter preparation is an authenticated client stream with the same 1024-byte
+and four-frame secret bounds as the host stream. The first frame carries a
+guest context and exact VID/PID/serial/capacity expectation, never a device
+path. `WriteFile` returns typed receive-hash, file/filesystem fsync and
+atomic-rename evidence. `VerifyFile` adds the reread digest; the host keeps all
+digests internal and exposes only equality booleans. `FinalizeUSB` succeeds
+only after guest-local unmount and LUKS close.
+
+Generic exporter guestd composition fails closed because it has no fixed-path
+cryptsetup/mkfs/mount adapter. Only the role image may supply that typed
+adapter; callers cannot choose commands, paths, device nodes or flags.
 
 guestd registers `GuestCommonService` plus exactly one role service selected at
 build time. A generic host build has no compiled role and refuses to start as a

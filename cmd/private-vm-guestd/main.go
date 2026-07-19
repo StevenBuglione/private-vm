@@ -157,6 +157,8 @@ func composeGuestServerConfig(identity guest.Identity, token *guest.Token) (gues
 		}
 		config.Downloader = downloader
 		return config, cleanup, nil
+	case session.RoleExporter:
+		return guest.ServerConfig{}, nil, errors.New("fixed-path exporter LUKS2/ext4 adapter is not configured")
 	default:
 		return config, nil, nil
 	}

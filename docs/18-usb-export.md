@@ -101,9 +101,13 @@ After both phrases are accepted, the daemon re-enumerates the claim and rejects
 identity, kernel-path, bus/address, capacity, interface, USBGuard, mount or
 read-only drift. It then requests only `org.private-vm.usb.prepare` immediately
 before entering the destructive exporter operation. The LUKS2 passphrase stays
-in the volatile secret type and is exposed to a future guest transport adapter
-only through a bounded reader; it is never part of argv, the environment,
-enrollment JSON or progress events.
+in the volatile secret type. CLI-to-daemon and daemon-to-exporter delivery uses
+authenticated client streams with at most four 256-byte chunks and 1024 bytes
+total. Each receiver clears its protobuf and staging buffers and destroys its
+protected value when the synchronous operation returns. It is never part of
+argv, the environment, disk, enrollment JSON or progress events. This bounds
+owned plaintext copies without claiming that Go or gRPC can prove every
+transient runtime copy was overwritten.
 
 Progress has explicit `CONFIRMED`, `COMMIT_STARTED`,
 `DESTINATION_PREPARED`, `CANCELED_PRECOMMIT` and `INCOMPLETE` states. A
@@ -165,6 +169,15 @@ partial writer, unmount/close, detach, stop, release and audit. It stops at the
 first dependent failure and retains state so the same operation can retry the
 incomplete step. Cancellation or caller loss cannot turn incomplete cleanup
 into a success receipt.
+
+The source host boundary exposes only preparation planning, streamed
+preparation and approved-output export interfaces. The exporter guest boundary
+implements the five role methods behind a fixed-policy adapter and verifies
+identity, no-network evidence, LUKS2/ext4 preparation, monotonic stream bounds,
+receive/reread hashes, both fsyncs, atomic rename, unmount and LUKS close. The
+generic daemon/guestd composition returns `USB_WORKFLOW_UNAVAILABLE` or refuses
+exporter startup until the image-specific QEMU, scanner and fixed-path
+cryptsetup/mkfs/mount adapters are installed.
 
 ## Interrupted export
 
