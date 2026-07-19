@@ -85,7 +85,7 @@ func (invoker *ProductionInvoker) Invoke(ctx context.Context, id CommandID, inte
 		}
 		response, err := invoker.profileOperation(ctx, id, request.ProfileName)
 		return vpnResult(response, err)
-	case CommandUSBList, CommandUSBInspect, CommandUSBEnroll, CommandUSBVerify, CommandUSBForget:
+	case CommandUSBList, CommandUSBInspect, CommandUSBEnroll, CommandUSBVerify, CommandUSBForget, CommandUSBPrepare, CommandUSBExport:
 		return invoker.invokeUSB(ctx, id, intent)
 	default:
 		return failClosedInvoker{}.Invoke(ctx, id, intent)

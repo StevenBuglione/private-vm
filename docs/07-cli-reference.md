@@ -294,12 +294,25 @@ private-vm usb inspect --device ID
 private-vm usb enroll --device ID [--label PRIVATE_VM_TRANSFER]
                               [--accept-port-binding]
 private-vm usb prepare --format luks2-ext4
+private-vm usb export --session EXPORTER_SESSION --claim CLAIM_ID \
+                      --scanner-session SCANNER_SESSION --output OUTPUT_ID
 private-vm usb verify
 private-vm usb forget
 ```
 
 `prepare` is destructive and requires an exact displayed device identity plus
-interactive confirmation unless a signed automation policy explicitly permits it.
+two exact interactive confirmations. It creates one exporter session, claims
+the current enrollment, displays the daemon-generated plan, reads the LUKS2
+passphrase without echo, and streams it through the authenticated control
+socket. The success record returns only the opaque exporter session, claim and
+enrollment IDs plus aggregate identity/capacity evidence. Failure aborts the
+same session and invokes its registered cleanup owner.
+
+`export` selects one policy-approved reconstructed scanner output by opaque
+session/output IDs. It never accepts a host or guest path. Success requires all
+source/relay/exporter/reread equality, flush, atomic-rename, unmount, detach,
+exporter-stop and session-cleanup booleans. The success record contains no
+filename, digest or device path.
 
 `list`, `inspect`, `enroll`, `verify`, and `forget` traverse the authenticated
 Unix daemon and are owner-bound by kernel peer credentials. Their typed output

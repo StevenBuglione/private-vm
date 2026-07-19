@@ -258,9 +258,21 @@ immutable digest cache, registers storage and runtime cleanup owners before
 publishing their phases, and exposes only workspace state or the downloader's
 typed torrent methods. A partial storage or runtime allocation is returned with
 its cleanup/audit contract so timeout or cancellation cannot drop ownership.
-Scanner and exporter requests remain typed fail-closed at this boundary until
-their separate orchestrators are composed; they are never routed through a
-workstation or downloader device model.
+Scanner requests remain typed fail-closed at this boundary until their separate
+orchestrator is composed; they are never routed through a workstation or
+downloader device model. The exporter uses a separate production coordinator:
+it verifies the exporter image, activates actor-owned storage, allocates a CID,
+private QMP directories and capability, launches the headless/no-NIC device
+model, authenticates guestd, hotplugs only the freshly revalidated USB claim,
+and requires the guest `InspectUSB` no-network and exact-identity evidence.
+
+Approved export sources use a one-use in-memory registry keyed by role, session
+and opaque output ID. Factories may implement either authenticated scanner
+reconstruction or workstation Export streaming. The registry and host workflow
+cannot represent a path, mount, device node, QEMU argument or raw digest in
+durable state. The exporter runtime and USB claim are allocations of the same
+serialized session actor, so failed preparation and caller loss converge through
+one cleanup owner.
 
 The workstation runtime exposes one sealed `WorkstationRelay`, not its VSOCK
 client. Host import/export callbacks carry only bounded transfer frames and an

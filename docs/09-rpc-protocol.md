@@ -309,8 +309,12 @@ five-minute plan. `PrepareUSB` is a client stream whose first frame carries the
 session, claim, plan challenge and both exact confirmations. It then accepts at
 most four non-empty passphrase chunks of at most 256 bytes and 1024 bytes total.
 Every receiving buffer is cleared and the protected secret is destroyed when
-the synchronous operation returns. `ExportApprovedToUSB` accepts only opaque
-exporter-session, claim, approved-scanner-session and output IDs. It returns
+the synchronous operation returns. The daemon binds the destructive Polkit
+authorization to the authenticated Unix peer immediately before preparation;
+no request UID is trusted. `ExportApprovedToUSB` accepts only opaque
+exporter-session, claim, approved-scanner-session and output IDs. Internally,
+the one-use source registry is role typed and can also represent an
+authenticated workstation Export output without adding a host path. It returns
 aggregate equality/flush/cleanup booleans, never a filename or digest.
 
 The host torrent surface is session-scoped and downloader-only. `AddTorrent`

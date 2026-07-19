@@ -168,11 +168,15 @@ scanner has not received it. The lifecycle adapter may then boot only the
 networkless exporter, attach the revalidated device through the typed QEMU
 hotplug boundary, and verify the same identity inside the guest.
 
-The relay accepts one authenticated, complete, policy-approved reconstructed
-output. Each chunk is at most 1 MiB, has a monotonic sequence, and is cleared
-from the relay's owned buffer after the destination consumes it. Overall byte,
-idle and operation deadlines are mandatory. Raw names and hashes never enter
-events or the export receipt.
+The relay accepts one authenticated approved source. Scanner sources must have
+a complete authenticated report, policy approval and reconstructed output;
+workstation sources must have authenticated Export state and be ready. The
+daemon opens the source once from a volatile registry keyed by role, session and
+opaque output ID. No source registration can carry a host/guest path. Each
+chunk is at most 1 MiB, has a monotonic sequence, and is cleared from the
+relay's owned buffer after the destination consumes it. Overall byte, idle and
+operation deadlines are mandatory. Raw names and hashes never enter events or
+the export receipt.
 
 The scanner digest, relay digest, exporter receive digest and exporter reread
 digest remain internal redacted values. A successful receipt exposes only the
@@ -188,18 +192,27 @@ first dependent failure and retains state so the same operation can retry the
 incomplete step. Cancellation or caller loss cannot turn incomplete cleanup
 into a success receipt.
 
-The source host boundary exposes only preparation planning, streamed
-preparation and approved-output export interfaces. The exporter guest boundary
-implements the five role methods behind a fixed-policy adapter and verifies
-identity, no-network evidence, LUKS2/ext4 preparation, monotonic stream bounds,
-receive/reread hashes, both fsyncs, atomic rename, unmount and LUKS close. The
-generic host daemon returns `USB_WORKFLOW_UNAVAILABLE` until its QEMU,
-scanner-source and relay adapters are installed. The exporter-compiled guestd
+The production host boundary exposes only preparation planning, streamed
+preparation and approved-output export interfaces. It composes the verified
+exporter image/storage selector, headless/no-NIC QEMU runtime, inherited
+capability, authenticated VSOCK client, typed QMP hotplug and exact session
+cleanup owner at daemon startup. It returns `USB_WORKFLOW_UNAVAILABLE` if any
+required adapter is absent. The exporter guest boundary implements the five
+role methods behind a fixed-policy adapter and verifies identity, no-network
+evidence, LUKS2/ext4 preparation, monotonic stream bounds, receive/reread
+hashes, both fsyncs, atomic rename, unmount and LUKS close. The exporter-compiled guestd
 uses one image-owned Linux adapter: it discovers exactly one unmounted
 mass-storage-only USB device, matches VID/PID/serial/capacity, proves that only
 loopback networking exists, and owns fixed LUKS2/ext4, mapper, mount and output
 paths. Its external tools and arguments are fixed; only the passphrase stream
 is connected to command stdin.
+
+QMP attach is treated as ambiguous ownership before the request is sent. A
+timeout therefore enters cleanup rather than assuming the device was not
+attached. Detach, VSOCK close, process stop, image destroy, CID release and
+directory removal each retain their handle after failure and are retried by the
+session owner. Process absence resolves an otherwise ambiguous attach/detach;
+no successful receipt is possible while any ownership or audit remains.
 
 ## Interrupted export
 

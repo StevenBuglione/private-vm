@@ -19,16 +19,19 @@ import (
 	"github.com/StevenBuglione/private-vm/internal/orchestrator"
 	"github.com/StevenBuglione/private-vm/internal/qemu"
 	"github.com/StevenBuglione/private-vm/internal/storage"
+	"github.com/StevenBuglione/private-vm/internal/usb"
 	"github.com/StevenBuglione/private-vm/internal/vpn"
 )
 
 var qemuVersionPattern = regexp.MustCompile(`(?m)^QEMU emulator version ([0-9]+\.[0-9]+\.[0-9]+)(?:\s|$)`)
 
 type productionHostServices struct {
-	profiles *vpn.MemoryStore
-	resolver *vpn.EndpointResolver
-	roles    *orchestrator.HostRoles
-	scanners *daemon.GuestScannerRelay
+	profiles   *vpn.MemoryStore
+	resolver   *vpn.EndpointResolver
+	roles      *orchestrator.HostRoles
+	scanners   *daemon.GuestScannerRelay
+	exporters  *orchestrator.ExporterRuntimeStack
+	usbSources *usb.ApprovedSourceRegistry
 }
 
 func (services *productionHostServices) Close() {
@@ -108,9 +111,10 @@ func composeProductionHost(ctx context.Context, cfg config.Config) (*productionH
 		profiles.Close()
 		return nil, err
 	}
+	cids := guest.NewDefaultCIDAllocator()
 	runtimeStack, err := orchestrator.NewRuntimeStack(
 		runtimeConfig.Directory(), tools["qemu-system-x86_64"], cfg.VPN().ProfileName(),
-		profiles, resolver, networks, guest.NewDefaultCIDAllocator(), orchestrator.QEMUAdapter{Launcher: launcher},
+		profiles, resolver, networks, cids, orchestrator.QEMUAdapter{Launcher: launcher},
 		probeTargets,
 	)
 	if err != nil {
@@ -141,7 +145,12 @@ func composeProductionHost(ctx context.Context, cfg config.Config) (*productionH
 		profiles.Close()
 		return nil, err
 	}
-	return &productionHostServices{profiles: profiles, resolver: resolver, roles: roles, scanners: scanners}, nil
+	exporters, err := orchestrator.NewExporterRuntimeStack(roles, runtimeConfig.Directory(), tools["qemu-system-x86_64"], cids, launcher)
+	if err != nil {
+		profiles.Close()
+		return nil, err
+	}
+	return &productionHostServices{profiles: profiles, resolver: resolver, roles: roles, scanners: scanners, exporters: exporters, usbSources: usb.NewApprovedSourceRegistry()}, nil
 }
 
 func productionProbeTargets(configuration config.VPN) (guestvpn.ProbeTargets, error) {

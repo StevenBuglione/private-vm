@@ -24,8 +24,8 @@ const (
 // block path, mount path, command, QEMU argument or arbitrary device selector.
 type USBWorkflowOrchestrator interface {
 	PlanPreparation(context.Context, session.Snapshot, string, usb.Enrollment) (usb.PreparePlan, error)
-	Prepare(context.Context, session.Snapshot, string, usb.Enrollment, string, usb.Confirmation, *secret.Bytes) (usb.PrepareReceipt, error)
-	Export(context.Context, session.Snapshot, string, string, string, usb.Enrollment) (usb.ExportReceipt, error)
+	Prepare(context.Context, session.Snapshot, string, usb.Enrollment, string, usb.Confirmation, *secret.Bytes, usb.PrepareAuthorizer) (usb.PrepareReceipt, error)
+	Export(context.Context, session.Snapshot, string, usb.SourceSelection, usb.Enrollment) (usb.ExportReceipt, error)
 }
 
 func (s *Service) PlanUSBPreparation(ctx context.Context, request *privatevmv1.PlanUSBPreparationRequest) (*privatevmv1.USBPreparePlan, error) {
@@ -100,7 +100,10 @@ func (s *Service) PrepareUSB(stream privatevmv1.PrivateVMDaemonService_PrepareUS
 	if err != nil {
 		return err
 	}
-	receipt, err := s.USBWorkflows.Prepare(ctx, snapshot, begin.GetClaimId(), enrollment, begin.GetChallenge(), usb.Confirmation{First: begin.GetFirstConfirmation(), Second: begin.GetSecondConfirmation()}, passphrase)
+	if s.Polkit == nil {
+		return rpcError(codes.Unavailable, "USB_AUTHORIZATION_UNAVAILABLE", "Destructive USB authorization is unavailable.", "Install and enable the fixed private-vm Polkit policy.", false)
+	}
+	receipt, err := s.USBWorkflows.Prepare(ctx, snapshot, begin.GetClaimId(), enrollment, begin.GetChallenge(), usb.Confirmation{First: begin.GetFirstConfirmation(), Second: begin.GetSecondConfirmation()}, passphrase, peerPrepareAuthorizer{polkit: s.Polkit, identity: identity})
 	if err != nil {
 		return usbRPCError(err)
 	}
@@ -135,7 +138,7 @@ func (s *Service) ExportApprovedToUSB(ctx context.Context, request *privatevmv1.
 	if err != nil || scanner.Role != session.RoleScanner || scanner.WorkflowState != "POLICY_APPROVED" {
 		return nil, rpcError(codes.FailedPrecondition, "USB_SCANNER_APPROVAL_REQUIRED", "The source is not owned by an approved scanner session.", "Complete the authenticated scanner report and approve one reconstructed output.", false)
 	}
-	receipt, err := s.USBWorkflows.Export(ctx, snapshot, request.GetClaimId(), scanner.ID, request.GetOutputId(), enrollment)
+	receipt, err := s.USBWorkflows.Export(ctx, snapshot, request.GetClaimId(), usb.SourceSelection{Role: usb.SourceScanner, SessionID: scanner.ID, OutputID: request.GetOutputId()}, enrollment)
 	if err != nil {
 		return nil, usbRPCError(err)
 	}
@@ -147,7 +150,20 @@ func (s *Service) ExportApprovedToUSB(ctx context.Context, request *privatevmv1.
 			return nil, sessionError(err)
 		}
 	}
+	destroyed, cleanupErr := s.Sessions.Cleanup(context.WithoutCancel(ctx), snapshot.ID, identity.UID)
+	if cleanupErr != nil || destroyed.Phase != session.PhaseDestroyed {
+		return nil, rpcError(codes.FailedPrecondition, "USB_CLEANUP_INCOMPLETE", "USB export verification completed but session cleanup is incomplete.", "Keep the device attached and retry session cleanup.", true)
+	}
 	return exportReceiptToProto(receipt), nil
+}
+
+type peerPrepareAuthorizer struct {
+	polkit   Polkit
+	identity PeerIdentity
+}
+
+func (authorizer peerPrepareAuthorizer) AuthorizePrepare(ctx context.Context) error {
+	return authorizer.polkit.Authorize(ctx, authorizer.identity, "org.private-vm.usb.prepare")
 }
 
 func (s *Service) usbWorkflowAdmission(ctx context.Context, sessionID, claimID, workflow string) (PeerIdentity, session.Snapshot, usb.Enrollment, error) {

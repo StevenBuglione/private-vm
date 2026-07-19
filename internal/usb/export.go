@@ -21,15 +21,18 @@ const (
 )
 
 type ApprovedOutput struct {
-	OutputID            string
-	LogicalName         string
-	MediaType           string
-	Size                uint64
-	ScannerDigest       Digest
-	ReportAuthenticated bool
-	ReportComplete      bool
-	PolicyApproved      bool
-	Reconstructed       bool
+	SourceRole               SourceRole
+	OutputID                 string
+	LogicalName              string
+	MediaType                string
+	Size                     uint64
+	SourceDigest             Digest
+	ReportAuthenticated      bool
+	ReportComplete           bool
+	PolicyApproved           bool
+	Reconstructed            bool
+	ExportStateAuthenticated bool
+	ExportStateReady         bool
 }
 
 func (o ApprovedOutput) Validate(maxBytes uint64) error {
@@ -43,11 +46,20 @@ func (o ApprovedOutput) Validate(maxBytes uint64) error {
 	if o.MediaType == "" || len(o.MediaType) > 255 || strings.ContainsAny(o.MediaType, "\x00\r\n") {
 		return errors.New("approved output media type is invalid")
 	}
-	if o.Size == 0 || o.Size > maxBytes || o.ScannerDigest.IsZero() {
+	if o.Size == 0 || o.Size > maxBytes || o.SourceDigest.IsZero() {
 		return errors.New("approved output size or digest is invalid")
 	}
-	if !o.ReportAuthenticated || !o.ReportComplete || !o.PolicyApproved || !o.Reconstructed {
-		return errors.New("approved output lacks complete safe-policy evidence")
+	switch o.SourceRole {
+	case SourceScanner:
+		if !o.ReportAuthenticated || !o.ReportComplete || !o.PolicyApproved || !o.Reconstructed {
+			return errors.New("approved scanner output lacks complete safe-policy evidence")
+		}
+	case SourceWorkstation:
+		if !o.ExportStateAuthenticated || !o.ExportStateReady {
+			return errors.New("workstation output lacks authenticated ready-state evidence")
+		}
+	default:
+		return errors.New("approved output source role is invalid")
 	}
 	return nil
 }
@@ -89,7 +101,7 @@ type FinalizeEvidence struct {
 }
 
 type ExportLifecycle interface {
-	VerifyHostAndScannerIsolation(context.Context, Claim) error
+	VerifyHostAndSourceIsolation(context.Context, Claim) error
 	BootNetworkless(context.Context) error
 	VerifyNoNetwork(context.Context) error
 	AttachExactUSB(context.Context, Claim) error
@@ -239,7 +251,7 @@ func (o *ExportOperation) Run(ctx context.Context, source ApprovedSource) (recei
 		o.mu.Unlock()
 	}()
 	if source == nil {
-		return o.fail(ctx, "An approved scanner source is required.", nil)
+		return o.fail(ctx, "An approved source is required.", nil)
 	}
 	sourceClosed := false
 	defer func() {
@@ -249,7 +261,7 @@ func (o *ExportOperation) Run(ctx context.Context, source ApprovedSource) (recei
 	}()
 	output := source.Output()
 	if err := output.Validate(o.options.MaxBytes); err != nil {
-		return o.fail(ctx, "The scanner output is not eligible for safe USB export.", err)
+		return o.fail(ctx, "The selected output is not eligible for safe USB export.", err)
 	}
 	if output.Size > o.enrollment.Identity.Capacity {
 		return o.failAs(ctx, CodeTooSmall, "The enrolled USB is too small for the approved output.", "Use a larger enrolled device and repeat preparation before exporting.", nil)
@@ -269,7 +281,7 @@ func (o *ExportOperation) Run(ctx context.Context, source ApprovedSource) (recei
 	if err := o.emit(ExportClaimVerified, "USB_CLAIM_VERIFIED", "The exact enrolled USB claim was revalidated.", 0, output.Size); err != nil {
 		return o.fail(ctx, "Exporter event recording failed.", err)
 	}
-	if err := o.lifecycle.VerifyHostAndScannerIsolation(ctx, claim); err != nil {
+	if err := o.lifecycle.VerifyHostAndSourceIsolation(ctx, claim); err != nil {
 		return o.fail(ctx, "USB role-boundary isolation verification failed.", err)
 	}
 	o.booted = true
@@ -319,12 +331,12 @@ func (o *ExportOperation) Run(ctx context.Context, source ApprovedSource) (recei
 			break
 		}
 		if nextErr != nil {
-			return o.fail(ctx, "The approved scanner stream failed.", nextErr)
+			return o.fail(ctx, "The approved source stream failed.", nextErr)
 		}
 		if chunk.Sequence != expectedSequence || len(chunk.Data) == 0 || len(chunk.Data) > MaximumRelayChunk ||
 			written > output.Size || uint64(len(chunk.Data)) > output.Size-written {
 			clear(chunk.Data)
-			return o.fail(ctx, "The approved scanner stream violated its bounds.", nil)
+			return o.fail(ctx, "The approved source stream violated its bounds.", nil)
 		}
 		writeCtx, writeCancel := context.WithTimeout(ctx, o.options.IdleTimeout)
 		writeErr := writer.WriteChunk(writeCtx, chunk.Sequence, chunk.Data)
@@ -342,19 +354,19 @@ func (o *ExportOperation) Run(ctx context.Context, source ApprovedSource) (recei
 		}
 	}
 	if written != output.Size {
-		return o.fail(ctx, "The approved scanner stream ended before its declared size.", nil)
+		return o.fail(ctx, "The approved source stream ended before its declared size.", nil)
 	}
 	closeErr := source.Close()
 	sourceClosed = true
 	if closeErr != nil {
-		return o.fail(ctx, "The approved scanner stream did not close cleanly.", closeErr)
+		return o.fail(ctx, "The approved source stream did not close cleanly.", closeErr)
 	}
 	var relayArray [32]byte
 	copy(relayArray[:], hasher.Sum(nil))
 	relayDigest := NewDigest(relayArray)
 	clear(relayArray[:])
-	if !output.ScannerDigest.Equal(relayDigest) {
-		return o.hashFailure(ctx, "The scanner and relay hashes do not agree.")
+	if !output.SourceDigest.Equal(relayDigest) {
+		return o.hashFailure(ctx, "The source and relay hashes do not agree.")
 	}
 	if err := o.emit(ExportStreamComplete, "USB_STREAM_COMPLETE", "The complete approved stream reached the exporter.", written, output.Size); err != nil {
 		return o.fail(ctx, "Exporter event recording failed.", err)

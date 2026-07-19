@@ -33,6 +33,7 @@ var (
 	usbHashOutputPattern        = regexp.MustCompile(`^[A-Za-z0-9+/=_-]{16,256}$`)
 	usbFingerprintOutputPattern = regexp.MustCompile(`^[0-9a-f]{64}$`)
 	usbBlockPathOutputPattern   = regexp.MustCompile(`^/dev/[A-Za-z0-9._-]+$`)
+	usbClaimOutputPattern       = regexp.MustCompile(`^usbclaim-[0-9a-f]{32}$`)
 )
 
 // Code is a stable, machine-readable result or event code.
@@ -49,6 +50,8 @@ const (
 	CodeScannerStatus   Code = "SCANNER_STATUS"
 	CodeUSBDevices      Code = "USB_DEVICE_STATUS"
 	CodeUSBEnrollment   Code = "USB_ENROLLMENT_STATUS"
+	CodeUSBPrepared     Code = "USB_PREPARED"
+	CodeUSBExported     Code = "USB_EXPORT_VERIFIED"
 	CodeInternalError   Code = "INTERNAL_ERROR"
 	CodeRenderFailed    Code = "OUTPUT_RENDER_FAILED"
 )
@@ -234,6 +237,37 @@ type USBEnrollmentPayload struct {
 }
 
 func (USBEnrollmentPayload) machinePayload() {}
+
+type USBPreparePayload struct {
+	SchemaVersion       uint32 `json:"schema_version"`
+	ExporterSessionID   string `json:"exporter_session_id"`
+	ClaimID             string `json:"claim_id"`
+	EnrollmentID        string `json:"enrollment_id"`
+	Filesystem          string `json:"filesystem"`
+	CapacityBytes       uint64 `json:"capacity_bytes"`
+	IdentityFingerprint string `json:"identity_fingerprint"`
+	State               string `json:"state"`
+}
+
+func (USBPreparePayload) machinePayload() {}
+
+type USBExportPayload struct {
+	SchemaVersion           uint32 `json:"schema_version"`
+	EnrollmentID            string `json:"enrollment_id"`
+	BytesWritten            uint64 `json:"bytes_written"`
+	SourceRelayHashEqual    bool   `json:"source_relay_hash_equal"`
+	RelayExporterHashEqual  bool   `json:"relay_exporter_hash_equal"`
+	ExporterRereadHashEqual bool   `json:"exporter_reread_hash_equal"`
+	FileSynced              bool   `json:"file_synced"`
+	FilesystemSynced        bool   `json:"filesystem_synced"`
+	AtomicRename            bool   `json:"atomic_rename"`
+	USBUnmounted            bool   `json:"usb_unmounted"`
+	USBDetached             bool   `json:"usb_detached"`
+	ExporterStopped         bool   `json:"exporter_stopped"`
+	CleanupComplete         bool   `json:"cleanup_complete"`
+}
+
+func (USBExportPayload) machinePayload() {}
 
 // EventPayload is deliberately sealed independently from success payloads.
 // Adding an event shape requires an explicit, reviewed concrete type.
@@ -462,6 +496,14 @@ func validSuccess(success SuccessEnvelope) bool {
 			data.CapacityBytes > 0 && usbFingerprintOutputPattern.MatchString(data.IdentityFingerprint) && validUSBInterfaces(data.Interfaces) && usbHashOutputPattern.MatchString(data.USBGuardHash) &&
 			(data.BlockPath == "" || usbBlockPathOutputPattern.MatchString(data.BlockPath)) && usbPortOutputPattern.MatchString(data.PortPath) && validUSBText(data.Serial, 256, true) && validUSBText(data.Model, 256, true) &&
 			validCode(Code(data.Code)) && validRequiredString(data.Remediation, 512)
+	case USBPreparePayload:
+		return success.Code == CodeUSBPrepared && data.SchemaVersion == 1 && validOptionalSessionID(data.ExporterSessionID) &&
+			usbClaimOutputPattern.MatchString(data.ClaimID) && usbEnrollmentOutputPattern.MatchString(data.EnrollmentID) &&
+			data.Filesystem == "luks2-ext4" && data.CapacityBytes > 0 && usbFingerprintOutputPattern.MatchString(data.IdentityFingerprint) && data.State == "DESTINATION_PREPARED"
+	case USBExportPayload:
+		return success.Code == CodeUSBExported && data.SchemaVersion == 1 && usbEnrollmentOutputPattern.MatchString(data.EnrollmentID) && data.BytesWritten > 0 &&
+			data.SourceRelayHashEqual && data.RelayExporterHashEqual && data.ExporterRereadHashEqual && data.FileSynced && data.FilesystemSynced && data.AtomicRename &&
+			data.USBUnmounted && data.USBDetached && data.ExporterStopped && data.CleanupComplete
 	default:
 		return false
 	}
@@ -637,6 +679,14 @@ func humanSuccess(code Code, data MachinePayload) string {
 			safeLine(value.EnrollmentID), safeLine(value.Label), safeLine(value.BlockPath), safeLine(value.VendorID), safeLine(value.ProductID),
 			safeLine(value.Serial), safeLine(value.USBGuardHash), value.CapacityBytes, safeLine(value.PortPath), value.PortBound, value.Verified,
 			safeLine(value.IdentityFingerprint), safeLine(value.Code), safeLine(value.Remediation))
+	case USBPreparePayload:
+		return fmt.Sprintf("exporter=%s claim=%s enrollment=%s filesystem=%s capacity=%d fingerprint=%s state=%s\n",
+			safeLine(value.ExporterSessionID), safeLine(value.ClaimID), safeLine(value.EnrollmentID), safeLine(value.Filesystem), value.CapacityBytes,
+			safeLine(value.IdentityFingerprint), safeLine(value.State))
+	case USBExportPayload:
+		return fmt.Sprintf("enrollment=%s bytes=%d source_relay_hash_equal=%t relay_exporter_hash_equal=%t exporter_reread_hash_equal=%t synced=%t filesystem_synced=%t atomic=%t unmounted=%t detached=%t stopped=%t cleanup=%t\n",
+			safeLine(value.EnrollmentID), value.BytesWritten, value.SourceRelayHashEqual, value.RelayExporterHashEqual, value.ExporterRereadHashEqual,
+			value.FileSynced, value.FilesystemSynced, value.AtomicRename, value.USBUnmounted, value.USBDetached, value.ExporterStopped, value.CleanupComplete)
 	default:
 		// MachinePayload is sealed; this protects against new payload types being
 		// added without a corresponding reviewed human representation.

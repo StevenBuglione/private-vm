@@ -17,6 +17,8 @@ pairs = [
     ("schemas/cli-success.schema.json", "examples/cli-torrent-success.example.json", "json"),
     ("schemas/cli-success.schema.json", "examples/cli-scanner-success.example.json", "json"),
     ("schemas/cli-success.schema.json", "examples/cli-workspace-success.example.json", "json"),
+    ("schemas/cli-success.schema.json", "examples/cli-usb-prepare-success.example.json", "json"),
+    ("schemas/cli-success.schema.json", "examples/cli-usb-export-success.example.json", "json"),
     ("schemas/config.schema.json", "examples/config.example.toml", "toml"),
     ("schemas/policy.schema.json", "examples/policy.safe.toml", "toml"),
     ("schemas/policy.schema.json", "examples/policy.quarantine.toml", "toml"),

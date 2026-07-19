@@ -137,9 +137,13 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	usbWorkflows, err := usb.NewHostWorkflow(manager, usbClaims, hostServices.exporters, hostServices.usbSources)
+	if err != nil {
+		return err
+	}
 	service := &daemon.Service{
 		Sessions: manager, Config: cfg, Polkit: daemon.PKCheck{Binary: pkcheck},
-		USBRegistry: usbRegistry, USBClaims: usbClaims,
+		USBRegistry: usbRegistry, USBClaims: usbClaims, USBWorkflows: usbWorkflows,
 		Profiles: hostServices.profiles, VPNResolver: hostServices.resolver,
 		Roles: hostServices.roles, Torrents: hostServices.roles, Scanners: hostServices.scanners,
 	}

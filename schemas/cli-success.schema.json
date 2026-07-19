@@ -74,6 +74,18 @@
         "code": { "const": "USB_ENROLLMENT_STATUS" },
         "data": { "$ref": "#/$defs/usb_enrollment" }
       }
+    },
+    {
+      "properties": {
+        "code": { "const": "USB_PREPARED" },
+        "data": { "$ref": "#/$defs/usb_prepared" }
+      }
+    },
+    {
+      "properties": {
+        "code": { "const": "USB_EXPORT_VERIFIED" },
+        "data": { "$ref": "#/$defs/usb_export" }
+      }
     }
   ],
   "$defs": {
@@ -289,6 +301,41 @@
         "remediation": { "type": "string", "minLength": 1, "maxLength": 512 }
       },
       "required": ["schema_version", "enrollment_id", "label", "filesystem", "vendor_id", "product_id", "usbguard_hash", "port_path", "port_bound", "interfaces", "capacity_bytes", "identity_fingerprint", "verified", "code", "remediation"]
+    },
+    "usb_prepared": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": { "const": 1 },
+        "exporter_session_id": { "type": "string", "pattern": "^pvm-[a-f0-9]{32}$" },
+        "claim_id": { "type": "string", "pattern": "^usbclaim-[a-f0-9]{32}$" },
+        "enrollment_id": { "type": "string", "pattern": "^usb-[a-f0-9]{16}$" },
+        "filesystem": { "const": "luks2-ext4" },
+        "capacity_bytes": { "type": "integer", "minimum": 1 },
+        "identity_fingerprint": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "state": { "const": "DESTINATION_PREPARED" }
+      },
+      "required": ["schema_version", "exporter_session_id", "claim_id", "enrollment_id", "filesystem", "capacity_bytes", "identity_fingerprint", "state"]
+    },
+    "usb_export": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": { "const": 1 },
+        "enrollment_id": { "type": "string", "pattern": "^usb-[a-f0-9]{16}$" },
+        "bytes_written": { "type": "integer", "minimum": 1 },
+        "source_relay_hash_equal": { "const": true },
+        "relay_exporter_hash_equal": { "const": true },
+        "exporter_reread_hash_equal": { "const": true },
+        "file_synced": { "const": true },
+        "filesystem_synced": { "const": true },
+        "atomic_rename": { "const": true },
+        "usb_unmounted": { "const": true },
+        "usb_detached": { "const": true },
+        "exporter_stopped": { "const": true },
+        "cleanup_complete": { "const": true }
+      },
+      "required": ["schema_version", "enrollment_id", "bytes_written", "source_relay_hash_equal", "relay_exporter_hash_equal", "exporter_reread_hash_equal", "file_synced", "filesystem_synced", "atomic_rename", "usb_unmounted", "usb_detached", "exporter_stopped", "cleanup_complete"]
     }
   }
 }

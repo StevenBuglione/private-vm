@@ -45,6 +45,8 @@ const (
 	CommandUSBEnroll        CommandID = "usb.enroll"
 	CommandUSBVerify        CommandID = "usb.verify"
 	CommandUSBForget        CommandID = "usb.forget"
+	CommandUSBPrepare       CommandID = "usb.prepare"
+	CommandUSBExport        CommandID = "usb.export"
 )
 
 type Intent interface {
@@ -188,6 +190,15 @@ type USBPrepareIntent struct {
 }
 
 func (USBPrepareIntent) privateVMIntent() {}
+
+type USBExportIntent struct {
+	ExporterSession string
+	ClaimID         string
+	SourceSession   string
+	OutputID        string
+}
+
+func (USBExportIntent) privateVMIntent() {}
 
 type ImageSelectionIntent struct {
 	Role   string

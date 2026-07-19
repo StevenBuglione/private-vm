@@ -31,6 +31,11 @@
   exporter composition that fails closed without its fixed-path adapter
 - daemon session/claim-bound USB plan, secret-stream preparation and approved
   scanner-to-exporter bridge, including complete workflow-state evidence
+- production exporter no-NIC/xHCI argument shape, fixed typed QMP hotplug,
+  guest `InspectUSB` no-network evidence, ambiguous attach ownership, per-step
+  cleanup-handle retention, failed first cleanup and successful retry
+- one-use role/session/output source selection for authenticated scanner
+  reconstruction and workstation Export without a host path
 - scan report parser
 - policy decisions
 - stream framing/hash
@@ -306,6 +311,27 @@ drift, closed report publication and refusal to admit the daemon for incomplete,
 timed-out or canceled recovery. These tests run no recovery command against the
 real host. Process/cgroup, network, VSOCK and USB recovery remains fail-closed,
 not simulated as successful production evidence.
+
+Focused production-composition tests additionally prove volatile plan/image/
+storage/runtime ownership, reverse cleanup, partial-runtime timeout ownership,
+scanner/exporter fail-closed behavior, downloader seal-before-absence audit,
+idempotent private socket-directory cleanup, bounded 16-KiB guest torrent
+framing, single first-frame context and oversize/send-failure rejection.
+
+The exporter/USB source gate runs without QEMU, USB mutation or a host mount:
+
+```bash
+GOMAXPROCS=2 go test -p=1 \
+  ./internal/qemu ./internal/orchestrator ./internal/usb \
+  ./internal/daemon ./internal/cli ./cmd/private-vmd
+```
+
+This focused gate does not prove live network namespace counters, mock-peer
+packets, a real Proton handshake, cached official role images, KVM launch, or
+physical USB preparation/export. Workstation and downloader acceptance also
+requires the role-specific guest VPN RPC implementation to consume the typed
+underlay and fixed probe targets; a host build paired with an older guestd must
+fail the authenticated readiness gate and is not release evidence.
 
 The bounded fuzz smoke is reproducible with:
 

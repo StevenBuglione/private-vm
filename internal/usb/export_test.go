@@ -96,7 +96,7 @@ func (l *fakeExportLifecycle) step(name string) error {
 	l.order = append(l.order, name)
 	return l.fail[name]
 }
-func (l *fakeExportLifecycle) VerifyHostAndScannerIsolation(context.Context, Claim) error {
+func (l *fakeExportLifecycle) VerifyHostAndSourceIsolation(context.Context, Claim) error {
 	return l.step("boundaries")
 }
 func (l *fakeExportLifecycle) BootNetworkless(context.Context) error       { return l.step("boot") }
@@ -130,8 +130,9 @@ func newExportFixture(t *testing.T, data []byte) exportFixture {
 	sum := sha256.Sum256(data)
 	source := &fakeApprovedSource{
 		output: ApprovedOutput{
-			OutputID: "output-opaque-01", LogicalName: "approved-output.pdf", MediaType: "application/pdf",
-			Size: uint64(len(data)), ScannerDigest: NewDigest(sum), ReportAuthenticated: true,
+			SourceRole: SourceScanner,
+			OutputID:   "output-opaque-01", LogicalName: "approved-output.pdf", MediaType: "application/pdf",
+			Size: uint64(len(data)), SourceDigest: NewDigest(sum), ReportAuthenticated: true,
 			ReportComplete: true, PolicyApproved: true, Reconstructed: true,
 		},
 		chunks: [][]byte{data[:len(data)/2], data[len(data)/2:]},
@@ -177,7 +178,7 @@ func TestExportOperationStreamsVerifiesAndCleans(t *testing.T) {
 func TestExportRejectsScannerRelayHashMismatchAndCleans(t *testing.T) {
 	fixture := newExportFixture(t, []byte("approved reconstructed output"))
 	wrong := sha256.Sum256([]byte("different"))
-	fixture.source.output.ScannerDigest = NewDigest(wrong)
+	fixture.source.output.SourceDigest = NewDigest(wrong)
 	_, err := fixture.operation.Run(t.Context(), fixture.source)
 	var usbError *Error
 	if !errors.As(err, &usbError) || usbError.Code != CodeHashMismatch {
@@ -295,7 +296,7 @@ func TestExportTimeoutCleansWithoutDetachedWork(t *testing.T) {
 func TestExportCleanupFailureCanBeRetried(t *testing.T) {
 	fixture := newExportFixture(t, []byte("approved reconstructed output"))
 	wrong := sha256.Sum256([]byte("different"))
-	fixture.source.output.ScannerDigest = NewDigest(wrong)
+	fixture.source.output.SourceDigest = NewDigest(wrong)
 	fixture.destination.finalizeErr = errors.New("fixture finalize failure")
 	_, err := fixture.operation.Run(t.Context(), fixture.source)
 	var usbError *Error

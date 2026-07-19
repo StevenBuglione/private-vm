@@ -138,10 +138,12 @@ func (stack *RuntimeStack) Start(ctx context.Context, request HostRuntimeRequest
 	}
 	resource.network = networkHandle
 	directories, err := createRuntimeSocketDirectories(stack.RuntimeRoot, request.Snapshot.ID)
+	if directories != nil {
+		resource.directories = directories
+	}
 	if err != nil {
 		return fail(err)
 	}
-	resource.directories = directories
 	lease, err := request.Storage.ActivateImages()
 	if err != nil {
 		return fail(err)
@@ -364,13 +366,14 @@ func createRuntimeSocketDirectories(runtimeRoot, sessionID string) (*runtimeSock
 	}{{"qmp", &directories.qmp}, {"spice", &directories.spice}} {
 		path := filepath.Join(parent, item.name)
 		if err := os.Mkdir(path, 0o700); err != nil {
-			_ = directories.Cleanup()
-			return nil, err
+			return directories, errors.Join(err, directories.Cleanup())
 		}
+		// Retain at least the created locator before inspection so a failed
+		// identity read cannot be mistaken for successful cleanup.
+		item.destination.path = path
 		identity, err := inspectRuntimeDirectory(path)
 		if err != nil {
-			_ = directories.Cleanup()
-			return nil, err
+			return directories, errors.Join(err, directories.Cleanup())
 		}
 		*item.destination = identity
 	}

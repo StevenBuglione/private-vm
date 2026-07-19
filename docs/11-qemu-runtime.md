@@ -187,7 +187,10 @@ descriptor (guest fd 3); a networked spec must receive the TAP as the second
 inherited descriptor (guest fd 4) and renders `-netdev tap,...,fd=4`. TAP and
 namespace names never enter QEMU argv. Offline specs reject a TAP descriptor.
 Exporter specs reject SPICE, GPU, network,
-audio, and quarantine devices. Scanner scan specs require `-nic none` and one
+audio, and quarantine devices. They render `-nic none` and one fixed xHCI
+controller but no `usb-host` argument; the exact device is added later by a
+typed QMP `device_add` operation whose caller can supply only bus and address.
+Scanner scan specs require `-nic none` and one
 read-only quarantine disk. Workstation and downloader specs require a TAP and
 cannot receive devices outside their role matrix.
 
@@ -197,9 +200,17 @@ SPICE directory creation, verified image-lease activation, typed argument
 validation, QEMU start, authenticated guest handshake, guest kill-switch/VPN
 configuration, guest proof, host policy proof and continuous loss monitoring.
 The runtime cleanup owner reverses that ownership and audits the QEMU/network
-owner, image lease, CID and private socket directories. Scanner and exporter
-specification support in `internal/qemu` does not by itself make those host
-workflows runnable.
+owner, image lease, CID and private socket directories.
+
+The exporter launch path independently owns its verified image lease, CID,
+capability, private QMP directories, QEMU process, VSOCK connection and USB
+attachment. Attachment ownership is recorded before `device_add`, because QMP
+can apply the operation before a timeout or lost response. Cleanup clears an
+ownership flag only after that step succeeds; failed steps retain their handles
+for retry. Successful process termination is sufficient proof that an
+ambiguous USB attachment no longer belongs to that guest. Host no-NIC arguments
+alone are not accepted as guest evidence: export also requires the authenticated
+exporter `InspectUSB` response to report no network.
 
 ## CPU and memory
 

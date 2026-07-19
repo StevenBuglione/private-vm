@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "ok": true,
+  "code": "USB_PREPARED",
+  "data": {
+    "schema_version": 1,
+    "exporter_session_id": "pvm-11111111111111111111111111111111",
+    "claim_id": "usbclaim-22222222222222222222222222222222",
+    "enrollment_id": "usb-0123456789abcdef",
+    "filesystem": "luks2-ext4",
+    "capacity_bytes": 32000000000,
+    "identity_fingerprint": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+    "state": "DESTINATION_PREPARED"
+  }
+}

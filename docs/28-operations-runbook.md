@@ -86,6 +86,32 @@ capacity. Restart scanner from clean overlay and rescan everything.
 Do not export. Inspect the device and re-enroll only if the physical device is
 known and expected. A changed interface set is a critical warning.
 
+## USB exporter verification
+
+Run the non-destructive source gate first under the host memory cap:
+
+```bash
+systemd-run --user --scope --quiet \
+  -p MemoryHigh=1500M -p MemoryMax=1800M -p MemorySwapMax=0 \
+  nix develop -c sh -c 'export GOMAXPROCS=2; go test -p=1 \
+    ./internal/qemu ./internal/orchestrator ./internal/usb \
+    ./internal/daemon ./internal/cli ./cmd/private-vmd'
+```
+
+It must prove fixed QMP commands, no prelaunch `usb-host`, no display/network,
+guest-inspection-gated no-network evidence, one-use approved source selection,
+two-step preparation and retryable cleanup ownership. This gate does not touch
+the attached USB and is not physical export evidence.
+
+Only in the scheduled destructive acceptance window, re-run `usb list`,
+`inspect`, `verify`, and compare the full displayed enrolled identity. Then run
+`usb prepare --format luks2-ext4`, enter both exact confirmations and the hidden
+passphrase, and retain its opaque exporter session and claim IDs. Run `usb
+export` with one approved scanner output. Accept the result only when every
+hash-equality, sync, rename, unmount, detach, stop and cleanup boolean is true;
+then independently prove the host never mounted the device. Never script the
+confirmations or store the passphrase in shell history.
+
 ## Export interrupted
 
 Do not mount on host. Start a fresh exporter verification session. Reformat if

@@ -105,7 +105,6 @@ func TestExporterHasNoDisplayOrNetwork(t *testing.T) {
 	spec.Networked = false
 	spec.NetworkFD = 0
 	spec.SPICESocket = ""
-	spec.USB = &USBDevice{Bus: 2, Address: 4}
 	args, err := spec.Args()
 	if err != nil {
 		t.Fatal(err)
@@ -114,8 +113,11 @@ func TestExporterHasNoDisplayOrNetwork(t *testing.T) {
 	if strings.Contains(joined, "-spice") || strings.Contains(joined, "virtio-vga") || strings.Contains(joined, "virtio-net") {
 		t.Fatalf("exporter received a forbidden display or network device: %s", joined)
 	}
-	if !strings.Contains(joined, "usb-host") || !strings.Contains(joined, "-nic none") {
+	if !strings.Contains(joined, "qemu-xhci,id=usb-controller") || !strings.Contains(joined, "-nic none") {
 		t.Fatalf("exporter arguments are incomplete: %s", joined)
+	}
+	if strings.Contains(joined, "usb-host") {
+		t.Fatalf("exporter USB must be hotplugged through typed QMP only: %s", joined)
 	}
 }
 
@@ -130,7 +132,6 @@ func TestRoleDeviceMatrixFailsClosed(t *testing.T) {
 			spec.Role = session.RoleScanner
 			spec.ScannerMode = ScannerModeScan
 		},
-		func(spec *Spec) { spec.USB = &USBDevice{Bus: 1, Address: 1} },
 	}
 	for index, mutate := range tests {
 		spec := validSpec(t)

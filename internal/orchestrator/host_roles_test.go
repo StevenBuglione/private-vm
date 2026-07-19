@@ -322,7 +322,7 @@ func TestHostRolesDownloaderRelaySealsThenAuditsRuntimeAbsence(t *testing.T) {
 	}
 }
 
-func TestHostRolesScannerAndExporterRemainTypedFailClosed(t *testing.T) {
+func TestHostRolesScannerRemainsTypedFailClosedAndExporterUsesDedicatedRuntime(t *testing.T) {
 	for _, role := range []session.Role{session.RoleScanner, session.RoleExporter} {
 		roles, err := NewHostRoles(fakeHostImageSelector{log: &hostTestLog{}}, fakeHostStorageAllocator{log: &hostTestLog{}}, fakeHostRuntimeStarter{log: &hostTestLog{}})
 		if err != nil {
@@ -333,8 +333,12 @@ func TestHostRolesScannerAndExporterRemainTypedFailClosed(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err := roles.Preflight(t.Context(), snapshot); !errors.Is(err, ErrHostRoleUnavailable) {
-			t.Fatalf("%s preflight error = %v", role, err)
+		preflightErr := roles.Preflight(t.Context(), snapshot)
+		if role == session.RoleScanner && !errors.Is(preflightErr, ErrHostRoleUnavailable) {
+			t.Fatalf("scanner preflight error = %v", preflightErr)
+		}
+		if role == session.RoleExporter && preflightErr != nil {
+			t.Fatalf("exporter preflight error = %v", preflightErr)
 		}
 	}
 }

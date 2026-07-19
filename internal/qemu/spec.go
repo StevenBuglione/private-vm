@@ -38,11 +38,6 @@ const (
 	scannerBootModeFWCfg = "opt/private-vm/scanner-boot-mode"
 )
 
-type USBDevice struct {
-	Bus     uint8
-	Address uint8
-}
-
 type Spec struct {
 	Binary       string
 	SessionID    string
@@ -61,7 +56,6 @@ type Spec struct {
 	NetworkFD    int
 	EnableAudio  bool
 	FWCfgTokenFD int
-	USB          *USBDevice
 }
 
 func (s Spec) Validate() error {
@@ -153,9 +147,6 @@ func (s Spec) validateRoleDevices() error {
 		if s.Networked || len(s.Data) != 0 || s.EnableAudio {
 			return errors.New("exporter forbids network, quarantine and audio")
 		}
-	}
-	if s.USB != nil && (s.Role != session.RoleExporter || s.USB.Bus == 0 || s.USB.Address == 0) {
-		return errors.New("exact USB passthrough is restricted to exporter")
 	}
 	return nil
 }
@@ -314,11 +305,8 @@ func (s Spec) Args() ([]string, error) {
 	if !s.EnableAudio {
 		args = append(args, "-audiodev", "none,id=noaudio")
 	}
-	if s.USB != nil {
-		args = append(args,
-			"-device", "qemu-xhci,id=usb-controller",
-			"-device", "usb-host,bus=usb-controller.0,hostbus="+strconv.Itoa(int(s.USB.Bus))+",hostaddr="+strconv.Itoa(int(s.USB.Address)),
-		)
+	if s.Role == session.RoleExporter {
+		args = append(args, "-device", "qemu-xhci,id=usb-controller")
 	}
 	if err := validateRenderedArgs(args); err != nil {
 		return nil, err

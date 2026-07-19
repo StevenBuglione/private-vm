@@ -27,7 +27,7 @@ func (fixture *usbWorkflowFixture) PlanPreparation(_ context.Context, _ session.
 	return fixture.plan, nil
 }
 
-func (fixture *usbWorkflowFixture) Prepare(_ context.Context, _ session.Snapshot, _ string, enrollment usb.Enrollment, challenge string, confirmation usb.Confirmation, passphrase *secret.Bytes) (usb.PrepareReceipt, error) {
+func (fixture *usbWorkflowFixture) Prepare(ctx context.Context, _ session.Snapshot, _ string, enrollment usb.Enrollment, challenge string, confirmation usb.Confirmation, passphrase *secret.Bytes, authorizer usb.PrepareAuthorizer) (usb.PrepareReceipt, error) {
 	var size int
 	_ = passphrase.WithReader(func(reader io.Reader) error {
 		value, _ := io.ReadAll(reader)
@@ -38,12 +38,18 @@ func (fixture *usbWorkflowFixture) Prepare(_ context.Context, _ session.Snapshot
 	if challenge != fixture.plan.Challenge || confirmation.First != fixture.plan.FirstPrompt || confirmation.Second != fixture.plan.SecondPrompt || size < 8 {
 		return usb.PrepareReceipt{}, context.Canceled
 	}
+	if err := authorizer.AuthorizePrepare(ctx); err != nil {
+		return usb.PrepareReceipt{}, err
+	}
 	fixture.prepared = true
 	return usb.PrepareReceipt{SchemaVersion: usb.PrepareSchemaVersion, EnrollmentID: enrollment.EnrollmentID, Filesystem: usb.DefaultFilesystem,
 		CapacityBytes: enrollment.Identity.Capacity, Fingerprint: fixture.plan.Fingerprint, State: usb.PrepareDestinationReady}, nil
 }
 
-func (fixture *usbWorkflowFixture) Export(_ context.Context, _ session.Snapshot, _, _, _ string, enrollment usb.Enrollment) (usb.ExportReceipt, error) {
+func (fixture *usbWorkflowFixture) Export(_ context.Context, _ session.Snapshot, _ string, selection usb.SourceSelection, enrollment usb.Enrollment) (usb.ExportReceipt, error) {
+	if selection.Role != usb.SourceScanner || selection.SessionID == "" || selection.OutputID == "" {
+		return usb.ExportReceipt{}, context.Canceled
+	}
 	fixture.exported = true
 	return usb.ExportReceipt{SchemaVersion: usb.ExportReceiptSchemaVersion, EnrollmentID: enrollment.EnrollmentID, BytesWritten: 64,
 		ScannerRelayHashEqual: true, RelayExporterHashEqual: true, ExporterRereadHashEqual: true,

@@ -160,7 +160,7 @@ func (roles *HostRoles) Preflight(ctx context.Context, snapshot session.Snapshot
 	if err != nil {
 		return err
 	}
-	if snapshot.Role != session.RoleWorkstation && snapshot.Role != session.RoleDownloader {
+	if snapshot.Role != session.RoleWorkstation && snapshot.Role != session.RoleDownloader && snapshot.Role != session.RoleExporter {
 		return ErrHostRoleUnavailable
 	}
 	if roles.PreflightCheck != nil {
@@ -168,10 +168,28 @@ func (roles *HostRoles) Preflight(ctx context.Context, snapshot session.Snapshot
 			return err
 		}
 	}
-	if preparer, ok := roles.Runtime.(HostRuntimePreparer); ok {
-		return preparer.Prepare(ctx, snapshot, state.plan)
+	if snapshot.Role != session.RoleExporter {
+		if preparer, ok := roles.Runtime.(HostRuntimePreparer); ok {
+			return preparer.Prepare(ctx, snapshot, state.plan)
+		}
 	}
 	return nil
+}
+
+// ExporterRequest returns only the already verified image and actor-owned
+// volatile storage for one exporter. It does not expose this seam through the
+// daemon API and accepts no caller-selected paths or QEMU fields.
+func (roles *HostRoles) ExporterRequest(snapshot session.Snapshot) (HostRuntimeRequest, error) {
+	state, err := roles.state(snapshot)
+	if err != nil || snapshot.Role != session.RoleExporter {
+		return HostRuntimeRequest{}, ErrHostRuntimeUnavailable
+	}
+	roles.mu.Lock()
+	defer roles.mu.Unlock()
+	if roles.states[snapshot.ID] != state || state.storage == nil || state.image.ManifestDigest == "" {
+		return HostRuntimeRequest{}, ErrHostStorageUnavailable
+	}
+	return HostRuntimeRequest{Snapshot: snapshot, Plan: state.plan, Image: state.image, Storage: state.storage}, nil
 }
 
 func (roles *HostRoles) VerifyImages(ctx context.Context, snapshot session.Snapshot) error {
