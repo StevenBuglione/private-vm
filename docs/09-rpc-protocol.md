@@ -224,6 +224,24 @@ Core methods:
 - `ClaimUSB`
 - `ReleaseUSB`
 
+Scanner workflow methods:
+
+- `StartScanner` (server stream)
+- `GetScannerStatus`
+- `GetScannerReport`
+- `ApproveScanner`
+- `RejectScanner`
+
+`StartScanner` names an owned downloader in `QUARANTINE_SEALED`; it creates a
+separate scanner-role session. Later scanner methods name that new session.
+The daemon serializes update boot, definition verification, update shutdown,
+same-overlay offline boot, no-network/read-only checks, inventory, scanning,
+reconstruction and report verification. The CLI receives only aggregate counts,
+workflow state and stable codes. Report JSON, logical names, hashes, finding
+identifiers, source-session identity and runtime details are not present in the
+host response messages. Approval selects only `workstation` or `usb`; it cannot
+name a host path or device.
+
 No arbitrary command execution method is permitted.
 
 The host torrent surface is session-scoped and downloader-only. `AddTorrent`
@@ -331,6 +349,12 @@ report before publishing `REPORT_COMPLETE`. `ExportApprovedFile` verifies that
 HMAC again, accepts only an output ID present in the approved report, rehashes
 the identity-pinned volatile output while streaming chunks of at most 1 MiB,
 and omits the end frame on any size, read or hash mismatch.
+
+The host scanner adapter relays those calls only through an authenticated VSOCK
+client that has passed `Hello`. It verifies the volatile report MAC before
+publishing an aggregate result. A rejected scanner may be powered off while the
+verified report remains in daemon memory; cleanup removes that cache. A missing
+promotion relay or destination hash proof blocks `ApproveScanner`.
 
 The advertised v1 capability map is exact and sorted:
 

@@ -97,6 +97,13 @@ The daemon is not a generic root command runner. Its APIs are semantic:
 - relay a bounded verified stream
 - destroy session
 
+The scanner handoff creates a distinct scanner session from a sealed downloader.
+Its runtime provider atomically transfers an exclusive quarantine lease to the
+scanner cleanup owner, boots update and offline device graphs serially, and
+keeps the verified report only in volatile daemon memory. Generic session
+abort/cleanup and scanner operations share the same per-session serialization
+lock so source cleanup cannot race lease acquisition.
+
 There is no API such as `RunCommand`, `MountPath`, `AttachArbitraryDevice`, or
 `LaunchCustomQEMUArgs`.
 

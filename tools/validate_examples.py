@@ -15,6 +15,7 @@ pairs = [
     ("schemas/cli-success.schema.json", "examples/cli-success.example.json", "json"),
     ("schemas/cli-success.schema.json", "examples/cli-session-success.example.json", "json"),
     ("schemas/cli-success.schema.json", "examples/cli-torrent-success.example.json", "json"),
+    ("schemas/cli-success.schema.json", "examples/cli-scanner-success.example.json", "json"),
     ("schemas/config.schema.json", "examples/config.example.toml", "toml"),
     ("schemas/policy.schema.json", "examples/policy.safe.toml", "toml"),
     ("schemas/policy.schema.json", "examples/policy.quarantine.toml", "toml"),
@@ -119,6 +120,8 @@ image_sbom = json.loads(
 )
 scan_report_schema = json.loads((ROOT / "schemas/scan-report.schema.json").read_text(encoding="utf-8"))
 scan_report = json.loads((ROOT / "examples/scan-report.example.json").read_text(encoding="utf-8"))
+cli_success_schema = json.loads((ROOT / "schemas/cli-success.schema.json").read_text(encoding="utf-8"))
+cli_scanner_status = json.loads((ROOT / "examples/cli-scanner-success.example.json").read_text(encoding="utf-8"))
 
 negative_cases = []
 unsigned = deepcopy(config)
@@ -188,6 +191,16 @@ for field, value in {
     unsafe_torrent = deepcopy(torrent_status)
     unsafe_torrent[field] = value
     negative_cases.append((f"torrent {field} in status", torrent_status_schema, unsafe_torrent))
+for field, value in {
+    "logical_name": "private-name.pdf",
+    "sha256": "a" * 64,
+    "canonical_json": "{}",
+    "malware_identifier": "private-signature",
+    "source_session_id": "pvm-44444444444444444444444444444444",
+}.items():
+    unsafe_scanner = deepcopy(cli_scanner_status)
+    unsafe_scanner["data"][field] = value
+    negative_cases.append((f"scanner {field} in CLI status", cli_success_schema, unsafe_scanner))
 weakened = deepcopy(safe_policy)
 weakened["rules"]["sanitize_documents"] = False
 negative_cases.append(("weakened safe policy", policy_schema, weakened))

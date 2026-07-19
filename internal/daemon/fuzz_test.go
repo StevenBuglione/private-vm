@@ -47,15 +47,18 @@ func FuzzDaemonRPCInputs(f *testing.F) {
 		{16, &privatevmv1.TorrentControlRequest{Context: contextWithSession}},
 		{17, &privatevmv1.HostSelectTorrentFilesRequest{Context: contextWithSession, Indexes: []uint32{0, 2}}},
 		{18, &privatevmv1.HostTorrentInputFrame{Frame: &privatevmv1.HostTorrentInputFrame_Begin{Begin: &privatevmv1.HostTorrentInputBegin{Context: contextWithSession, Kind: privatevmv1.TorrentInputKind_TORRENT_INPUT_KIND_MAGNET}}}},
+		{19, &privatevmv1.HostScannerStartRequest{Context: contextWithSession, PolicyName: "safe"}},
+		{20, &privatevmv1.HostScannerControlRequest{Context: contextWithSession}},
+		{21, &privatevmv1.HostScannerApprovalRequest{Context: contextWithSession, Destination: privatevmv1.ScannerApprovalDestination_SCANNER_APPROVAL_DESTINATION_WORKSTATION}},
 	}
 	for _, seed := range seeds {
 		addDaemonProtoSeed(f, seed.kind, seed.message)
 	}
 	f.Add(uint8(0), []byte{})
 	f.Add(uint8(14), []byte{0xff, 0xff, 0xff})
-	f.Add(uint8(19), []byte("123 (public fuzz peer) S 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 4242\n"))
-	f.Add(uint8(20), []byte("pos:\t0\nflags:\t02000002\nPid:\t123\n"))
-	f.Add(uint8(21), []byte("Name:\tpublic-fuzz-peer\nPid:\t123\nUid:\t1000\t1001\t1002\t1003\nGroups:\t7 8 4242\n"))
+	f.Add(uint8(22), []byte("123 (public fuzz peer) S 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 4242\n"))
+	f.Add(uint8(23), []byte("pos:\t0\nflags:\t02000002\nPid:\t123\n"))
+	f.Add(uint8(24), []byte("Name:\tpublic-fuzz-peer\nPid:\t123\nUid:\t1000\t1001\t1002\t1003\nGroups:\t7 8 4242\n"))
 
 	f.Fuzz(func(t *testing.T, kind uint8, data []byte) {
 		if len(data) > maximumDaemonFuzzInput {
@@ -70,7 +73,7 @@ func FuzzDaemonRPCInputs(f *testing.F) {
 			return proto.Unmarshal(data, message) == nil
 		}
 
-		switch kind % 22 {
+		switch kind % 25 {
 		case 0:
 			request := &privatevmv1.RequestContext{}
 			if unmarshal(request) {
@@ -176,12 +179,29 @@ func FuzzDaemonRPCInputs(f *testing.F) {
 				observe(validateRequestContext(frame.GetBegin().GetContext(), true))
 			}
 		case 19:
+			request := &privatevmv1.HostScannerStartRequest{}
+			if unmarshal(request) {
+				observe(validateRequestContext(request.GetContext(), true))
+			}
+		case 20:
+			request := &privatevmv1.HostScannerControlRequest{}
+			if unmarshal(request) {
+				observe(validateRequestContext(request.GetContext(), true))
+			}
+		case 21:
+			request := &privatevmv1.HostScannerApprovalRequest{}
+			if unmarshal(request) {
+				observe(validateRequestContext(request.GetContext(), true))
+				_, err := scannerDestination(request.GetDestination())
+				observe(err)
+			}
+		case 22:
 			_, _, err := parseProcStat(data)
 			observe(err)
-		case 20:
+		case 23:
 			_, err := parsePidfdInfo(data)
 			observe(err)
-		case 21:
+		case 24:
 			_, _, _, err := parseProcStatus(data)
 			observe(err)
 		}

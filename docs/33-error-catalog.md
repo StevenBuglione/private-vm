@@ -353,6 +353,12 @@ names, content hashes, endpoints, source paths and qBittorrent output.
 
 ### Scanner
 
+- `SCANNER_REQUEST_INVALID`
+- `SCANNER_DESTINATION_INVALID`
+- `SCANNER_RUNNING`
+- `SCAN_REPORT_APPROVABLE`
+- `SCAN_PROMOTION_VERIFIED`
+- `SCAN_REJECTED`
 - `SCANNER_DEFINITIONS_STALE`
 - `SCANNER_NETWORK_PRESENT`
 - `QUARANTINE_NOT_READ_ONLY`
@@ -408,6 +414,15 @@ are discarded before status construction. Cancellation uses `Canceled`, timeout
 uses `DeadlineExceeded`, bounded limit failures use `ResourceExhausted`, missing
 image adapters use `Unavailable`, and phase, policy, isolation, report or output
 integrity failures use `FailedPrecondition` unless the request itself is invalid.
+
+The host scanner boundary preserves safe guest `ErrorDetail` values and maps
+scanner/report/sanitized-output codes to exit 18. `SCANNER_STATE_INVALID` blocks
+an unsealed source, an out-of-order decision or a non-active scanner.
+`SCANNER_DESTINATION_INVALID` blocks any target other than a fresh workstation
+or the enrolled-USB workflow. `SCAN_PROMOTION_VERIFIED` is emitted only after
+the destination relay and integrity proof succeed; it is not a malware-safety
+claim. Cancellation and timeout remain the canonical `REQUEST_CANCELED` and
+`REQUEST_TIMEOUT`; an absence-audit failure remains `CLEANUP_INCOMPLETE`/exit 24.
 
 ### USB
 

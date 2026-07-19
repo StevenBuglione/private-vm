@@ -38,6 +38,16 @@ aggregate-only `TorrentStatusPayload`. The daemon's `TorrentOrchestrator`
 interface is the sole bridge to an authenticated downloader guest; it exposes
 no generic guest dialer or qBittorrent request surface.
 
+Scanner commands also use only the Unix daemon protocol. `scan start` names a
+sealed downloader, while later commands name the separate scanner session that
+the daemon creates. The closed `ScannerStatusPayload` can represent aggregate
+counts and decisions but not report JSON, names, hashes, source identity, paths
+or guest/runtime details. `ScannerOrchestrator` owns phase ordering and
+allocation registration; `GuestScannerRelay` is the production adapter to an
+authenticated, Hello-verified ScannerGuestService client. Its runtime provider
+owns concrete image/storage/QEMU/QMP/VSOCK resources, report-MAC verification
+and destination relay/hash proof. Missing providers fail closed.
+
 Operational command pre-run resolves an immutable `internal/config.Config`
 snapshot. The loader distinguishes absent boolean flags from explicit false
 values and maps its redacted stable errors to exit 11 without wrapping raw file

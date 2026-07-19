@@ -183,6 +183,15 @@ Completion evidence must continue to cover role rejection, every session-error
 mapping, and safe remediation on every typed error. No test may accept a race by
 unlinking an unverified path.
 
+The scanner host integration uses the real Unix daemon transport with a typed
+fake runtime. It proves a sealed downloader creates a distinct scanner session,
+the update/no-quarantine and offline/no-NIC/read-only gates occur in order,
+authenticated guest progress is projected to bounded aggregate events, report
+data is redacted, promotion precedes approval, rejection never promotes, and
+resources clean in offline-runtime → update-runtime → storage order. Injected
+operation failure, cancellation, timeout and cleanup-audit failure prove either
+`DESTROYED` convergence or an explicit retryable `DESTROYING` record.
+
 ### Session, QEMU and ephemeral-storage evidence
 
 Batch 1 runtime tests exhaust every allowed lifecycle transition and each

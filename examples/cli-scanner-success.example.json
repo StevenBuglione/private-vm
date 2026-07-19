@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "ok": true,
+  "code": "SCANNER_STATUS",
+  "data": {
+    "schema_version": 1,
+    "session_id": "pvm-33333333333333333333333333333333",
+    "workflow_state": "REPORT_COMPLETE",
+    "report_complete": true,
+    "decision": "pending",
+    "input_count": 2,
+    "finding_count": 1,
+    "blocking_finding_count": 0,
+    "sanitized_output_count": 1,
+    "sanitized_output_bytes": 4096,
+    "code": "SCAN_REPORT_APPROVABLE",
+    "remediation": "Choose exactly one documented promotion destination or reject the result."
+  }
+}

@@ -25,6 +25,11 @@ service PrivateVMDaemonService {
   rpc PauseTorrentDownload(TorrentControlRequest) returns (TorrentStatus);
   rpc GetTorrentStatus(TorrentControlRequest) returns (TorrentStatus);
   rpc SealTorrentQuarantine(TorrentControlRequest) returns (TorrentStatus);
+  rpc StartScanner(HostScannerStartRequest) returns (stream HostScannerEvent);
+  rpc GetScannerStatus(HostScannerControlRequest) returns (HostScannerStatus);
+  rpc GetScannerReport(HostScannerControlRequest) returns (HostScannerReportSummary);
+  rpc ApproveScanner(HostScannerApprovalRequest) returns (HostScannerStatus);
+  rpc RejectScanner(HostScannerControlRequest) returns (HostScannerStatus);
   rpc StartRole(StartRoleRequest) returns (Session);
   rpc StopRole(StopRoleRequest) returns (Session);
   rpc AbortSession(AbortSessionRequest) returns (Session);
@@ -150,6 +155,65 @@ message TorrentControlRequest { RequestContext context = 1; }
 message HostSelectTorrentFilesRequest {
   RequestContext context = 1;
   repeated uint32 indexes = 2;
+}
+
+// Scanner host requests are semantic. The source session in StartScanner must
+// be an owned downloader whose quarantine is sealed and whose QEMU process was
+// audited absent. Later requests name the newly-created scanner session.
+message HostScannerStartRequest {
+  RequestContext context = 1;
+  string policy_name = 2;
+}
+
+message HostScannerControlRequest { RequestContext context = 1; }
+
+enum ScannerApprovalDestination {
+  SCANNER_APPROVAL_DESTINATION_UNSPECIFIED = 0;
+  SCANNER_APPROVAL_DESTINATION_WORKSTATION = 1;
+  SCANNER_APPROVAL_DESTINATION_USB = 2;
+}
+
+message HostScannerApprovalRequest {
+  RequestContext context = 1;
+  ScannerApprovalDestination destination = 2;
+}
+
+// This is the complete CLI-safe scanner view. It deliberately omits report
+// bodies, logical names, hashes, malware identifiers, paths and image/runtime
+// details.
+message HostScannerStatus {
+  uint32 schema_version = 1;
+  string scanner_session_id = 2;
+  string workflow_state = 3;
+  bool report_complete = 4;
+  bool policy_approved = 5;
+  bool policy_rejected = 6;
+  uint32 sanitized_output_count = 7;
+  uint64 sanitized_output_bytes = 8;
+  uint32 finding_count = 9;
+  uint32 blocking_finding_count = 10;
+  string code = 11;
+  string remediation = 12;
+}
+
+message HostScannerReportSummary {
+  uint32 schema_version = 1;
+  string scanner_session_id = 2;
+  bool complete = 3;
+  string result = 4;
+  uint32 input_count = 5;
+  uint32 finding_count = 6;
+  uint32 blocking_finding_count = 7;
+  uint32 sanitized_output_count = 8;
+  uint64 sanitized_output_bytes = 9;
+  string code = 10;
+  string remediation = 11;
+}
+
+message HostScannerEvent {
+  HostScannerStatus status = 1;
+  Progress progress = 2;
+  Diagnostic finding = 3;
 }
 
 message StartRoleRequest { RequestContext context = 1; }

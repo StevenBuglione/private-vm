@@ -176,6 +176,27 @@ See `schemas/scan-report.schema.json`.
 The report includes each tool version and exact decision reason. It remains
 volatile unless the user explicitly exports it.
 
+## Host orchestration
+
+The CLI sends scanner intent only to `private-vmd` over the Unix control socket.
+The daemon accepts a source only after downloader QEMU absence and
+`QUARANTINE_SEALED` evidence. It creates a distinct scanner session, acquires an
+exclusive sealed-quarantine lease, and registers storage, update-runtime and
+offline-runtime cleanup before advancing their states.
+
+The update VM has networking and no quarantine. After current definitions are
+verified it is stopped. The offline VM reuses the exact overlay, has no NIC and
+receives the quarantine read-only. Guestd must independently verify no network,
+block read-only state and `ro,nodev,nosuid,noexec` mount options before content
+operations. The daemon relays the role-specific guest service over authenticated
+VSOCK, verifies the canonical report MAC and exposes only aggregate report data
+to the CLI.
+
+Approval is a destination operation, not a label. It succeeds only after one
+documented workstation or USB relay verifies its integrity. Rejection stops the
+scanner without invoking promotion. Both paths finish through the scanner
+session's idempotent cleanup owner.
+
 The immutable scanner image embeds its direct parser/reconstruction package
 versions in `/etc/private-vm/scanner-toolchain.json` and repeats those identities
 in `/etc/private-vm/scanner-sbom.spdx.json`. A missing, empty or mismatched entry

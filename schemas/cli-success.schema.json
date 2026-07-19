@@ -50,6 +50,12 @@
         "code": { "const": "TORRENT_STATUS" },
         "data": { "$ref": "#/$defs/torrent_status" }
       }
+    },
+    {
+      "properties": {
+        "code": { "const": "SCANNER_STATUS" },
+        "data": { "$ref": "#/$defs/scanner_status" }
+      }
     }
   ],
   "$defs": {
@@ -176,6 +182,25 @@
         "remediation": { "type": "string", "minLength": 1, "maxLength": 512 }
       },
       "required": ["schema_version", "state", "completed_bytes", "total_bytes", "file_count", "selected_count", "payload_paused", "code", "remediation"]
+    },
+    "scanner_status": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": { "const": 1 },
+        "session_id": { "type": "string", "pattern": "^pvm-[a-f0-9]{32}$" },
+        "workflow_state": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]{2,63}$" },
+        "report_complete": { "type": "boolean" },
+        "decision": { "enum": ["pending", "approved", "rejected"] },
+        "input_count": { "type": "integer", "minimum": 0, "maximum": 1000000 },
+        "finding_count": { "type": "integer", "minimum": 0, "maximum": 1000000 },
+        "blocking_finding_count": { "type": "integer", "minimum": 0, "maximum": 1000000 },
+        "sanitized_output_count": { "type": "integer", "minimum": 0, "maximum": 1000000 },
+        "sanitized_output_bytes": { "type": "integer", "minimum": 0 },
+        "code": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]{2,63}$" },
+        "remediation": { "type": "string", "minLength": 1, "maxLength": 512 }
+      },
+      "required": ["schema_version", "session_id", "workflow_state", "report_complete", "decision", "input_count", "finding_count", "blocking_finding_count", "sanitized_output_count", "sanitized_output_bytes", "code", "remediation"]
     }
   }
 }

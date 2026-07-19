@@ -37,6 +37,7 @@ type Service struct {
 	VPNResolver           *vpn.EndpointResolver
 	Roles                 RoleOrchestrator
 	Torrents              TorrentOrchestrator
+	Scanners              ScannerOrchestrator
 	roleOperations        *roleOperationSet
 	afterCreate           func()
 	cleanupCanceledCreate func(context.Context, string, uint32) error
@@ -406,7 +407,7 @@ func (s *Service) StopRole(ctx context.Context, request *privatevmv1.StopRoleReq
 	if _, err := s.Sessions.Transition(ctx, id, identity.UID, session.PhaseStopping); err != nil {
 		return nil, sessionError(err)
 	}
-	return s.cleanup(ctx, id)
+	return s.cleanupLocked(ctx, id)
 }
 
 func (s *Service) AbortSession(ctx context.Context, request *privatevmv1.AbortSessionRequest) (*privatevmv1.Session, error) {
@@ -424,6 +425,13 @@ func (s *Service) CleanupSession(ctx context.Context, request *privatevmv1.Clean
 }
 
 func (s *Service) cleanup(ctx context.Context, id string) (*privatevmv1.Session, error) {
+	lock := s.roleOperation(id)
+	lock.Lock()
+	defer lock.Unlock()
+	return s.cleanupLocked(ctx, id)
+}
+
+func (s *Service) cleanupLocked(ctx context.Context, id string) (*privatevmv1.Session, error) {
 	identity, err := identityFromContext(ctx)
 	if err != nil {
 		return nil, sessionError(err)
@@ -634,6 +642,10 @@ var unarySessionRequirement = map[string]bool{
 	privatevmv1.PrivateVMDaemonService_PauseTorrentDownload_FullMethodName:  true,
 	privatevmv1.PrivateVMDaemonService_GetTorrentStatus_FullMethodName:      true,
 	privatevmv1.PrivateVMDaemonService_SealTorrentQuarantine_FullMethodName: true,
+	privatevmv1.PrivateVMDaemonService_GetScannerStatus_FullMethodName:      true,
+	privatevmv1.PrivateVMDaemonService_GetScannerReport_FullMethodName:      true,
+	privatevmv1.PrivateVMDaemonService_ApproveScanner_FullMethodName:        true,
+	privatevmv1.PrivateVMDaemonService_RejectScanner_FullMethodName:         true,
 	privatevmv1.PrivateVMDaemonService_StartRole_FullMethodName:             true,
 	privatevmv1.PrivateVMDaemonService_StopRole_FullMethodName:              true,
 	privatevmv1.PrivateVMDaemonService_AbortSession_FullMethodName:          true,

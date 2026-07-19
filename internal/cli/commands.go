@@ -286,12 +286,12 @@ func (factory commandFactory) scan() *cobra.Command {
 		return validateSessionID(startSession, true)
 	}, func([]string) Intent { return ScannerIntent{SessionID: startSession} })
 	start.Flags().StringVar(&startSession, "session", "", "required session identifier")
-	status := requiredSession("status", "scan.status")
-	report := requiredSession("report", "scan.report")
-	reject := requiredSession("reject", "scan.reject")
+	status := requiredSession("status", CommandScannerStatus)
+	report := requiredSession("report", CommandScannerReport)
+	reject := requiredSession("reject", CommandScannerReject)
 
 	var sessionID, openIn, to string
-	approve := factory.operation("approve", "Approve reconstructed output", "scan.approve", noArgs, func(*cobra.Command) error {
+	approve := factory.operation("approve", "Approve reconstructed output", CommandScannerApprove, noArgs, func(*cobra.Command) error {
 		if err := validateSessionID(sessionID, true); err != nil {
 			return err
 		}

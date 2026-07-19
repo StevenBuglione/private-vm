@@ -66,6 +66,8 @@ func (invoker *ProductionInvoker) Invoke(ctx context.Context, id CommandID, inte
 		CommandTorrentPlan, CommandTorrentDownload, CommandTorrentPause, CommandTorrentResume,
 		CommandTorrentStatus, CommandTorrentComplete:
 		return invoker.invokeTorrent(ctx, id, intent)
+	case CommandScannerStart, CommandScannerStatus, CommandScannerReport, CommandScannerApprove, CommandScannerReject:
+		return invoker.invokeScanner(ctx, id, intent)
 	case CommandVPNImport, CommandVPNRotate:
 		request, ok := intent.(VPNImportIntent)
 		if !ok {
@@ -325,9 +327,14 @@ func daemonDetailExitCode(code string) int {
 		return exitcode.Internal
 	case "PROTOCOL_VERSION_MISMATCH":
 		return exitcode.Runtime
+	case "QUARANTINE_NOT_READ_ONLY", "QUARANTINE_MOUNT_UNSAFE", "TYPE_MISMATCH", "ACTIVE_CONTENT_BLOCKED":
+		return exitcode.ScanRejected
 	default:
 		if len(code) >= len("TORRENT_") && code[:len("TORRENT_")] == "TORRENT_" || len(code) >= len("QUARANTINE_") && code[:len("QUARANTINE_")] == "QUARANTINE_" {
 			return exitcode.Torrent
+		}
+		if len(code) >= len("SCAN_") && code[:len("SCAN_")] == "SCAN_" || len(code) >= len("SCANNER_") && code[:len("SCANNER_")] == "SCANNER_" || len(code) >= len("REPORT_") && code[:len("REPORT_")] == "REPORT_" || len(code) >= len("SANITIZED_") && code[:len("SANITIZED_")] == "SANITIZED_" || len(code) >= len("MALWARE_") && code[:len("MALWARE_")] == "MALWARE_" || len(code) >= len("ARCHIVE_") && code[:len("ARCHIVE_")] == "ARCHIVE_" || len(code) >= len("CLAMAV_") && code[:len("CLAMAV_")] == "CLAMAV_" || len(code) >= len("SANITIZER_") && code[:len("SANITIZER_")] == "SANITIZER_" {
+			return exitcode.ScanRejected
 		}
 		return exitcode.Network
 	}

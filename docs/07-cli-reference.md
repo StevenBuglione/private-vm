@@ -187,6 +187,20 @@ private-vm scan approve --session ID --open-in workstation|--to usb
 private-vm scan reject --session ID
 ```
 
+For `scan start`, `--session` is the downloader session whose state is
+`QUARANTINE_SEALED`. The command creates and returns a different scanner session
+ID. `status`, `report`, `approve` and `reject` require that scanner ID. The run
+alias uses the identical daemon stream and cannot bypass update, offline,
+read-only, report-authentication or cleanup gates.
+
+Scanner machine output uses `SCANNER_STATUS`. It contains the scanner session
+ID, workflow state, decision, aggregate input/finding/output counts, total
+sanitized bytes, stable code and remediation. It never contains the source
+session ID, report JSON, logical names, hashes, finding identifiers, paths or
+guest/runtime details. `approve` returns success only after the selected
+destination relay and integrity verification complete; `reject` never invokes a
+promotion relay.
+
 ### VPN
 
 ```text

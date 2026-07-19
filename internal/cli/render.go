@@ -33,6 +33,7 @@ const (
 	CodeVPNProfile    Code = "VPN_PROFILE_STATUS"
 	CodeSessionStatus Code = "SESSION_STATUS"
 	CodeTorrentStatus Code = "TORRENT_STATUS"
+	CodeScannerStatus Code = "SCANNER_STATUS"
 	CodeInternalError Code = "INTERNAL_ERROR"
 	CodeRenderFailed  Code = "OUTPUT_RENDER_FAILED"
 )
@@ -134,6 +135,26 @@ type TorrentStatusPayload struct {
 }
 
 func (TorrentStatusPayload) machinePayload() {}
+
+// ScannerStatusPayload is an aggregate-only projection of authenticated
+// scanner evidence. Logical names, hashes, report JSON, malware identifiers,
+// source session IDs and runtime details are intentionally unrepresentable.
+type ScannerStatusPayload struct {
+	SchemaVersion        uint32 `json:"schema_version"`
+	SessionID            string `json:"session_id"`
+	WorkflowState        string `json:"workflow_state"`
+	ReportComplete       bool   `json:"report_complete"`
+	Decision             string `json:"decision"`
+	InputCount           uint32 `json:"input_count"`
+	FindingCount         uint32 `json:"finding_count"`
+	BlockingFindingCount uint32 `json:"blocking_finding_count"`
+	SanitizedOutputCount uint32 `json:"sanitized_output_count"`
+	SanitizedOutputBytes uint64 `json:"sanitized_output_bytes"`
+	Code                 string `json:"code"`
+	Remediation          string `json:"remediation"`
+}
+
+func (ScannerStatusPayload) machinePayload() {}
 
 // EventPayload is deliberately sealed independently from success payloads.
 // Adding an event shape requires an explicit, reviewed concrete type.
@@ -334,6 +355,12 @@ func validSuccess(success SuccessEnvelope) bool {
 			validCode(Code(data.State)) && data.CompletedBytes <= data.TotalBytes &&
 			data.SelectedCount <= data.FileCount && validCode(Code(data.Code)) &&
 			validRequiredString(data.Remediation, 512)
+	case ScannerStatusPayload:
+		return success.Code == CodeScannerStatus && data.SchemaVersion == 1 &&
+			validOptionalSessionID(data.SessionID) && data.SessionID != "" &&
+			validCode(Code(data.WorkflowState)) && oneOf(data.Decision, "pending", "approved", "rejected") &&
+			data.BlockingFindingCount <= data.FindingCount && validCode(Code(data.Code)) &&
+			validRequiredString(data.Remediation, 512)
 	default:
 		return false
 	}
@@ -451,6 +478,13 @@ func humanSuccess(code Code, data MachinePayload) string {
 			"%s state=%s progress=%d/%d files=%d selected=%d payload_paused=%t\nremediation: %s\n",
 			safeLine(value.Code), safeLine(value.State), value.CompletedBytes, value.TotalBytes,
 			value.FileCount, value.SelectedCount, value.PayloadPaused, safeLine(value.Remediation),
+		)
+	case ScannerStatusPayload:
+		return fmt.Sprintf(
+			"%s session=%s state=%s decision=%s report_complete=%t inputs=%d findings=%d blocking=%d outputs=%d output_bytes=%d\nremediation: %s\n",
+			safeLine(value.Code), safeLine(value.SessionID), safeLine(value.WorkflowState), safeLine(value.Decision),
+			value.ReportComplete, value.InputCount, value.FindingCount, value.BlockingFindingCount,
+			value.SanitizedOutputCount, value.SanitizedOutputBytes, safeLine(value.Remediation),
 		)
 	default:
 		// MachinePayload is sealed; this protects against new payload types being

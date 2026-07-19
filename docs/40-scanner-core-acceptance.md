@@ -21,6 +21,14 @@ export through authenticated gRPC. Progress is filename/hash-free, an
 out-of-order or changed-policy call fails closed, cross-role services remain
 absent, and cancellation/timeout paths clean partial reconstructed output.
 
+The host RPC integration adds the complementary daemon owner. Starting from an
+owned sealed downloader, it creates a separate scanner session and advances the
+complete update → stop → same-overlay offline → inventory → scan → reconstruct
+→ authenticated-report sequence. Status/report output is aggregate-only.
+Approval invokes exactly one typed promotion target before it publishes
+approval; rejection never invokes promotion. Unix-daemon integration tests
+cover success, failure, cancellation, timeout and cleanup-audit failure.
+
 Local commands use `CGO_ENABLED=0`, `GOMAXPROCS=2` and `-p 1`. They use no VPN
 credential, magnet, torrent, public download or physical USB.
 
@@ -32,9 +40,9 @@ Remaining system acceptance before these issues may be treated as fully closed:
   prove the guest mount and failed write;
 - run the pinned libmagic, ClamAV, Ghostscript/Poppler, LibreOffice and ffmpeg
   toolchain against the versioned hostile corpus;
-- replace the generic fail-closed scanner composition with the image-pinned
-  boot-evidence, retained-overlay receipt, freshclam/libmagic/clamd/archive and
-  reconstruction adapters, then exercise them over AF_VSOCK;
+- compose the host scanner runtime with image-pinned storage/QEMU/QMP/VSOCK
+  providers and the guest image's retained-overlay receipt,
+  freshclam/libmagic/clamd/archive and reconstruction adapters;
 - prove the authenticated scanner promotion relay into a fresh workstation and
   exporter end to end;
 - verify cleanup through scanner/QEMU death and daemon recovery.

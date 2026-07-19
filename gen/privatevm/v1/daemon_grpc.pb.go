@@ -36,6 +36,11 @@ const (
 	PrivateVMDaemonService_PauseTorrentDownload_FullMethodName  = "/privatevm.v1.PrivateVMDaemonService/PauseTorrentDownload"
 	PrivateVMDaemonService_GetTorrentStatus_FullMethodName      = "/privatevm.v1.PrivateVMDaemonService/GetTorrentStatus"
 	PrivateVMDaemonService_SealTorrentQuarantine_FullMethodName = "/privatevm.v1.PrivateVMDaemonService/SealTorrentQuarantine"
+	PrivateVMDaemonService_StartScanner_FullMethodName          = "/privatevm.v1.PrivateVMDaemonService/StartScanner"
+	PrivateVMDaemonService_GetScannerStatus_FullMethodName      = "/privatevm.v1.PrivateVMDaemonService/GetScannerStatus"
+	PrivateVMDaemonService_GetScannerReport_FullMethodName      = "/privatevm.v1.PrivateVMDaemonService/GetScannerReport"
+	PrivateVMDaemonService_ApproveScanner_FullMethodName        = "/privatevm.v1.PrivateVMDaemonService/ApproveScanner"
+	PrivateVMDaemonService_RejectScanner_FullMethodName         = "/privatevm.v1.PrivateVMDaemonService/RejectScanner"
 	PrivateVMDaemonService_StartRole_FullMethodName             = "/privatevm.v1.PrivateVMDaemonService/StartRole"
 	PrivateVMDaemonService_StopRole_FullMethodName              = "/privatevm.v1.PrivateVMDaemonService/StopRole"
 	PrivateVMDaemonService_AbortSession_FullMethodName          = "/privatevm.v1.PrivateVMDaemonService/AbortSession"
@@ -68,6 +73,11 @@ type PrivateVMDaemonServiceClient interface {
 	PauseTorrentDownload(ctx context.Context, in *TorrentControlRequest, opts ...grpc.CallOption) (*TorrentStatus, error)
 	GetTorrentStatus(ctx context.Context, in *TorrentControlRequest, opts ...grpc.CallOption) (*TorrentStatus, error)
 	SealTorrentQuarantine(ctx context.Context, in *TorrentControlRequest, opts ...grpc.CallOption) (*TorrentStatus, error)
+	StartScanner(ctx context.Context, in *HostScannerStartRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[HostScannerEvent], error)
+	GetScannerStatus(ctx context.Context, in *HostScannerControlRequest, opts ...grpc.CallOption) (*HostScannerStatus, error)
+	GetScannerReport(ctx context.Context, in *HostScannerControlRequest, opts ...grpc.CallOption) (*HostScannerReportSummary, error)
+	ApproveScanner(ctx context.Context, in *HostScannerApprovalRequest, opts ...grpc.CallOption) (*HostScannerStatus, error)
+	RejectScanner(ctx context.Context, in *HostScannerControlRequest, opts ...grpc.CallOption) (*HostScannerStatus, error)
 	StartRole(ctx context.Context, in *StartRoleRequest, opts ...grpc.CallOption) (*Session, error)
 	StopRole(ctx context.Context, in *StopRoleRequest, opts ...grpc.CallOption) (*Session, error)
 	AbortSession(ctx context.Context, in *AbortSessionRequest, opts ...grpc.CallOption) (*Session, error)
@@ -272,6 +282,65 @@ func (c *privateVMDaemonServiceClient) SealTorrentQuarantine(ctx context.Context
 	return out, nil
 }
 
+func (c *privateVMDaemonServiceClient) StartScanner(ctx context.Context, in *HostScannerStartRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[HostScannerEvent], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &PrivateVMDaemonService_ServiceDesc.Streams[3], PrivateVMDaemonService_StartScanner_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[HostScannerStartRequest, HostScannerEvent]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type PrivateVMDaemonService_StartScannerClient = grpc.ServerStreamingClient[HostScannerEvent]
+
+func (c *privateVMDaemonServiceClient) GetScannerStatus(ctx context.Context, in *HostScannerControlRequest, opts ...grpc.CallOption) (*HostScannerStatus, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(HostScannerStatus)
+	err := c.cc.Invoke(ctx, PrivateVMDaemonService_GetScannerStatus_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *privateVMDaemonServiceClient) GetScannerReport(ctx context.Context, in *HostScannerControlRequest, opts ...grpc.CallOption) (*HostScannerReportSummary, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(HostScannerReportSummary)
+	err := c.cc.Invoke(ctx, PrivateVMDaemonService_GetScannerReport_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *privateVMDaemonServiceClient) ApproveScanner(ctx context.Context, in *HostScannerApprovalRequest, opts ...grpc.CallOption) (*HostScannerStatus, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(HostScannerStatus)
+	err := c.cc.Invoke(ctx, PrivateVMDaemonService_ApproveScanner_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *privateVMDaemonServiceClient) RejectScanner(ctx context.Context, in *HostScannerControlRequest, opts ...grpc.CallOption) (*HostScannerStatus, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(HostScannerStatus)
+	err := c.cc.Invoke(ctx, PrivateVMDaemonService_RejectScanner_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *privateVMDaemonServiceClient) StartRole(ctx context.Context, in *StartRoleRequest, opts ...grpc.CallOption) (*Session, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(Session)
@@ -314,7 +383,7 @@ func (c *privateVMDaemonServiceClient) CleanupSession(ctx context.Context, in *C
 
 func (c *privateVMDaemonServiceClient) StreamEvents(ctx context.Context, in *GetSessionRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[SessionEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &PrivateVMDaemonService_ServiceDesc.Streams[3], PrivateVMDaemonService_StreamEvents_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &PrivateVMDaemonService_ServiceDesc.Streams[4], PrivateVMDaemonService_StreamEvents_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -333,7 +402,7 @@ type PrivateVMDaemonService_StreamEventsClient = grpc.ServerStreamingClient[Sess
 
 func (c *privateVMDaemonServiceClient) ImportWorkspaceFile(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[TransferFrame, TransferReceipt], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &PrivateVMDaemonService_ServiceDesc.Streams[4], PrivateVMDaemonService_ImportWorkspaceFile_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &PrivateVMDaemonService_ServiceDesc.Streams[5], PrivateVMDaemonService_ImportWorkspaceFile_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -346,7 +415,7 @@ type PrivateVMDaemonService_ImportWorkspaceFileClient = grpc.ClientStreamingClie
 
 func (c *privateVMDaemonServiceClient) ExportWorkspaceFile(ctx context.Context, in *ExportWorkspaceRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[TransferFrame], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &PrivateVMDaemonService_ServiceDesc.Streams[5], PrivateVMDaemonService_ExportWorkspaceFile_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &PrivateVMDaemonService_ServiceDesc.Streams[6], PrivateVMDaemonService_ExportWorkspaceFile_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -404,6 +473,11 @@ type PrivateVMDaemonServiceServer interface {
 	PauseTorrentDownload(context.Context, *TorrentControlRequest) (*TorrentStatus, error)
 	GetTorrentStatus(context.Context, *TorrentControlRequest) (*TorrentStatus, error)
 	SealTorrentQuarantine(context.Context, *TorrentControlRequest) (*TorrentStatus, error)
+	StartScanner(*HostScannerStartRequest, grpc.ServerStreamingServer[HostScannerEvent]) error
+	GetScannerStatus(context.Context, *HostScannerControlRequest) (*HostScannerStatus, error)
+	GetScannerReport(context.Context, *HostScannerControlRequest) (*HostScannerReportSummary, error)
+	ApproveScanner(context.Context, *HostScannerApprovalRequest) (*HostScannerStatus, error)
+	RejectScanner(context.Context, *HostScannerControlRequest) (*HostScannerStatus, error)
 	StartRole(context.Context, *StartRoleRequest) (*Session, error)
 	StopRole(context.Context, *StopRoleRequest) (*Session, error)
 	AbortSession(context.Context, *AbortSessionRequest) (*Session, error)
@@ -473,6 +547,21 @@ func (UnimplementedPrivateVMDaemonServiceServer) GetTorrentStatus(context.Contex
 }
 func (UnimplementedPrivateVMDaemonServiceServer) SealTorrentQuarantine(context.Context, *TorrentControlRequest) (*TorrentStatus, error) {
 	return nil, status.Error(codes.Unimplemented, "method SealTorrentQuarantine not implemented")
+}
+func (UnimplementedPrivateVMDaemonServiceServer) StartScanner(*HostScannerStartRequest, grpc.ServerStreamingServer[HostScannerEvent]) error {
+	return status.Error(codes.Unimplemented, "method StartScanner not implemented")
+}
+func (UnimplementedPrivateVMDaemonServiceServer) GetScannerStatus(context.Context, *HostScannerControlRequest) (*HostScannerStatus, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetScannerStatus not implemented")
+}
+func (UnimplementedPrivateVMDaemonServiceServer) GetScannerReport(context.Context, *HostScannerControlRequest) (*HostScannerReportSummary, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetScannerReport not implemented")
+}
+func (UnimplementedPrivateVMDaemonServiceServer) ApproveScanner(context.Context, *HostScannerApprovalRequest) (*HostScannerStatus, error) {
+	return nil, status.Error(codes.Unimplemented, "method ApproveScanner not implemented")
+}
+func (UnimplementedPrivateVMDaemonServiceServer) RejectScanner(context.Context, *HostScannerControlRequest) (*HostScannerStatus, error) {
+	return nil, status.Error(codes.Unimplemented, "method RejectScanner not implemented")
 }
 func (UnimplementedPrivateVMDaemonServiceServer) StartRole(context.Context, *StartRoleRequest) (*Session, error) {
 	return nil, status.Error(codes.Unimplemented, "method StartRole not implemented")
@@ -800,6 +889,89 @@ func _PrivateVMDaemonService_SealTorrentQuarantine_Handler(srv interface{}, ctx 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _PrivateVMDaemonService_StartScanner_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(HostScannerStartRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(PrivateVMDaemonServiceServer).StartScanner(m, &grpc.GenericServerStream[HostScannerStartRequest, HostScannerEvent]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type PrivateVMDaemonService_StartScannerServer = grpc.ServerStreamingServer[HostScannerEvent]
+
+func _PrivateVMDaemonService_GetScannerStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(HostScannerControlRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PrivateVMDaemonServiceServer).GetScannerStatus(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PrivateVMDaemonService_GetScannerStatus_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PrivateVMDaemonServiceServer).GetScannerStatus(ctx, req.(*HostScannerControlRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PrivateVMDaemonService_GetScannerReport_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(HostScannerControlRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PrivateVMDaemonServiceServer).GetScannerReport(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PrivateVMDaemonService_GetScannerReport_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PrivateVMDaemonServiceServer).GetScannerReport(ctx, req.(*HostScannerControlRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PrivateVMDaemonService_ApproveScanner_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(HostScannerApprovalRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PrivateVMDaemonServiceServer).ApproveScanner(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PrivateVMDaemonService_ApproveScanner_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PrivateVMDaemonServiceServer).ApproveScanner(ctx, req.(*HostScannerApprovalRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PrivateVMDaemonService_RejectScanner_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(HostScannerControlRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PrivateVMDaemonServiceServer).RejectScanner(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PrivateVMDaemonService_RejectScanner_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PrivateVMDaemonServiceServer).RejectScanner(ctx, req.(*HostScannerControlRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _PrivateVMDaemonService_StartRole_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(StartRoleRequest)
 	if err := dec(in); err != nil {
@@ -1001,6 +1173,22 @@ var PrivateVMDaemonService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _PrivateVMDaemonService_SealTorrentQuarantine_Handler,
 		},
 		{
+			MethodName: "GetScannerStatus",
+			Handler:    _PrivateVMDaemonService_GetScannerStatus_Handler,
+		},
+		{
+			MethodName: "GetScannerReport",
+			Handler:    _PrivateVMDaemonService_GetScannerReport_Handler,
+		},
+		{
+			MethodName: "ApproveScanner",
+			Handler:    _PrivateVMDaemonService_ApproveScanner_Handler,
+		},
+		{
+			MethodName: "RejectScanner",
+			Handler:    _PrivateVMDaemonService_RejectScanner_Handler,
+		},
+		{
 			MethodName: "StartRole",
 			Handler:    _PrivateVMDaemonService_StartRole_Handler,
 		},
@@ -1039,6 +1227,11 @@ var PrivateVMDaemonService_ServiceDesc = grpc.ServiceDesc{
 		{
 			StreamName:    "StartTorrentDownload",
 			Handler:       _PrivateVMDaemonService_StartTorrentDownload_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "StartScanner",
+			Handler:       _PrivateVMDaemonService_StartScanner_Handler,
 			ServerStreams: true,
 		},
 		{
