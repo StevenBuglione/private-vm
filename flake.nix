@@ -438,8 +438,13 @@
             machine.succeed("for command in evince file-roller firefox git gvfsd jq keepassxc libreoffice mousepad nm-applet parole pavucontrol ristretto thunar tumblerd udisksctl xfce4-screenshooter xfce4-taskmanager xfce4-terminal; do ! command -v $command >/dev/null || exit 1; done")
             machine.succeed("nft list table inet private_vm_downloader | grep -F 'policy drop'")
             machine.succeed("test -b /dev/disk/by-id/virtio-quarantine")
-            machine.succeed("findmnt -n -o FSTYPE /mnt/quarantine | grep -Fx ext4")
-            machine.succeed("findmnt -n -o OPTIONS /mnt/quarantine | grep -E '(^|,)nodev(,|$)' | grep -E '(^|,)nosuid(,|$)' | grep -E '(^|,)noexec(,|$)'")
+            # guestd is the single quarantine mount owner. systemd gives it a
+            # private mount namespace, so inspect that namespace instead of
+            # accidentally requiring the hostile filesystem on the guest's
+            # global mount table.
+            machine.succeed("pid=$(systemctl show -p MainPID --value private-vm-guestd.service); test $pid -gt 1; nsenter -t $pid -m findmnt -n -o FSTYPE /mnt/quarantine | grep -Fx ext4")
+            machine.succeed("pid=$(systemctl show -p MainPID --value private-vm-guestd.service); test $pid -gt 1; nsenter -t $pid -m findmnt -n -o OPTIONS /mnt/quarantine | grep -E '(^|,)nodev(,|$)' | grep -E '(^|,)nosuid(,|$)' | grep -E '(^|,)noexec(,|$)'")
+            machine.fail("findmnt -n -o SOURCE /mnt/quarantine | grep -F /dev/vdb")
             machine.fail("systemctl cat private-vm-qbittorrent.service")
             machine.succeed("test -x /etc/private-vm/qbittorrent")
             machine.succeed("readlink -f /etc/private-vm/qbittorrent | grep -E '^/nix/store/[^/]+-qbittorrent-[^/]+/bin/qbittorrent$'")
