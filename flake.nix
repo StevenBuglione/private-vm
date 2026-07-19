@@ -1088,7 +1088,9 @@
                   enable = true;
                   group = "pvm-custom";
                   package = customApplication;
+                  authorizedUsers = [ "pvm-test-user" ];
                 };
+                users.users.pvm-test-user.isNormalUser = true;
                 system.stateVersion = "26.05";
               }
             ];
@@ -1108,8 +1110,8 @@
             ];
           };
           service = host.config.systemd.services.private-vmd;
-          policies = builtins.filter (
-            package: nixpkgs.lib.hasPrefix "private-vm-polkit-policy" package.name
+          integrations = builtins.filter (
+            package: nixpkgs.lib.hasPrefix "private-vm-host-integration" package.name
           ) host.config.environment.systemPackages;
           requiredPath = with pkgs; [
             host.config.security.polkit.package.bin
@@ -1130,7 +1132,9 @@
         assert nixpkgs.lib.hasInfix "--group pvm-custom" service.serviceConfig.ExecStart;
         assert service.serviceConfig.RuntimeDirectoryMode == "0750";
         assert service.serviceConfig.StateDirectoryMode == "0700";
-        assert builtins.length policies == 1;
+        assert builtins.elem "pvm-custom" host.config.users.users.pvm-test-user.extraGroups;
+        assert builtins.length integrations == 1;
+        assert builtins.elem (builtins.head integrations) host.config.services.udev.packages;
         assert nixpkgs.lib.all (package: nixpkgs.lib.elem package service.path) requiredPath;
         assert builtins.length (nixpkgs.lib.splitString "<action id=" policySource) == 2;
         assert nixpkgs.lib.hasInfix "<action id=\"org.private-vm.usb.prepare\">" policySource;
@@ -1143,6 +1147,7 @@
             exec_start = service.serviceConfig.ExecStart;
             runtime_mode = service.serviceConfig.RuntimeDirectoryMode;
             state_mode = service.serviceConfig.StateDirectoryMode;
+            authorized_users = host.config.services.private-vm.authorizedUsers;
             daemon_path = map (package: package.name) service.path;
             policy_sha256 = builtins.hashString "sha256" policySource;
           }

@@ -22,6 +22,7 @@ Example host flake:
           services.private-vm = {
             enable = true;
             strict = true;
+            authorizedUsers = [ "steven" ];
           };
         }
       ];
@@ -63,6 +64,14 @@ third-party backup tool honors the marker. Without that assertion, LUKS scratch
 fails closed while capacity-qualified tmpfs sessions remain possible.
 
 After group changes, re-login.
+
+`authorizedUsers` accepts only existing explicitly declared NixOS accounts,
+rejects duplicate entries, and is empty by default. The module never grants
+socket access to every interactive user implicitly. The package also installs
+the Bash, Zsh and Fish completions, `private-vm(1)` and `private-vmd(8)` manual
+pages, the candidate-only udev discovery rule, and a documentation-only
+USBGuard enrollment fragment. The udev rule does not authorize or pass through
+a USB device; exact enrollment and the daemon policy remain authoritative.
 
 The daemon runtime directory is `root:<configured-group>` mode `0750`, its
 persistent state directory is mode `0700`, and the daemon creates
