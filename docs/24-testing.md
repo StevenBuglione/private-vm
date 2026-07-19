@@ -456,10 +456,16 @@ RPC tests prove the protobuf profile slice is detached and cleared on success
 and rejection. QEMU tests prove descriptors 3 and 4 are inherited and no TAP
 name enters argv.
 
-These tests remain unprivileged and synthetic. Namespace packet tests, a mock
-WireGuard peer, the concrete systemd-resolved D-Bus adapter, qBittorrent
-binding, role UI/pause composition, live QEMU ordering and the controlled
-Proton smoke test remain image/acceptance gates.
+These tests remain unprivileged and synthetic. They also exercise the concrete
+systemd-resolved D-Bus call model, fixed WireGuard handshake command, bounded
+interface-bound connection adapter, loopback-only qBittorrent binding check,
+typed workstation-warning/downloader-pause responses, and host lifecycle
+composition. The orchestration fault matrix proves ordered start, refusal of
+incomplete guest/counter proofs, cancellation, dirty-stop protection,
+unexpected QEMU exit cleanup, retry and idempotence. Namespace packet tests, a
+mock WireGuard peer, production namespace counters, image composition, live
+QEMU ordering and the controlled Proton smoke test remain image/acceptance
+gates.
 
 Mock Proton endpoint:
 

@@ -36,6 +36,7 @@ type RolePolicy struct {
 	Role                  session.Role
 	ScannerUpdate         bool
 	RequireTorrentBinding bool
+	RequireIPv6Tunnel     bool
 }
 
 func (policy RolePolicy) validate() error {
@@ -96,6 +97,7 @@ func (Underlay) MarshalXML(*xml.Encoder, xml.StartElement) error {
 type Proof struct {
 	Handshake         bool
 	DNSThroughTunnel  bool
+	DNSBypassBlocked  bool
 	IPv4ThroughTunnel bool
 	IPv6ThroughTunnel bool
 	IPv4BypassBlocked bool
@@ -110,6 +112,7 @@ type Status struct {
 	Configured        bool   `json:"configured"`
 	Handshake         bool   `json:"handshake"`
 	DNSThroughTunnel  bool   `json:"dns_through_tunnel"`
+	DNSBypassBlocked  bool   `json:"dns_bypass_blocked"`
 	IPv4ThroughTunnel bool   `json:"ipv4_through_tunnel"`
 	IPv6ThroughTunnel bool   `json:"ipv6_through_tunnel"`
 	IPv4BypassBlocked bool   `json:"ipv4_bypass_blocked"`

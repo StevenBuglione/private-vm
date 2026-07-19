@@ -57,6 +57,10 @@ func (connection *fakeResolvedConnection) Call(ctx context.Context, method strin
 	return nil
 }
 
+func (connection *fakeResolvedConnection) CallStore(context.Context, string, []any, ...any) error {
+	return errors.New("unexpected stored call")
+}
+
 func (connection *fakeResolvedConnection) Close() error {
 	connection.mu.Lock()
 	connection.closed = true

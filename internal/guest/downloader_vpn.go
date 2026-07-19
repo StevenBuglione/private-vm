@@ -81,6 +81,10 @@ func protoVPNStatus(status guestvpn.Status) *privatevmv1.VPNStatus {
 		DnsThroughTunnel:  status.DNSThroughTunnel,
 		Ipv4BypassBlocked: status.IPv4BypassBlocked,
 		Ipv6BypassBlocked: status.IPv6BypassBlocked,
+		DnsBypassBlocked:  status.DNSBypassBlocked,
+		Ipv4ThroughTunnel: status.IPv4ThroughTunnel,
+		Ipv6ThroughTunnel: status.IPv6ThroughTunnel,
+		TorrentBound:      status.TorrentBound,
 		Diagnostics: []*privatevmv1.Diagnostic{{
 			Code: status.Code, Severity: severity, Summary: "Guest VPN state is " + string(status.State) + ".",
 			Remediation: status.Remediation, Overridable: false,

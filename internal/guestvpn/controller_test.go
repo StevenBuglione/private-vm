@@ -128,7 +128,7 @@ func (responder *fakeResponder) OnVPNLoss(_ context.Context, status Status) erro
 
 func completeProof() Proof {
 	return Proof{
-		Handshake: true, DNSThroughTunnel: true, IPv4ThroughTunnel: true, IPv6ThroughTunnel: true,
+		Handshake: true, DNSThroughTunnel: true, DNSBypassBlocked: true, IPv4ThroughTunnel: true, IPv6ThroughTunnel: true,
 		IPv4BypassBlocked: true, IPv6BypassBlocked: true, TorrentBound: true,
 	}
 }

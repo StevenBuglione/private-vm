@@ -87,6 +87,10 @@ message VPNStatus {
   bool ipv4_bypass_blocked = 4;
   bool ipv6_bypass_blocked = 5;
   repeated Diagnostic diagnostics = 6;
+  bool dns_bypass_blocked = 7;
+  bool ipv4_through_tunnel = 8;
+  bool ipv6_through_tunnel = 9;
+  bool torrent_bound = 10;
 }
 
 message TorrentInputFrame {

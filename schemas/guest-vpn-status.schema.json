@@ -11,6 +11,7 @@
     "configured": { "type": "boolean" },
     "handshake": { "type": "boolean" },
     "dns_through_tunnel": { "type": "boolean" },
+    "dns_bypass_blocked": { "type": "boolean" },
     "ipv4_through_tunnel": { "type": "boolean" },
     "ipv6_through_tunnel": { "type": "boolean" },
     "ipv4_bypass_blocked": { "type": "boolean" },
@@ -21,7 +22,7 @@
   },
   "required": [
     "schema_version", "state", "kill_switch_armed", "configured", "handshake",
-    "dns_through_tunnel", "ipv4_through_tunnel", "ipv6_through_tunnel",
+    "dns_through_tunnel", "dns_bypass_blocked", "ipv4_through_tunnel", "ipv6_through_tunnel",
     "ipv4_bypass_blocked", "ipv6_bypass_blocked", "torrent_bound", "code", "remediation"
   ],
   "allOf": [
@@ -33,6 +34,7 @@
           "configured": { "const": true },
           "handshake": { "const": true },
           "dns_through_tunnel": { "const": true },
+          "dns_bypass_blocked": { "const": true },
           "ipv4_through_tunnel": { "const": true },
           "ipv4_bypass_blocked": { "const": true },
           "ipv6_bypass_blocked": { "const": true },

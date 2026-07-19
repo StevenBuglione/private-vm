@@ -51,7 +51,7 @@ type rpcVPNVerifier struct{}
 
 func (rpcVPNVerifier) Verify(context.Context, guestvpn.RolePolicy) (guestvpn.Proof, error) {
 	return guestvpn.Proof{
-		Handshake: true, DNSThroughTunnel: true, IPv4ThroughTunnel: true, IPv6ThroughTunnel: true,
+		Handshake: true, DNSThroughTunnel: true, DNSBypassBlocked: true, IPv4ThroughTunnel: true, IPv6ThroughTunnel: true,
 		IPv4BypassBlocked: true, IPv6BypassBlocked: true, TorrentBound: true,
 	}, nil
 }
@@ -95,7 +95,8 @@ func TestDownloaderVPNRPCConsumesAndClearsProfileBytes(t *testing.T) {
 		t.Fatal("RPC profile buffer remained reachable or uncleared")
 	}
 	if !response.GetConfigured() || !response.GetHandshake() || !response.GetDnsThroughTunnel() ||
-		!response.GetIpv4BypassBlocked() || !response.GetIpv6BypassBlocked() || len(response.GetDiagnostics()) != 1 {
+		!response.GetDnsBypassBlocked() || !response.GetIpv4ThroughTunnel() || !response.GetIpv6ThroughTunnel() ||
+		!response.GetIpv4BypassBlocked() || !response.GetIpv6BypassBlocked() || !response.GetTorrentBound() || len(response.GetDiagnostics()) != 1 {
 		t.Fatalf("unexpected safe VPN response: %#v", response)
 	}
 	verified, err := handler.VerifyVPN(context.Background(), &privatevmv1.VerifyVPNRequest{Context: helloRequest(session.RoleDownloader, APIMajor, APIMinor).GetContext()})

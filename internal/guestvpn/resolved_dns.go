@@ -32,6 +32,7 @@ type resolvedDomain struct {
 
 type resolvedConnection interface {
 	Call(context.Context, string, ...any) error
+	CallStore(context.Context, string, []any, ...any) error
 	Close() error
 }
 
@@ -168,6 +169,17 @@ func (connection *godbusResolvedConnection) Call(ctx context.Context, method str
 		return errors.New("systemd-resolved bus unavailable")
 	}
 	if call := connection.object.CallWithContext(ctx, method, 0, args...); call.Err != nil {
+		return errors.New("systemd-resolved call failed")
+	}
+	return nil
+}
+
+func (connection *godbusResolvedConnection) CallStore(ctx context.Context, method string, args []any, output ...any) error {
+	if connection == nil || connection.object == nil {
+		return errors.New("systemd-resolved bus unavailable")
+	}
+	call := connection.object.CallWithContext(ctx, method, 0, args...)
+	if call.Err != nil || call.Store(output...) != nil {
 		return errors.New("systemd-resolved call failed")
 	}
 	return nil

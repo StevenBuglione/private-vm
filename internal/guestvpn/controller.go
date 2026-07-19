@@ -99,7 +99,7 @@ func (controller *Controller) Configure(ctx context.Context, profile vpn.Profile
 	}
 	controller.state = StateConfigured
 	controller.configured = true
-	proof, err := controller.verifier.Verify(operationCtx, controller.policy)
+	proof, err := controller.verifier.Verify(operationCtx, controller.verificationPolicyLocked())
 	controller.proof = proof
 	if err != nil || !proof.complete(controller.requireIPv6, controller.policy.RequireTorrentBinding) {
 		controller.state = StateDegraded
@@ -120,7 +120,7 @@ func (controller *Controller) Verify(ctx context.Context) (Status, error) {
 	}
 	operationCtx, cancel := boundedContext(ctx, maximumOperationDuration)
 	defer cancel()
-	proof, err := controller.verifier.Verify(operationCtx, controller.policy)
+	proof, err := controller.verifier.Verify(operationCtx, controller.verificationPolicyLocked())
 	controller.proof = proof
 	// The profile's IPv6 requirement is already reflected by the verifier's
 	// role-specific contract: both bypass families always remain mandatory.
@@ -225,6 +225,7 @@ func (controller *Controller) statusLocked() Status {
 		Configured:        controller.configured,
 		Handshake:         controller.proof.Handshake,
 		DNSThroughTunnel:  controller.proof.DNSThroughTunnel,
+		DNSBypassBlocked:  controller.proof.DNSBypassBlocked,
 		IPv4ThroughTunnel: controller.proof.IPv4ThroughTunnel,
 		IPv6ThroughTunnel: controller.proof.IPv6ThroughTunnel,
 		IPv4BypassBlocked: controller.proof.IPv4BypassBlocked,
@@ -252,8 +253,14 @@ func (controller *Controller) statusLocked() Status {
 }
 
 func (proof Proof) complete(requireIPv6, requireTorrent bool) bool {
-	return proof.Handshake && proof.DNSThroughTunnel && proof.IPv4ThroughTunnel && proof.IPv4BypassBlocked && proof.IPv6BypassBlocked &&
+	return proof.Handshake && proof.DNSThroughTunnel && proof.DNSBypassBlocked && proof.IPv4ThroughTunnel && proof.IPv4BypassBlocked && proof.IPv6BypassBlocked &&
 		(!requireIPv6 || proof.IPv6ThroughTunnel) && (!requireTorrent || proof.TorrentBound)
+}
+
+func (controller *Controller) verificationPolicyLocked() RolePolicy {
+	policy := controller.policy
+	policy.RequireIPv6Tunnel = controller.requireIPv6
+	return policy
 }
 
 func boundedContext(ctx context.Context, maximum time.Duration) (context.Context, context.CancelFunc) {

@@ -277,13 +277,16 @@ Tests must avoid sending secrets or torrent metadata to third-party leak-test
 sites. Use minimal controlled endpoints or Proton-provided IP checks.
 
 The source verifier boundary returns booleans only and requires handshake,
-tunnel DNS, IPv4 tunnel routing, direct IPv4 and IPv6 blocking, optional IPv6
-tunnel routing, and downloader interface binding. It cannot return probe
-targets, public IPs, DNS answers, endpoint values, or raw command output.
-Controlled mock-peer packet tests, namespace counters, the concrete
-systemd-resolved D-Bus adapter, qBittorrent binding, image composition and live
-Proton smoke proof remain image/acceptance work; none is reported as passed by
-the source suite.
+tunnel DNS, clear-interface DNS blocking, IPv4 tunnel routing, direct IPv4 and
+IPv6 blocking, optional IPv6 tunnel routing, and downloader interface binding.
+It cannot return probe targets, public IPs, DNS answers, endpoint values, or raw
+command output. The concrete bounded adapters use fixed `wg` arguments,
+interface-bound Go sockets, systemd-resolved's private D-Bus connection and the
+loopback-only qBittorrent preferences API. The host orchestrator then requires
+the verified guest result and a boolean-only host/namespace counter proof before
+starting continuous monitoring. Controlled mock-peer packet tests, production
+namespace counters, image composition and live Proton smoke proof remain
+image/acceptance work; none is reported as passed by the source suite.
 
 ## VPN loss
 

@@ -537,6 +537,10 @@ type VPNStatus struct {
 	Ipv4BypassBlocked bool                   `protobuf:"varint,4,opt,name=ipv4_bypass_blocked,json=ipv4BypassBlocked,proto3" json:"ipv4_bypass_blocked,omitempty"`
 	Ipv6BypassBlocked bool                   `protobuf:"varint,5,opt,name=ipv6_bypass_blocked,json=ipv6BypassBlocked,proto3" json:"ipv6_bypass_blocked,omitempty"`
 	Diagnostics       []*Diagnostic          `protobuf:"bytes,6,rep,name=diagnostics,proto3" json:"diagnostics,omitempty"`
+	DnsBypassBlocked  bool                   `protobuf:"varint,7,opt,name=dns_bypass_blocked,json=dnsBypassBlocked,proto3" json:"dns_bypass_blocked,omitempty"`
+	Ipv4ThroughTunnel bool                   `protobuf:"varint,8,opt,name=ipv4_through_tunnel,json=ipv4ThroughTunnel,proto3" json:"ipv4_through_tunnel,omitempty"`
+	Ipv6ThroughTunnel bool                   `protobuf:"varint,9,opt,name=ipv6_through_tunnel,json=ipv6ThroughTunnel,proto3" json:"ipv6_through_tunnel,omitempty"`
+	TorrentBound      bool                   `protobuf:"varint,10,opt,name=torrent_bound,json=torrentBound,proto3" json:"torrent_bound,omitempty"`
 	unknownFields     protoimpl.UnknownFields
 	sizeCache         protoimpl.SizeCache
 }
@@ -611,6 +615,34 @@ func (x *VPNStatus) GetDiagnostics() []*Diagnostic {
 		return x.Diagnostics
 	}
 	return nil
+}
+
+func (x *VPNStatus) GetDnsBypassBlocked() bool {
+	if x != nil {
+		return x.DnsBypassBlocked
+	}
+	return false
+}
+
+func (x *VPNStatus) GetIpv4ThroughTunnel() bool {
+	if x != nil {
+		return x.Ipv4ThroughTunnel
+	}
+	return false
+}
+
+func (x *VPNStatus) GetIpv6ThroughTunnel() bool {
+	if x != nil {
+		return x.Ipv6ThroughTunnel
+	}
+	return false
+}
+
+func (x *VPNStatus) GetTorrentBound() bool {
+	if x != nil {
+		return x.TorrentBound
+	}
+	return false
 }
 
 type TorrentInputFrame struct {
@@ -2025,7 +2057,7 @@ const file_privatevm_v1_guest_proto_rawDesc = "" +
 	"\acontext\x18\x01 \x01(\v2\x1a.privatevm.v1.GuestContextR\acontext\x12\x18\n" +
 	"\aprofile\x18\x02 \x01(\fR\aprofile\"H\n" +
 	"\x10VerifyVPNRequest\x124\n" +
-	"\acontext\x18\x01 \x01(\v2\x1a.privatevm.v1.GuestContextR\acontext\"\x93\x02\n" +
+	"\acontext\x18\x01 \x01(\v2\x1a.privatevm.v1.GuestContextR\acontext\"\xc6\x03\n" +
 	"\tVPNStatus\x12\x1e\n" +
 	"\n" +
 	"configured\x18\x01 \x01(\bR\n" +
@@ -2034,7 +2066,12 @@ const file_privatevm_v1_guest_proto_rawDesc = "" +
 	"\x12dns_through_tunnel\x18\x03 \x01(\bR\x10dnsThroughTunnel\x12.\n" +
 	"\x13ipv4_bypass_blocked\x18\x04 \x01(\bR\x11ipv4BypassBlocked\x12.\n" +
 	"\x13ipv6_bypass_blocked\x18\x05 \x01(\bR\x11ipv6BypassBlocked\x12:\n" +
-	"\vdiagnostics\x18\x06 \x03(\v2\x18.privatevm.v1.DiagnosticR\vdiagnostics\"\xb4\x01\n" +
+	"\vdiagnostics\x18\x06 \x03(\v2\x18.privatevm.v1.DiagnosticR\vdiagnostics\x12,\n" +
+	"\x12dns_bypass_blocked\x18\a \x01(\bR\x10dnsBypassBlocked\x12.\n" +
+	"\x13ipv4_through_tunnel\x18\b \x01(\bR\x11ipv4ThroughTunnel\x12.\n" +
+	"\x13ipv6_through_tunnel\x18\t \x01(\bR\x11ipv6ThroughTunnel\x12#\n" +
+	"\rtorrent_bound\x18\n" +
+	" \x01(\bR\ftorrentBound\"\xb4\x01\n" +
 	"\x11TorrentInputFrame\x124\n" +
 	"\acontext\x18\x01 \x01(\v2\x1a.privatevm.v1.GuestContextR\acontext\x12%\n" +
 	"\rtorrent_chunk\x18\x02 \x01(\fH\x00R\ftorrentChunk\x12#\n" +
