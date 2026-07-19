@@ -23,6 +23,19 @@ private-vm doctor --strict
 
 The daemon validates ownership/naming before deleting.
 
+Startup recovery additionally pins exact object identity, proves there is no
+current registry owner, verifies loss of the volatile session key source,
+cleans in dependency order, audits the full resource set, and checks that base
+images did not change. A machine-readable report is valid only against
+`schemas/recovery-report.schema.json`; it intentionally contains counts and
+stable codes but no session ID, path, process identity, device identity or
+backend output.
+
+An `ORPHAN_CLEANUP_FAILED` or `CLEANUP_INCOMPLETE` result is blocking. Preserve
+the volatile report, correct the reported host condition, and retry the command.
+Do not manually unlink a similarly named object: a filename is not ownership
+evidence.
+
 ## VPN test fails
 
 1. Do not continue.

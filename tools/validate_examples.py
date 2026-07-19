@@ -49,6 +49,7 @@ pairs = [
     ("schemas/torrent-status.schema.json", "examples/torrent-status.example.json", "json"),
     ("schemas/scan-report.schema.json", "examples/scan-report.example.json", "json"),
     ("schemas/vpn-profile-status.schema.json", "examples/vpn-profile-status.example.json", "json"),
+    ("schemas/recovery-report.schema.json", "examples/recovery-report.example.json", "json"),
     ("schemas/workstation-bundles.schema.json", "project/workstation-bundles.json", "json"),
 ]
 
@@ -119,6 +120,12 @@ image_sbom = json.loads(
 )
 scan_report_schema = json.loads((ROOT / "schemas/scan-report.schema.json").read_text(encoding="utf-8"))
 scan_report = json.loads((ROOT / "examples/scan-report.example.json").read_text(encoding="utf-8"))
+recovery_report_schema = json.loads(
+    (ROOT / "schemas/recovery-report.schema.json").read_text(encoding="utf-8")
+)
+recovery_report = json.loads(
+    (ROOT / "examples/recovery-report.example.json").read_text(encoding="utf-8")
+)
 
 negative_cases = []
 unsigned = deepcopy(config)
@@ -291,6 +298,22 @@ negative_cases.append(("networked scan report", scan_report_schema, networked_re
 unrescanned_report = deepcopy(scan_report)
 unrescanned_report["sanitized_outputs"][0]["rescan_verdict"] = "SKIPPED"
 negative_cases.append(("unrescanned scan output", scan_report_schema, unrescanned_report))
+recovery_session_identity = deepcopy(recovery_report)
+recovery_session_identity["session_id"] = "pvm-11111111111111111111111111111111"
+negative_cases.append(("recovery report session identity", recovery_report_schema, recovery_session_identity))
+recovery_locator = deepcopy(recovery_report)
+recovery_locator["artifact_path"] = "/var/lib/private-vm/scratch/private.luks"
+negative_cases.append(("recovery report artifact locator", recovery_report_schema, recovery_locator))
+recovery_unknown_failure = deepcopy(recovery_report)
+recovery_unknown_failure["code"] = "ORPHAN_CLEANUP_FAILED"
+recovery_unknown_failure["status"] = "incomplete"
+recovery_unknown_failure["failures"] = [{
+    "code": "EXTERNAL_COMMAND_OUTPUT",
+    "safe_message": "unsafe",
+    "remediation": "unsafe",
+    "retryable": True,
+}]
+negative_cases.append(("unknown recovery failure", recovery_report_schema, recovery_unknown_failure))
 
 for label, schema, value in negative_cases:
     if Draft202012Validator(schema).is_valid(value):

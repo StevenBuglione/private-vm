@@ -48,9 +48,15 @@ between allocation and registration triggers bounded rollback. Cleanup runs in
 reverse allocation order, stops at the first failure, and resumes safely on a
 later request. This live cleanup registry is internal actor state rather than a
 public RPC or durable session field. The separate startup-recovery record added
-by `D-004` may contain only closed, daemon-derived resource identities needed to
+by `D-005` may contain only closed, daemon-derived resource identities needed to
 revalidate an orphan; it must not serialize callbacks, raw command arguments or
 sensitive values.
+
+The exported startup recovery report is a different, deliberately coarser
+object. It contains only schema version, complete/incomplete code, aggregate
+session/resource counts, volatile-key-loss and base-image audit booleans, and
+closed safe failure records. Session IDs, locators, identity fingerprints,
+process evidence, device identities and wrapped backend errors are forbidden.
 
 ## Image identity
 
