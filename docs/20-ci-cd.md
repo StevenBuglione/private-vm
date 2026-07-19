@@ -30,6 +30,12 @@ Add only per job:
 
 Never use `pull_request_target` to execute untrusted code.
 
+The release producer must save the actions/attest v4 `bundle-path` output next
+to each image as the bounded Sigstore bundle v0.3 layer. Its signed payload must
+match `schemas/image-provenance-payload.schema.json`; release publication is not
+compatible with branch refs, arbitrary tags, repository-name-only identity, or
+an invocation URL that differs between the Fulcio certificate and payload.
+
 ## Active source workflow: `ci.yml`
 
 For pull requests and pushes:

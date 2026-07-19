@@ -48,15 +48,15 @@ exact requested digest.
 1. parse reference without executing content
 2. resolve tag to immutable digest
 3. pull manifest with byte limits
-4. verify OCI content digests
-5. verify provenance bundle
-6. require official repository identity
-7. require approved workflow identity
-8. require expected tag/ref constraints
-9. verify image manifest schema
-10. verify role, bundle, arch, protocol, and minimum host requirements
-11. verify decompressed QCOW2 digest
-12. atomically install read-only cache entry
+4. verify every OCI component digest
+5. verify the complete compressed QCOW2 digest before constructing its decoder
+6. decompress within bounds and verify the installed QCOW2 digest
+7. verify the image manifest schema, cache bindings and host compatibility
+8. verify the complete SPDX closure and its image binding
+9. verify the offline Sigstore provenance bundle and signed digest
+10. require the exact official repository, numeric IDs and release workflow
+11. require the immutable canonical SemVer/RC ref and source commit
+12. atomically install the read-only cache entry
 
 Any failure deletes partial data.
 
@@ -111,11 +111,30 @@ values fail closed. The verifier requires:
 - virtual size, manifest size, SBOM size and collection counts within hard
   ceilings.
 
-The official verifier constructor always composes those checks with a distinct
-IMG-003 `ProvenanceVerifier`. IMG-002 exports no accepting provenance
-implementation and has no official non-SBOM mode. Until IMG-003 supplies the
-repository/workflow verifier, product composition remains fail closed and no
-staged pull can become runnable.
+The exported official verifier constructor always composes those checks with
+the embedded-root IMG-003 verifier. Its provenance interface and accepting test
+function are package-private, so a product caller cannot replace the official
+identity policy or select a non-provenance mode.
+
+The OCI provenance layer keeps the frozen generic media type above; its JSON
+document must declare the distinct
+`application/vnd.dev.sigstore.bundle.v0.3+json` bundle media type. IMG-003
+accepts exactly one bounded Sigstore bundle v0.3 containing one DSSE
+`application/vnd.in-toto+json` envelope, one Fulcio certificate, one Rekor
+`dsse/0.0.1` entry and inclusion proof, and at least one authenticated observer
+timestamp. Verification is offline against the reviewed embedded Sigstore
+public-good trust snapshot. No TUF, Rekor, Fulcio, GitHub or registry request is
+made while verifying a staged or cached entry.
+
+The signed payload is the closed SLSA provenance v1 profile in
+`schemas/image-provenance-payload.schema.json`. It binds the compressed-image
+SHA-256 to `image.qcow2.zst`, the source commit, the exact release workflow and
+an immutable `refs/tags/v<SemVer>` tag (only canonical `-rc.N` prereleases are
+accepted). The repository name is additionally pinned by GitHub repository ID
+`1305109560` and owner ID `34593055`. The Fulcio SAN, OIDC issuer, source
+repository/ref/commit, both numeric IDs, hosted-runner identity, and release
+workflow are exact. Its `RunInvocationURI` must equal the signed SLSA
+`invocationId`; repository-name reuse therefore cannot satisfy policy.
 
 ## Published image SPDX 2.3 profile
 
@@ -159,6 +178,9 @@ repository: StevenBuglione/private-vm
 workflow: .github/workflows/release.yml
 issuer: GitHub Actions OIDC
 visibility: public
+repository-id: 1305109560
+owner-id: 34593055
+ref: refs/tags/v<canonical-semver-or-rc.N>
 ```
 
 Custom registries require a separate explicit trust configuration and warnings.

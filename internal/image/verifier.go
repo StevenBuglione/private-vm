@@ -7,16 +7,17 @@ import (
 	"errors"
 )
 
-// ProvenanceVerifier is the mandatory IMG-003 seam. IMG-002 deliberately does
-// not provide an accepting implementation, so manifest/SBOM validation alone
-// cannot be composed into a runnable official pull.
-type ProvenanceVerifier interface {
+// provenanceVerifier is deliberately package-private. The exported official
+// constructor always installs the embedded-root implementation, so callers
+// cannot replace the official repository/workflow policy with an accepting
+// callback.
+type provenanceVerifier interface {
 	VerifyProvenance(context.Context, Entry, Manifest) error
 }
 
-type ProvenanceVerificationFunc func(context.Context, Entry, Manifest) error
+type provenanceVerificationFunc func(context.Context, Entry, Manifest) error
 
-func (function ProvenanceVerificationFunc) VerifyProvenance(ctx context.Context, entry Entry, manifest Manifest) error {
+func (function provenanceVerificationFunc) VerifyProvenance(ctx context.Context, entry Entry, manifest Manifest) error {
 	if function == nil {
 		return imageError(CodeVerificationMissing, "No image provenance verifier is available.", "Install IMG-003 repository and workflow provenance verification before pulling an official image.", nil)
 	}
@@ -25,12 +26,23 @@ func (function ProvenanceVerificationFunc) VerifyProvenance(ctx context.Context,
 
 type officialVerifier struct {
 	policy     compatibilitySnapshot
-	provenance ProvenanceVerifier
+	provenance provenanceVerifier
 }
 
 // NewOfficialVerifier composes strict manifest/SBOM verification with the
-// mandatory IMG-003 implementation. There is no official non-SBOM mode.
-func NewOfficialVerifier(policy CompatibilityPolicy, provenance ProvenanceVerifier) (Verifier, error) {
+// embedded public-good-root IMG-003 implementation. There is no injectable
+// official identity policy and no official non-SBOM or non-provenance mode.
+func NewOfficialVerifier(policy CompatibilityPolicy) (Verifier, error) {
+	provenance, err := newEmbeddedOfficialProvenanceVerifier(policy.Limits)
+	if err != nil {
+		return nil, err
+	}
+	return newOfficialVerifier(policy, provenance)
+}
+
+// newOfficialVerifier is the package-private composition seam used by focused
+// IMG-002 tests. Product callers can only use NewOfficialVerifier above.
+func newOfficialVerifier(policy CompatibilityPolicy, provenance provenanceVerifier) (Verifier, error) {
 	if nilLike(provenance) {
 		return nil, imageError(CodeVerificationMissing, "No image provenance verifier is available.", "Install IMG-003 repository and workflow provenance verification before pulling an official image.", nil)
 	}

@@ -39,6 +39,7 @@ pairs = [
     ("schemas/guest-image-identity.schema.json", "examples/guest-image-identity.example.json", "json"),
     ("schemas/image-cache-entry.schema.json", "examples/image-cache-entry.example.json", "json"),
     ("schemas/image-manifest.schema.json", "examples/image-manifest.example.json", "json"),
+    ("schemas/image-provenance-payload.schema.json", "examples/image-provenance-payload.example.json", "json"),
     ("schemas/image-sbom.schema.json", "examples/image-sbom.spdx.example.json", "json"),
     ("schemas/scan-report.schema.json", "examples/scan-report.example.json", "json"),
     ("schemas/workstation-bundles.schema.json", "project/workstation-bundles.json", "json"),
@@ -90,6 +91,12 @@ image_manifest_schema = json.loads(
 )
 image_manifest = json.loads(
     (ROOT / "examples/image-manifest.example.json").read_text(encoding="utf-8")
+)
+image_provenance_schema = json.loads(
+    (ROOT / "schemas/image-provenance-payload.schema.json").read_text(encoding="utf-8")
+)
+image_provenance = json.loads(
+    (ROOT / "examples/image-provenance-payload.example.json").read_text(encoding="utf-8")
 )
 image_sbom_schema = json.loads(
     (ROOT / "schemas/image-sbom.schema.json").read_text(encoding="utf-8")
@@ -183,6 +190,12 @@ negative_cases.append(("missing image bundle field", image_manifest_schema, miss
 wrong_manifest_capability = deepcopy(image_manifest)
 wrong_manifest_capability["capabilities"].append("unexpected")
 negative_cases.append(("wrong role capability set", image_manifest_schema, wrong_manifest_capability))
+mutable_provenance_ref = deepcopy(image_provenance)
+mutable_provenance_ref["predicate"]["buildDefinition"]["externalParameters"]["workflow"]["ref"] = "refs/heads/main"
+negative_cases.append(("mutable provenance ref", image_provenance_schema, mutable_provenance_ref))
+reused_repository_name = deepcopy(image_provenance)
+reused_repository_name["predicate"]["buildDefinition"]["internalParameters"]["github"]["repository_id"] = "999999999"
+negative_cases.append(("reused provenance repository name", image_provenance_schema, reused_repository_name))
 missing_sbom_checksum = deepcopy(image_sbom)
 del missing_sbom_checksum["packages"][1]["checksums"]
 negative_cases.append(("missing closure checksum field", image_sbom_schema, missing_sbom_checksum))

@@ -35,6 +35,10 @@ const (
 	CodeCapabilityMismatch   ErrorCode = "IMAGE_CAPABILITY_MISMATCH"
 	CodeSBOMRequired         ErrorCode = "IMAGE_SBOM_REQUIRED"
 	CodeSBOMInvalid          ErrorCode = "IMAGE_SBOM_INVALID"
+	CodeProvenanceRequired   ErrorCode = "IMAGE_PROVENANCE_REQUIRED"
+	CodeProvenanceInvalid    ErrorCode = "IMAGE_PROVENANCE_INVALID"
+	CodeProvenanceIdentity   ErrorCode = "IMAGE_PROVENANCE_IDENTITY_MISMATCH"
+	CodeProvenancePredicate  ErrorCode = "IMAGE_PROVENANCE_PREDICATE_INVALID"
 	CodePullCancelled        ErrorCode = "IMAGE_PULL_CANCELLED"
 	CodePullTimeout          ErrorCode = "IMAGE_PULL_TIMEOUT"
 )

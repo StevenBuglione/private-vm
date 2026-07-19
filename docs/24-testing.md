@@ -77,8 +77,17 @@ and SPDX decoders reject unknown, duplicate, trailing, missing and null fields,
 including nested package/file/checksum/relationship fields. The SPDX cases also
 cover duplicate or unsorted store paths, store-hash-derived IDs, exact store
 names, image/file checksum mismatch, incomplete closure packages and noncanonical
-relationship graphs. A fake IMG-003 seam is used only by unit tests; production
-composition remains unavailable until provenance verification is implemented.
+relationship graphs. The package-private IMG-003 seam is used only by focused
+unit tests; the exported official constructor always installs the embedded-root
+verifier.
+
+IMG-003 tests use a local virtual Fulcio/Rekor/TSA deployment and no network.
+They prove a valid cryptographic DSSE bundle; exact repository/workflow/tag,
+numeric repository/owner IDs and invocation binding; wrong SAN/issuer/digest;
+untrusted and expired certificate material; malformed, duplicate, unknown,
+missing-proof and oversized inputs; cancellation, timeout and repeated offline
+cache reverification. Schema tests also reject mutable refs and repository-name
+reuse with a changed numeric ID.
 
 ### Integration without KVM
 

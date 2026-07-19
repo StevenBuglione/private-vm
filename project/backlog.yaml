@@ -517,13 +517,17 @@
             "IMG-002"
           ],
           "deliverables": [
-            "Sigstore/GitHub attestation verifier",
-            "repository/workflow/ref policy",
-            "offline cache policy"
+            "bounded offline Sigstore bundle v0.3 verifier with embedded public-good roots",
+            "exact repository/workflow/immutable SemVer ref and numeric-ID policy",
+            "closed signed SLSA payload and Fulcio invocation binding",
+            "offline cache reverification policy"
           ],
           "acceptance": [
             "wrong repository is never overridable",
             "wrong workflow is never overridable",
+            "branch/arbitrary refs and repository-name reuse are rejected",
+            "wrong SAN, issuer, digest, trust, certificate time or proof is rejected",
+            "cached verification performs no network request",
             "digest mismatch blocks before decompression"
           ]
         }

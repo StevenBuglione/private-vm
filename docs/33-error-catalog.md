@@ -191,6 +191,10 @@ ordinary, detailed and structural `fmt` verbs cannot reveal that cause.
 | `IMAGE_CAPABILITY_MISMATCH` | The capability list is not the exact sorted common-plus-role contract. |
 | `IMAGE_SBOM_REQUIRED` | The official strict artifact has no readable SPDX layer. |
 | `IMAGE_SBOM_INVALID` | The SPDX 2.3 document or its image/Nix-closure binding is malformed, incomplete or noncanonical. |
+| `IMAGE_PROVENANCE_REQUIRED` | The immutable cache entry has no complete recorded Sigstore provenance bundle. |
+| `IMAGE_PROVENANCE_INVALID` | The bounded offline bundle, signature, trust chain, Rekor proof, SCT or observer timestamp is invalid. |
+| `IMAGE_PROVENANCE_IDENTITY_MISMATCH` | The authenticated repository, workflow, immutable release ref, commit or compressed-image identity is not official. |
+| `IMAGE_PROVENANCE_PREDICATE_INVALID` | The signed closed SLSA/GitHub Actions payload violates the exact official producer profile. |
 | `IMAGE_PULL_CANCELLED` | The caller cancelled before atomic publication; partial data was removed. |
 | `IMAGE_PULL_TIMEOUT` | The bounded pull deadline expired; partial data was removed. |
 

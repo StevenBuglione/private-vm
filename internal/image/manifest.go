@@ -85,30 +85,39 @@ type CompatibilityPolicy struct {
 }
 
 type VerificationLimits struct {
-	MaxManifestBytes int64
-	MaxSBOMBytes     int64
-	MaxPackages      int
-	MaxFiles         int
-	MaxRelationships int
-	MaxJSONDepth     int
-	Timeout          time.Duration
+	MaxManifestBytes           int64
+	MaxSBOMBytes               int64
+	MaxProvenanceBytes         int64
+	MaxProvenancePayloadBytes  int64
+	MaxTransparencyProofHashes int
+	MaxPackages                int
+	MaxFiles                   int
+	MaxRelationships           int
+	MaxJSONDepth               int
+	Timeout                    time.Duration
 }
 
 func DefaultVerificationLimits() VerificationLimits {
 	return VerificationLimits{
-		MaxManifestBytes: 64 << 10,
-		MaxSBOMBytes:     16 << 20,
-		MaxPackages:      50_000,
-		MaxFiles:         4_096,
-		MaxRelationships: 60_000,
-		MaxJSONDepth:     32,
-		Timeout:          30 * time.Second,
+		MaxManifestBytes:           64 << 10,
+		MaxSBOMBytes:               16 << 20,
+		MaxProvenanceBytes:         4 << 20,
+		MaxProvenancePayloadBytes:  256 << 10,
+		MaxTransparencyProofHashes: 64,
+		MaxPackages:                50_000,
+		MaxFiles:                   4_096,
+		MaxRelationships:           60_000,
+		MaxJSONDepth:               32,
+		Timeout:                    30 * time.Second,
 	}
 }
 
 func (limits VerificationLimits) validate() error {
 	if limits.MaxManifestBytes < 1 || limits.MaxManifestBytes > 1<<20 ||
 		limits.MaxSBOMBytes < 1 || limits.MaxSBOMBytes > 64<<20 ||
+		limits.MaxProvenanceBytes < 1 || limits.MaxProvenanceBytes > 16<<20 ||
+		limits.MaxProvenancePayloadBytes < 1 || limits.MaxProvenancePayloadBytes > 1<<20 ||
+		limits.MaxTransparencyProofHashes < 1 || limits.MaxTransparencyProofHashes > 128 ||
 		limits.MaxPackages < 2 || limits.MaxPackages > 100_000 ||
 		limits.MaxFiles < 1 || limits.MaxFiles > 100_000 ||
 		limits.MaxRelationships < 3 || limits.MaxRelationships > 200_000 ||

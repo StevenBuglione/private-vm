@@ -107,7 +107,7 @@ func validSPDXDocument(manifest Manifest) spdxDocument {
 func TestOfficialVerifierAcceptsExactManifestSBOMAndProvenance(t *testing.T) {
 	fixture := newVerificationFixture(t)
 	called := false
-	verifier, err := NewOfficialVerifier(fixture.policy, ProvenanceVerificationFunc(func(_ context.Context, entry Entry, manifest Manifest) error {
+	verifier, err := newOfficialVerifier(fixture.policy, provenanceVerificationFunc(func(_ context.Context, entry Entry, manifest Manifest) error {
 		called = true
 		if entry.ManifestDigest != fixture.entry.ManifestDigest || manifest.SourceCommit != fixture.manifest.SourceCommit {
 			t.Fatal("provenance seam received the wrong verified identity")
@@ -163,7 +163,7 @@ func TestOfficialVerifierComposesBehindOCIPuller(t *testing.T) {
 				HostQEMUVersion: "10.2.4", NixOSVersion: frozenNixOSVersion,
 				Limits: DefaultVerificationLimits(),
 			}
-			verifier, err := NewOfficialVerifier(policy, ProvenanceVerificationFunc(acceptingProvenance))
+			verifier, err := newOfficialVerifier(policy, provenanceVerificationFunc(acceptingProvenance))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -217,13 +217,24 @@ func TestManifestGoAndJSONSchemaFieldsRemainIdentical(t *testing.T) {
 	}
 }
 
-func TestOfficialVerifierRequiresIMG003(t *testing.T) {
+func TestPackagePrivateVerifierSeamRequiresIMG003(t *testing.T) {
 	fixture := newVerificationFixture(t)
-	_, err := NewOfficialVerifier(fixture.policy, nil)
+	_, err := newOfficialVerifier(fixture.policy, nil)
 	assertImageErrorCode(t, err, CodeVerificationMissing)
-	var typedNil ProvenanceVerificationFunc
-	_, err = NewOfficialVerifier(fixture.policy, typedNil)
+	var typedNil provenanceVerificationFunc
+	_, err = newOfficialVerifier(fixture.policy, typedNil)
 	assertImageErrorCode(t, err, CodeVerificationMissing)
+}
+
+func TestExportedOfficialVerifierInstallsEmbeddedPolicy(t *testing.T) {
+	fixture := newVerificationFixture(t)
+	verifier, err := NewOfficialVerifier(fixture.policy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if verifier == nil {
+		t.Fatal("official verifier is nil")
+	}
 }
 
 func TestManifestCompatibilityAndCacheBindingsFailClosed(t *testing.T) {
@@ -518,7 +529,7 @@ func TestArchitectureMappingAndPolicySnapshot(t *testing.T) {
 		}
 	}
 	fixture := newVerificationFixture(t)
-	verifier, err := NewOfficialVerifier(fixture.policy, ProvenanceVerificationFunc(acceptingProvenance))
+	verifier, err := newOfficialVerifier(fixture.policy, provenanceVerificationFunc(acceptingProvenance))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -544,9 +555,9 @@ func TestProvenanceFailureIsRedactedAndStable(t *testing.T) {
 	}
 }
 
-func (fixture *verificationFixture) verifier(t *testing.T, provenance ProvenanceVerificationFunc) Verifier {
+func (fixture *verificationFixture) verifier(t *testing.T, provenance provenanceVerificationFunc) Verifier {
 	t.Helper()
-	verifier, err := NewOfficialVerifier(fixture.policy, provenance)
+	verifier, err := newOfficialVerifier(fixture.policy, provenance)
 	if err != nil {
 		t.Fatal(err)
 	}

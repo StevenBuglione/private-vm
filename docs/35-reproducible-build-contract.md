@@ -18,7 +18,10 @@ may introduce nondeterminism.
   and provenance-related metadata.
 - OCI artifacts are addressed by digest.
 - SBOMs enumerate included packages.
-- provenance attestations bind artifacts to the release workflow.
+- provenance attestations bind the compressed artifact digest to the exact
+  release workflow, immutable canonical SemVer/RC tag, source commit, GitHub
+  repository/owner numeric IDs, and run invocation. The client verifies the
+  saved Sigstore bundle offline against its reviewed embedded trust snapshot.
 - release commands include `-trimpath` and deterministic version metadata.
 - build inputs never use mutable `latest` references.
 

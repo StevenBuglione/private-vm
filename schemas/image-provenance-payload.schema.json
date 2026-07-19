@@ -1,0 +1,125 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://private-vm.dev/schema/image-provenance-payload-v1.json",
+  "title": "private-vm signed GitHub Actions SLSA provenance payload",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "_type": { "const": "https://in-toto.io/Statement/v1" },
+    "subject": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": { "const": "image.qcow2.zst" },
+          "digest": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": { "sha256": { "$ref": "#/$defs/sha256" } },
+            "required": ["sha256"]
+          }
+        },
+        "required": ["name", "digest"]
+      }
+    },
+    "predicateType": { "const": "https://slsa.dev/provenance/v1" },
+    "predicate": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "buildDefinition": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "buildType": { "const": "https://slsa-framework.github.io/github-actions-buildtypes/workflow/v1" },
+            "externalParameters": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "workflow": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "ref": { "$ref": "#/$defs/releaseRef" },
+                    "repository": { "const": "https://github.com/StevenBuglione/private-vm" },
+                    "path": { "const": "/.github/workflows/release.yml" }
+                  },
+                  "required": ["ref", "repository", "path"]
+                }
+              },
+              "required": ["workflow"]
+            },
+            "internalParameters": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "github": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "event_name": { "const": "push" },
+                    "repository_id": { "const": "1305109560" },
+                    "repository_owner_id": { "const": "34593055" }
+                  },
+                  "required": ["event_name", "repository_id", "repository_owner_id"]
+                }
+              },
+              "required": ["github"]
+            },
+            "resolvedDependencies": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 1,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "uri": { "type": "string", "pattern": "^git\\+https://github\\.com/StevenBuglione/private-vm@refs/tags/v(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(-rc\\.(0|[1-9][0-9]*))?$" },
+                  "digest": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": { "gitCommit": { "$ref": "#/$defs/commit" } },
+                    "required": ["gitCommit"]
+                  }
+                },
+                "required": ["uri", "digest"]
+              }
+            }
+          },
+          "required": ["buildType", "externalParameters", "internalParameters", "resolvedDependencies"]
+        },
+        "runDetails": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "builder": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": { "id": { "const": "https://github.com/actions/runner/github-hosted" } },
+              "required": ["id"]
+            },
+            "metadata": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "invocationId": { "type": "string", "pattern": "^https://github\\.com/StevenBuglione/private-vm/actions/runs/[1-9][0-9]{0,19}/attempts/[1-9][0-9]{0,19}$" }
+              },
+              "required": ["invocationId"]
+            }
+          },
+          "required": ["builder", "metadata"]
+        }
+      },
+      "required": ["buildDefinition", "runDetails"]
+    }
+  },
+  "required": ["_type", "subject", "predicateType", "predicate"],
+  "$defs": {
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "commit": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "releaseRef": { "type": "string", "pattern": "^refs/tags/v(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(-rc\\.(0|[1-9][0-9]*))?$" }
+  }
+}
