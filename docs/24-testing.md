@@ -18,6 +18,9 @@
 - claim collision, cancellation rollback, absence audit, release retry, stale
   preparation challenges, two exact confirmation steps, final identity
   revalidation, Polkit-before-commit ordering and incomplete prepare evidence
+- exporter-only daemon claim admission, mismatched-enrollment rejection,
+  serialized workflow ownership, partial-acquisition cleanup and idempotent
+  explicit-release/session-cleanup absence audit
 - one-way chunk sequencing and bounds, authenticated safe-policy eligibility,
   scanner/relay/exporter/reread hash equality, source-close failure, timeout,
   fsync/rename evidence, networkless role boundaries and retryable reverse-order

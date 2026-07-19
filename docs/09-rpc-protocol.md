@@ -274,6 +274,16 @@ receipt, or verification failure leaves the workstation dirty and invokes an
 idempotent abort under an independent bounded context. `usb` is the only v1
 destination; `encrypted-bundle` is explicitly unimplemented.
 
+`ClaimUSB` is accepted only for a newly created exporter session and an exact
+opaque enrollment ID loaded from the reviewed enrollment store. The daemon
+advances `PLANNED → USB_IDENTIFIED`, acquires the physical claim inside that
+session's serialized actor, registers idempotent release plus absence audit,
+and only then publishes `USB_CLAIMED`. Failed and partially failed acquisition
+is admitted to the same cleanup owner before an error is returned. `ReleaseUSB`
+is owner- and session-bound and proves the exact claim absent; it never accepts
+a kernel device path. Neither method requests destructive Polkit authorization.
+That authorization belongs immediately before exporter-side preparation.
+
 The host torrent surface is session-scoped and downloader-only. `AddTorrent`
 starts with one contextual begin frame selecting magnet or metainfo, followed
 only by non-empty chunks of at most 16 KiB. The daemon consumes the stream

@@ -13,6 +13,7 @@ import (
 	"github.com/StevenBuglione/private-vm/internal/preflight"
 	"github.com/StevenBuglione/private-vm/internal/secret"
 	"github.com/StevenBuglione/private-vm/internal/session"
+	"github.com/StevenBuglione/private-vm/internal/usb"
 	"github.com/StevenBuglione/private-vm/internal/vpn"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -35,6 +36,8 @@ type Service struct {
 	Polkit                Polkit
 	Profiles              *vpn.MemoryStore
 	VPNResolver           *vpn.EndpointResolver
+	USBEnrollments        USBEnrollmentStore
+	USBClaims             USBClaimCoordinator
 	Roles                 RoleOrchestrator
 	Torrents              TorrentOrchestrator
 	Scanners              ScannerOrchestrator
@@ -42,6 +45,21 @@ type Service struct {
 	roleOperations        *roleOperationSet
 	afterCreate           func()
 	cleanupCanceledCreate func(context.Context, string, uint32) error
+}
+
+// USBEnrollmentStore and USBClaimCoordinator form the complete semantic USB
+// boundary exposed to the privileged service. Neither interface permits an
+// arbitrary device path, mount request, USBGuard rule or command argument.
+type USBEnrollmentStore interface {
+	Load() (usb.Enrollment, error)
+}
+
+type USBClaimCoordinator interface {
+	Claim(context.Context, string, uint32, usb.Enrollment) (usb.Claim, error)
+	Release(context.Context, string, string, uint32) error
+	CleanupSession(context.Context, string, uint32) error
+	AuditAbsent(context.Context, string, string, uint32) error
+	AuditSessionAbsent(context.Context, string, uint32) error
 }
 
 func (s *Service) GetVersion(context.Context, *privatevmv1.Empty) (*privatevmv1.VersionResponse, error) {
@@ -497,14 +515,121 @@ func (s *Service) ClaimUSB(ctx context.Context, request *privatevmv1.ClaimUSBReq
 	if err := validateRequestContext(request.GetContext(), true); err != nil {
 		return nil, err
 	}
-	return nil, unimplemented("USB claim")
+	if s.USBEnrollments == nil || s.USBClaims == nil {
+		return nil, rpcError(codes.Unavailable, "USB_INTEGRATION_UNAVAILABLE", "The exact USB claim integration is unavailable.", "Install and configure the USBGuard-backed exporter integration before retrying.", false)
+	}
+	identity, err := identityFromContext(ctx)
+	if err != nil {
+		return nil, sessionError(err)
+	}
+	id := request.GetContext().GetSessionId()
+	lock := s.roleOperation(id)
+	lock.Lock()
+	defer lock.Unlock()
+
+	snapshot, err := s.Sessions.Get(id, identity.UID)
+	if err != nil {
+		return nil, sessionError(err)
+	}
+	if snapshot.Role != session.RoleExporter || snapshot.Phase != session.PhaseCreated {
+		return nil, rpcError(codes.FailedPrecondition, "USB_EXPORTER_SESSION_REQUIRED", "USB claims are permitted only for a newly created exporter session.", "Create a dedicated exporter session and claim the enrolled device before starting its guest.", false)
+	}
+	enrollment, err := s.USBEnrollments.Load()
+	if err != nil {
+		return nil, usbRPCError(err)
+	}
+	if request.GetEnrollmentId() == "" || request.GetEnrollmentId() != enrollment.EnrollmentID {
+		return nil, rpcError(codes.FailedPrecondition, "USB_IDENTITY_MISMATCH", "The requested USB enrollment does not match the reviewed record.", "Inspect the current enrollment and retry with its opaque enrollment ID.", false)
+	}
+	if snapshot.WorkflowState == "" {
+		if _, err = s.Sessions.TransitionWorkflow(ctx, id, identity.UID, "PLANNED"); err != nil {
+			return nil, sessionError(err)
+		}
+		snapshot.WorkflowState = "PLANNED"
+	}
+	if snapshot.WorkflowState == "PLANNED" {
+		if _, err = s.Sessions.TransitionWorkflow(ctx, id, identity.UID, "USB_IDENTIFIED"); err != nil {
+			return nil, sessionError(err)
+		}
+	} else if snapshot.WorkflowState != "USB_IDENTIFIED" {
+		return nil, sessionError(session.ErrInvalidWorkflow)
+	}
+
+	var claim usb.Claim
+	var allocationErr error
+	allocate := func(operation context.Context) (session.CleanupFunc, session.AuditFunc, error) {
+		allocated, claimErr := s.USBClaims.Claim(operation, id, identity.UID, enrollment)
+		if claimErr != nil {
+			allocationErr = claimErr
+			return func(cleanup context.Context) error {
+					return s.USBClaims.CleanupSession(cleanup, id, identity.UID)
+				}, func(audit context.Context) error {
+					return s.USBClaims.AuditSessionAbsent(audit, id, identity.UID)
+				}, claimErr
+		}
+		claim = allocated
+		return func(cleanup context.Context) error {
+				return s.USBClaims.Release(cleanup, claim.ID, id, identity.UID)
+			}, func(audit context.Context) error {
+				return s.USBClaims.AuditAbsent(audit, claim.ID, id, identity.UID)
+			}, nil
+	}
+	if err := s.Sessions.AcquireResource(ctx, id, identity.UID, "usb-claim", allocate); err != nil {
+		cleanupCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		_, cleanupErr := s.Sessions.Cleanup(cleanupCtx, id, identity.UID)
+		cancel()
+		if cleanupErr != nil {
+			return nil, sessionError(session.ErrCleanupIncomplete)
+		}
+		if allocationErr != nil {
+			return nil, usbRPCError(allocationErr)
+		}
+		return nil, usbRPCError(err)
+	}
+	if _, err := s.Sessions.TransitionWorkflow(ctx, id, identity.UID, "USB_CLAIMED"); err != nil {
+		cleanupCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		_, cleanupErr := s.Sessions.Cleanup(cleanupCtx, id, identity.UID)
+		cancel()
+		if cleanupErr != nil {
+			return nil, sessionError(session.ErrCleanupIncomplete)
+		}
+		return nil, sessionError(err)
+	}
+	return &privatevmv1.USBClaim{ClaimId: claim.ID, EnrollmentId: claim.EnrollmentID}, nil
 }
 
-func (s *Service) ReleaseUSB(_ context.Context, request *privatevmv1.ReleaseUSBRequest) (*privatevmv1.Empty, error) {
+func (s *Service) ReleaseUSB(ctx context.Context, request *privatevmv1.ReleaseUSBRequest) (*privatevmv1.Empty, error) {
 	if err := validateRequestContext(request.GetContext(), true); err != nil {
 		return nil, err
 	}
-	return nil, unimplemented("USB release")
+	if s.USBClaims == nil {
+		return nil, rpcError(codes.Unavailable, "USB_INTEGRATION_UNAVAILABLE", "The exact USB claim integration is unavailable.", "Install and configure the USBGuard-backed exporter integration before retrying.", false)
+	}
+	identity, err := identityFromContext(ctx)
+	if err != nil {
+		return nil, sessionError(err)
+	}
+	id := request.GetContext().GetSessionId()
+	lock := s.roleOperation(id)
+	lock.Lock()
+	defer lock.Unlock()
+	snapshot, err := s.Sessions.Get(id, identity.UID)
+	if err != nil {
+		return nil, sessionError(err)
+	}
+	if snapshot.Role != session.RoleExporter {
+		return nil, rpcError(codes.FailedPrecondition, "USB_EXPORTER_SESSION_REQUIRED", "USB claims are permitted only for an exporter session.", "Use the exporter session that owns this claim.", false)
+	}
+	if request.GetClaimId() == "" {
+		return nil, rpcError(codes.InvalidArgument, "USB_CLAIM_ID_REQUIRED", "An opaque USB claim ID is required.", "Use the claim ID returned by ClaimUSB for this exporter session.", false)
+	}
+	if err := s.USBClaims.Release(ctx, request.GetClaimId(), id, identity.UID); err != nil {
+		return nil, usbRPCError(err)
+	}
+	if err := s.USBClaims.AuditAbsent(ctx, request.GetClaimId(), id, identity.UID); err != nil {
+		return nil, usbRPCError(err)
+	}
+	return &privatevmv1.Empty{}, nil
 }
 
 func validateRequestContext(value *privatevmv1.RequestContext, requireSession bool) error {
