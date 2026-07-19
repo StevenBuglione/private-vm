@@ -111,15 +111,15 @@ type roleCleanup interface {
 }
 
 type guestCompositionError struct {
-	component string
+	message string
 }
 
 func (failure *guestCompositionError) Error() string {
-	return "the fixed " + failure.component + " component could not be composed"
+	return failure.message
 }
 
-func compositionError(component string) error {
-	return &guestCompositionError{component: component}
+func compositionError(message string) error {
+	return &guestCompositionError{message: message}
 }
 
 func guestCompositionMessage(err error) string {
@@ -222,11 +222,11 @@ func composeDownloaderService() (*guest.DownloaderVPNServer, *downloaderCleanup,
 	defer cancelPrepare()
 	uid, gid, err := privateUserIdentity()
 	if err != nil {
-		return nil, nil, compositionError("downloader user identity")
+		return nil, nil, compositionError("the downloader private user identity is unavailable")
 	}
 	quarantine, err := torrent.PrepareLinuxQuarantine(prepareCtx, "/run/current-system/sw/bin/mkfs.ext4", uid, gid)
 	if err != nil {
-		return nil, nil, compositionError("downloader quarantine")
+		return nil, nil, compositionError(downloaderQuarantineFailure(err))
 	}
 	fail := func(err error) (*guest.DownloaderVPNServer, *downloaderCleanup, error) {
 		cleanupCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -236,16 +236,16 @@ func composeDownloaderService() (*guest.DownloaderVPNServer, *downloaderCleanup,
 	}
 	available, err := quarantine.CapacityBytes()
 	if err != nil || available <= 6<<30 {
-		return fail(compositionError("downloader quarantine capacity"))
+		return fail(compositionError("the downloader quarantine capacity check failed"))
 	}
 	client, err := torrent.NewLocalQBittorrentService("/run/current-system/sw/bin/systemctl", uid, gid)
 	if err != nil {
-		return fail(compositionError("downloader qBittorrent owner"))
+		return fail(compositionError("the downloader qBittorrent configuration failed"))
 	}
 	backend, err := torrent.NewQBitBackend(client, torrent.NewFilesystemVerifier())
 	if err != nil {
 		_ = client.Close(context.Background())
-		return fail(compositionError("downloader qBittorrent adapter"))
+		return fail(compositionError("the downloader qBittorrent backend failed"))
 	}
 	maximumSelected := (available - (5 << 30)) / 2
 	controller, err := torrent.NewController(backend, quarantine, torrent.Config{
@@ -258,17 +258,47 @@ func composeDownloaderService() (*guest.DownloaderVPNServer, *downloaderCleanup,
 	})
 	if err != nil {
 		_ = client.Close(context.Background())
-		return fail(compositionError("downloader workflow controller"))
+		return fail(compositionError("the downloader controller failed"))
 	}
 	factory := productionVPNFactory(session.RoleDownloader, client)
 	server, err := guest.NewDownloaderServer(factory, controller)
 	if err != nil {
 		_ = controller.Close(context.Background())
 		_ = client.Close(context.Background())
-		return fail(compositionError("downloader guest service"))
+		return fail(compositionError("the downloader authenticated service failed"))
 	}
 	cleanup := &downloaderCleanup{server: server, controller: controller, client: client, quarantine: quarantine}
 	return server, cleanup, nil
+}
+
+func downloaderQuarantineFailure(err error) string {
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return "the downloader quarantine initialization timed out"
+	}
+	switch err.Error() {
+	case "fixed quarantine device unavailable":
+		return "the downloader quarantine device is unavailable"
+	case "fixed quarantine device is not block storage":
+		return "the downloader quarantine device type is invalid"
+	case "fixed quarantine device identity mismatch":
+		return "the downloader quarantine device identity is invalid"
+	case "fixed quarantine device is not writable":
+		return "the downloader quarantine device is read-only"
+	case "fixed quarantine capacity unavailable", "fixed quarantine capacity invalid":
+		return "the downloader quarantine device capacity is invalid"
+	case "quarantine mount evidence unavailable":
+		return "the downloader quarantine mount evidence is unavailable"
+	case "quarantine filesystem preparation failed":
+		return "the downloader quarantine filesystem preparation failed"
+	case "quarantine mount failed":
+		return "the downloader quarantine mount failed"
+	case "quarantine preparation cleanup incomplete":
+		return "the downloader quarantine rollback audit failed"
+	case "quarantine directory preparation failed":
+		return "the downloader quarantine directory preparation failed"
+	default:
+		return "the downloader quarantine initialization failed"
+	}
 }
 
 type prohibitedTorrentBindingProbe struct{}

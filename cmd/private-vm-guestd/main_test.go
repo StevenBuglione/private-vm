@@ -11,11 +11,15 @@ import (
 )
 
 func TestGuestCompositionMessageExposesOnlyFixedStage(t *testing.T) {
-	if got := guestCompositionMessage(errors.Join(errors.New("private detail"), compositionError("downloader quarantine"))); got != "the fixed downloader quarantine component could not be composed" {
+	want := "the downloader quarantine filesystem preparation failed"
+	if got := guestCompositionMessage(errors.Join(errors.New("private detail"), compositionError(want))); got != want {
 		t.Fatalf("composition message = %q", got)
 	}
 	if got := guestCompositionMessage(errors.New("private detail")); got != "the role-specific guest service could not be composed" {
 		t.Fatalf("fallback composition message = %q", got)
+	}
+	if got := downloaderQuarantineFailure(errors.New("PrivateKey=must-not-leak")); got != "the downloader quarantine initialization failed" {
+		t.Fatalf("untrusted quarantine error leaked: %q", got)
 	}
 }
 
