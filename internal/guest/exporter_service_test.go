@@ -96,7 +96,7 @@ func TestExporterAuthenticatedPrepareWriteVerifyFinalize(t *testing.T) {
 	if err != nil || !statusValue.GetIdentityVerified() || !statusValue.GetNoNetwork() {
 		t.Fatalf("inspect=%v err=%v", statusValue, err)
 	}
-	prepare, err := client.PrepareUSB(t.Context())
+	prepare, err := client.PrepareExactUSB(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -114,7 +114,7 @@ func TestExporterAuthenticatedPrepareWriteVerifyFinalize(t *testing.T) {
 	}
 	content := []byte("approved reconstructed output")
 	digest := sha256.Sum256(content)
-	write, err := client.WriteFile(t.Context())
+	write, err := client.WriteVerifiedFile(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -132,7 +132,7 @@ func TestExporterAuthenticatedPrepareWriteVerifyFinalize(t *testing.T) {
 	if err != nil || !receipt.GetFileSynced() || !receipt.GetFilesystemSynced() || !receipt.GetAtomicRename() {
 		t.Fatalf("write=%v err=%v", receipt, err)
 	}
-	verified, err := client.VerifyFile(t.Context(), &privatevmv1.VerifyExportRequest{Context: ctx, TransferId: begin.TransferId})
+	verified, err := client.VerifyWrittenFile(t.Context(), &privatevmv1.VerifyExportRequest{Context: ctx, TransferId: begin.TransferId})
 	if err != nil || !bytes.Equal(verified.GetReceiverDigest().GetValue(), verified.GetRereadDigest().GetValue()) {
 		t.Fatalf("verify=%v err=%v", verified, err)
 	}

@@ -204,7 +204,7 @@ func (service *ExporterService) InspectUSB(ctx context.Context, request *private
 	return &privatevmv1.USBStatus{NoNetwork: true, IdentityVerified: true, Unmounted: true}, nil
 }
 
-func (service *ExporterService) PrepareUSB(stream grpc.ClientStreamingServer[privatevmv1.PrepareUSBFrame, privatevmv1.USBStatus]) error {
+func (service *ExporterService) PrepareExactUSB(stream grpc.ClientStreamingServer[privatevmv1.PrepareUSBFrame, privatevmv1.USBStatus]) error {
 	service.mu.Lock()
 	defer service.mu.Unlock()
 	if service.closed || service.state != exporterStateInspected {
@@ -259,7 +259,7 @@ func (service *ExporterService) PrepareUSB(stream grpc.ClientStreamingServer[pri
 	return stream.SendAndClose(&privatevmv1.USBStatus{NoNetwork: true, Mounted: true, IdentityVerified: true, Luks2: true, Ext4: true})
 }
 
-func (service *ExporterService) WriteFile(stream grpc.ClientStreamingServer[privatevmv1.TransferFrame, privatevmv1.USBTransferReceipt]) error {
+func (service *ExporterService) WriteVerifiedFile(stream grpc.ClientStreamingServer[privatevmv1.TransferFrame, privatevmv1.USBTransferReceipt]) error {
 	service.mu.Lock()
 	defer service.mu.Unlock()
 	if service.closed || service.state != exporterStatePrepared {
@@ -333,7 +333,7 @@ func (service *ExporterService) WriteFile(stream grpc.ClientStreamingServer[priv
 	return stream.SendAndClose(cloneUSBReceipt(service.receipt))
 }
 
-func (service *ExporterService) VerifyFile(ctx context.Context, request *privatevmv1.VerifyExportRequest) (*privatevmv1.USBTransferReceipt, error) {
+func (service *ExporterService) VerifyWrittenFile(ctx context.Context, request *privatevmv1.VerifyExportRequest) (*privatevmv1.USBTransferReceipt, error) {
 	service.mu.Lock()
 	defer service.mu.Unlock()
 	if service.closed || service.state != exporterStateWritten || service.receipt == nil || request.GetTransferId() != service.receipt.GetTransferId() ||

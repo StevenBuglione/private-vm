@@ -390,12 +390,17 @@ Exporter:
 - `WriteFile`
 - `VerifyFile`
 - `FinalizeUSB`
+- `PrepareExactUSB`
+- `WriteVerifiedFile`
+- `VerifyWrittenFile`
 
-Exporter preparation is an authenticated client stream with the same 1024-byte
+The original unary `PrepareUSB` and generic-receipt `WriteFile`/`VerifyFile`
+methods are retained for protocol compatibility and fail closed in the v1
+exporter implementation. `PrepareExactUSB` is an authenticated client stream with the same 1024-byte
 and four-frame secret bounds as the host stream. The first frame carries a
 guest context and exact VID/PID/serial/capacity expectation, never a device
-path. `WriteFile` returns typed receive-hash, file/filesystem fsync and
-atomic-rename evidence. `VerifyFile` adds the reread digest; the host keeps all
+path. `WriteVerifiedFile` returns typed receive-hash, file/filesystem fsync and
+atomic-rename evidence. `VerifyWrittenFile` adds the reread digest; the host keeps all
 digests internal and exposes only equality booleans. `FinalizeUSB` succeeds
 only after guest-local unmount and LUKS close.
 
