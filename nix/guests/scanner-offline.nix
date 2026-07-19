@@ -8,6 +8,14 @@
   networking.dhcpcd.enable = lib.mkForce false;
   services.resolved.enable = lib.mkForce false;
   services.clamav.updater.enable = lib.mkForce false;
+  systemd.services.private-vm-scanner-definitions-update.enable = lib.mkForce false;
+  systemd.services.private-vm-guestd.serviceConfig.RestrictAddressFamilies = lib.mkForce [
+    "AF_UNIX"
+    "AF_VSOCK"
+  ];
+  systemd.services.private-vm-guestd.serviceConfig.CapabilityBoundingSet = lib.mkForce [
+    "CAP_IPC_LOCK"
+  ];
 
   environment.etc."private-vm/scanner-phase.json" = {
     mode = "0444";

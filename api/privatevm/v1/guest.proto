@@ -39,6 +39,8 @@ service DownloaderGuestService {
 }
 
 service ScannerGuestService {
+  rpc ConfigureWireGuard(ConfigureWireGuardRequest) returns (VPNStatus);
+  rpc VerifyVPN(VerifyVPNRequest) returns (VPNStatus);
   rpc UpdateDefinitions(ScannerRequest) returns (DefinitionsStatus);
   rpc GetDefinitionsStatus(ScannerRequest) returns (DefinitionsStatus);
   rpc VerifyOfflineMode(ScannerRequest) returns (OfflineStatus);

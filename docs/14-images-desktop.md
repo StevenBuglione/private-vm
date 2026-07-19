@@ -162,16 +162,18 @@ Applications are intentionally limited:
 
 The scanner is one immutable image with two boot configurations over the same
 per-session root overlay. The default `definitions-update` configuration enables
-NetworkManager and `freshclam` but declares quarantine attachment forbidden. The
-`scan-offline` specialization disables NetworkManager, DHCP, resolved and the
-FreshClam service/timer. The daemon must also render the scan launch with no NIC;
+NetworkManager and installs FreshClam, but has no automatic updater service or
+timer and declares quarantine attachment forbidden. The fixed non-wanted
+definitions oneshot is reserved for guestd after authenticated Proton
+verification; the production adapter composition is tracked independently.
+The `scan-offline` specialization disables NetworkManager, DHCP, resolved and
+that oneshot. The daemon must also render the scan launch with no NIC;
 disabling guest services is not accepted as evidence that a network device is
 absent.
 
-The image task does not claim that the update phase has the production Proton
-kill switch. SCAN-001 and the NET tasks must install that policy before any
-external definition update is allowed; the Nix image gate uses only a local,
-non-secret FreshClam fixture and is not VPN-readiness evidence.
+The Nix image gate uses only a local, non-secret FreshClam fixture and is not
+VPN-readiness evidence. Production permits `UpdateDefinitions` only after the
+shared host and guest Proton gates pass; see ADR 0017.
 
 `/etc/private-vm/scanner-toolchain.json` records the exact Nix package name and
 version for ClamAV, file identification, bounded archive primitives, parser

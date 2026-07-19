@@ -1015,6 +1015,8 @@ var DownloaderGuestService_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
+	ScannerGuestService_ConfigureWireGuard_FullMethodName   = "/privatevm.v1.ScannerGuestService/ConfigureWireGuard"
+	ScannerGuestService_VerifyVPN_FullMethodName            = "/privatevm.v1.ScannerGuestService/VerifyVPN"
 	ScannerGuestService_UpdateDefinitions_FullMethodName    = "/privatevm.v1.ScannerGuestService/UpdateDefinitions"
 	ScannerGuestService_GetDefinitionsStatus_FullMethodName = "/privatevm.v1.ScannerGuestService/GetDefinitionsStatus"
 	ScannerGuestService_VerifyOfflineMode_FullMethodName    = "/privatevm.v1.ScannerGuestService/VerifyOfflineMode"
@@ -1029,6 +1031,8 @@ const (
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type ScannerGuestServiceClient interface {
+	ConfigureWireGuard(ctx context.Context, in *ConfigureWireGuardRequest, opts ...grpc.CallOption) (*VPNStatus, error)
+	VerifyVPN(ctx context.Context, in *VerifyVPNRequest, opts ...grpc.CallOption) (*VPNStatus, error)
 	UpdateDefinitions(ctx context.Context, in *ScannerRequest, opts ...grpc.CallOption) (*DefinitionsStatus, error)
 	GetDefinitionsStatus(ctx context.Context, in *ScannerRequest, opts ...grpc.CallOption) (*DefinitionsStatus, error)
 	VerifyOfflineMode(ctx context.Context, in *ScannerRequest, opts ...grpc.CallOption) (*OfflineStatus, error)
@@ -1045,6 +1049,26 @@ type scannerGuestServiceClient struct {
 
 func NewScannerGuestServiceClient(cc grpc.ClientConnInterface) ScannerGuestServiceClient {
 	return &scannerGuestServiceClient{cc}
+}
+
+func (c *scannerGuestServiceClient) ConfigureWireGuard(ctx context.Context, in *ConfigureWireGuardRequest, opts ...grpc.CallOption) (*VPNStatus, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(VPNStatus)
+	err := c.cc.Invoke(ctx, ScannerGuestService_ConfigureWireGuard_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *scannerGuestServiceClient) VerifyVPN(ctx context.Context, in *VerifyVPNRequest, opts ...grpc.CallOption) (*VPNStatus, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(VPNStatus)
+	err := c.cc.Invoke(ctx, ScannerGuestService_VerifyVPN_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func (c *scannerGuestServiceClient) UpdateDefinitions(ctx context.Context, in *ScannerRequest, opts ...grpc.CallOption) (*DefinitionsStatus, error) {
@@ -1167,6 +1191,8 @@ type ScannerGuestService_ExportApprovedFileClient = grpc.ServerStreamingClient[T
 // All implementations must embed UnimplementedScannerGuestServiceServer
 // for forward compatibility.
 type ScannerGuestServiceServer interface {
+	ConfigureWireGuard(context.Context, *ConfigureWireGuardRequest) (*VPNStatus, error)
+	VerifyVPN(context.Context, *VerifyVPNRequest) (*VPNStatus, error)
 	UpdateDefinitions(context.Context, *ScannerRequest) (*DefinitionsStatus, error)
 	GetDefinitionsStatus(context.Context, *ScannerRequest) (*DefinitionsStatus, error)
 	VerifyOfflineMode(context.Context, *ScannerRequest) (*OfflineStatus, error)
@@ -1185,6 +1211,12 @@ type ScannerGuestServiceServer interface {
 // pointer dereference when methods are called.
 type UnimplementedScannerGuestServiceServer struct{}
 
+func (UnimplementedScannerGuestServiceServer) ConfigureWireGuard(context.Context, *ConfigureWireGuardRequest) (*VPNStatus, error) {
+	return nil, status.Error(codes.Unimplemented, "method ConfigureWireGuard not implemented")
+}
+func (UnimplementedScannerGuestServiceServer) VerifyVPN(context.Context, *VerifyVPNRequest) (*VPNStatus, error) {
+	return nil, status.Error(codes.Unimplemented, "method VerifyVPN not implemented")
+}
 func (UnimplementedScannerGuestServiceServer) UpdateDefinitions(context.Context, *ScannerRequest) (*DefinitionsStatus, error) {
 	return nil, status.Error(codes.Unimplemented, "method UpdateDefinitions not implemented")
 }
@@ -1228,6 +1260,42 @@ func RegisterScannerGuestServiceServer(s grpc.ServiceRegistrar, srv ScannerGuest
 		t.testEmbeddedByValue()
 	}
 	s.RegisterService(&ScannerGuestService_ServiceDesc, srv)
+}
+
+func _ScannerGuestService_ConfigureWireGuard_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ConfigureWireGuardRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ScannerGuestServiceServer).ConfigureWireGuard(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ScannerGuestService_ConfigureWireGuard_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ScannerGuestServiceServer).ConfigureWireGuard(ctx, req.(*ConfigureWireGuardRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ScannerGuestService_VerifyVPN_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(VerifyVPNRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ScannerGuestServiceServer).VerifyVPN(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ScannerGuestService_VerifyVPN_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ScannerGuestServiceServer).VerifyVPN(ctx, req.(*VerifyVPNRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
 func _ScannerGuestService_UpdateDefinitions_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -1353,6 +1421,14 @@ var ScannerGuestService_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: "privatevm.v1.ScannerGuestService",
 	HandlerType: (*ScannerGuestServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "ConfigureWireGuard",
+			Handler:    _ScannerGuestService_ConfigureWireGuard_Handler,
+		},
+		{
+			MethodName: "VerifyVPN",
+			Handler:    _ScannerGuestService_VerifyVPN_Handler,
+		},
 		{
 			MethodName: "UpdateDefinitions",
 			Handler:    _ScannerGuestService_UpdateDefinitions_Handler,

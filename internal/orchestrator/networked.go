@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	privatevmv1 "github.com/StevenBuglione/private-vm/gen/privatevm/v1"
 	"github.com/StevenBuglione/private-vm/internal/guestvpn"
 	"github.com/StevenBuglione/private-vm/internal/network"
 	"github.com/StevenBuglione/private-vm/internal/qemu"
@@ -215,7 +216,7 @@ func validateStartRequest(request StartNetworkedRequest) error {
 func verifiedStatus(status guestvpn.Status, role session.Role) bool {
 	verified := status.SchemaVersion == 1 && status.State == guestvpn.StateVerified && status.KillSwitchArmed && status.Configured &&
 		status.Handshake && status.DNSThroughTunnel && status.DNSBypassBlocked && status.IPv4ThroughTunnel &&
-		status.IPv4BypassBlocked && status.IPv6BypassBlocked && status.Code == "GUEST_VPN_VERIFIED"
+		status.IPv4BypassBlocked && status.IPv6ThroughTunnel && status.IPv6BypassBlocked && status.Code == "GUEST_VPN_VERIFIED"
 	return verified && (role != session.RoleDownloader || status.TorrentBound)
 }
 
@@ -408,6 +409,24 @@ func (runtime *NetworkedRuntime) Torrent() (TorrentRelay, error) {
 		return nil, ErrNetworkedStart
 	}
 	return relay, nil
+}
+
+func (runtime *NetworkedRuntime) ScannerClient() (privatevmv1.ScannerGuestServiceClient, error) {
+	if runtime == nil || runtime.role != session.RoleScanner {
+		return nil, ErrNetworkedStart
+	}
+	runtime.mu.Lock()
+	defer runtime.mu.Unlock()
+	if runtime.processStopped || runtime.guestClosed || runtime.guest == nil {
+		return nil, ErrNetworkedCleanup
+	}
+	provider, ok := runtime.guest.(interface {
+		ScannerClient() (privatevmv1.ScannerGuestServiceClient, error)
+	})
+	if !ok {
+		return nil, ErrNetworkedStart
+	}
+	return provider.ScannerClient()
 }
 
 func normalizeStartError(ctx context.Context) error {

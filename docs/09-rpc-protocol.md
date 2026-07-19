@@ -311,7 +311,7 @@ selected paths/sizes and hashes, shuts down qBittorrent, syncs and unmounts in
 the guest; the host coordinator must additionally destroy and audit the
 downloader before it can issue a scanner-ready receipt.
 
-The implemented workstation and downloader VPN adapters accept at most the
+The implemented workstation, downloader and scanner-update VPN adapters accept at most the
 frozen 64-KiB profile size, clear and detach the protobuf byte slice on every handler
 return (including rejected role/context), and parses only a host-resolved
 literal endpoint. `ConfigureWireGuard` returns success only for controller
@@ -327,10 +327,13 @@ ports, never display strings. Each online role validates them before creating
 its one VPN controller and rejects a second configuration attempt. These
 request-only values never appear in status, diagnostics, events or durable
 state. The shared internal lifecycle does not change exact role registration:
-the workstation exposes no torrent RPC. See ADRs 0013 and 0014.
+the workstation exposes no torrent RPC and the scanner exposes no downloader
+RPC. See ADRs 0012, 0013, 0014, and 0017.
 
 Scanner:
 
+- `ConfigureWireGuard` (definitions-update boot only)
+- `VerifyVPN` (definitions-update boot only)
 - `UpdateDefinitions`
 - `GetDefinitionsStatus`
 - `VerifyOfflineMode`
@@ -385,7 +388,7 @@ The advertised v1 capability map is exact and sorted:
 | common | `guest-events`, `guest-shutdown`, `guest-status` |
 | workstation | `desktop`, `network-warning`, `vpn-verification`, `wireguard-config`, `workspace-export`, `workspace-import` |
 | downloader | `quarantine-seal`, `torrent-download`, `torrent-metadata`, `vpn-verification`, `wireguard-config` |
-| scanner | `approved-export`, `definitions-update`, `inventory`, `offline-verification`, `reconstruct`, `scan`, `scan-report` |
+| scanner | `approved-export`, `definitions-update`, `inventory`, `offline-verification`, `reconstruct`, `scan`, `scan-report`, `vpn-verification`, `wireguard-config` |
 | exporter | `usb-finalize`, `usb-inspect`, `usb-prepare`, `usb-verify`, `usb-write` |
 
 ## Error model

@@ -69,6 +69,8 @@
               "reconstruct"
               "scan"
               "scan-report"
+              "vpn-verification"
+              "wireguard-config"
             ];
             exporter = [
               "usb-finalize"
@@ -705,9 +707,11 @@
           '';
         in
         assert scannerConfiguration.config.networking.networkmanager.enable;
-        assert scannerConfiguration.config.services.clamav.updater.enable;
-        assert builtins.hasAttr "clamav-freshclam" scannerConfiguration.config.systemd.services;
-        assert builtins.hasAttr "clamav-freshclam" scannerConfiguration.config.systemd.timers;
+        assert !scannerConfiguration.config.services.clamav.updater.enable;
+        assert !(builtins.hasAttr "clamav-freshclam" scannerConfiguration.config.systemd.services);
+        assert !(builtins.hasAttr "clamav-freshclam" scannerConfiguration.config.systemd.timers);
+        assert builtins.hasAttr "private-vm-scanner-definitions-update" scannerConfiguration.config.systemd.services;
+        assert scannerConfiguration.config.systemd.services.private-vm-scanner-definitions-update.wantedBy == [ ];
         assert !offlineConfiguration.networking.networkmanager.enable;
         assert !offlineConfiguration.networking.dhcpcd.enable;
         assert !offlineConfiguration.services.resolved.enable;
@@ -824,8 +828,10 @@
             machine.succeed("freshclam --config-file=${freshclamTestConfig} --datadir=/var/lib/clamav-test --no-dns --stdout")
             machine.succeed("test -s /var/lib/clamav-test/private-vm-test.hdb")
             machine.succeed("grep -Fx '44d88612fea8a8f36de82e1278abb02f:68:Eicar-Test-Signature' /var/lib/clamav-test/private-vm-test.hdb")
-            machine.succeed("systemctl is-enabled clamav-freshclam.timer")
-            machine.succeed("systemctl is-active clamav-freshclam.timer")
+            machine.succeed("! systemctl list-unit-files --no-legend clamav-freshclam.service | grep -F clamav-freshclam.service")
+            machine.succeed("! systemctl list-unit-files --no-legend clamav-freshclam.timer | grep -F clamav-freshclam.timer")
+            machine.succeed("systemctl is-disabled private-vm-scanner-definitions-update.service")
+            machine.succeed("! systemctl is-active private-vm-scanner-definitions-update.service")
             machine.succeed("systemctl is-active NetworkManager.service")
             machine.succeed("test $(find /sys/class/net -mindepth 1 -maxdepth 1 ! -name lo | wc -l) -ge 1")
             machine.succeed("jq -e '.phase == \"definitions-update\" and .network_device_policy == \"proton-only\" and .quarantine_device_policy == \"forbidden\"' /etc/private-vm/scanner-phase.json")
@@ -842,6 +848,8 @@
               "reconstruct",
               "scan",
               "scan-report",
+              "vpn-verification",
+              "wireguard-config",
             ]
             version = json.loads(machine.succeed("private-vm-guestd --version"))
             image = json.loads(machine.succeed("cat /etc/private-vm/image.json"))
@@ -927,6 +935,7 @@
             machine.succeed("! systemctl is-active NetworkManager.service")
             machine.succeed("! systemctl list-unit-files --no-legend clamav-freshclam.service | grep -F clamav-freshclam.service")
             machine.succeed("! systemctl list-unit-files --no-legend clamav-freshclam.timer | grep -F clamav-freshclam.timer")
+            machine.succeed("! systemctl list-unit-files --no-legend private-vm-scanner-definitions-update.service | grep -F private-vm-scanner-definitions-update.service")
             machine.succeed("jq -e '.phase == \"scan-offline\" and .network_device_policy == \"forbidden\" and .quarantine_device_policy == \"required-read-only\" and .quarantine_mount_options == [\"nodev\", \"noexec\", \"nosuid\", \"ro\"] and .definitions_update == \"disabled\"' /etc/private-vm/scanner-phase.json")
             machine.succeed("test -x /run/current-system/sw/bin/startxfce4")
             machine.succeed("test -x /run/current-system/sw/bin/clamscan")
@@ -944,6 +953,8 @@
               "reconstruct",
               "scan",
               "scan-report",
+              "vpn-verification",
+              "wireguard-config",
             ]
             version = json.loads(machine.succeed("private-vm-guestd --version"))
             image = json.loads(machine.succeed("cat /etc/private-vm/image.json"))

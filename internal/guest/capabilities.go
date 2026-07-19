@@ -30,7 +30,7 @@ var commonCapabilities = []string{
 var roleCapabilities = map[session.Role][]string{
 	session.RoleWorkstation: {"desktop", "network-warning", "vpn-verification", "wireguard-config", "workspace-export", "workspace-import"},
 	session.RoleDownloader:  {"quarantine-seal", "torrent-download", "torrent-metadata", "vpn-verification", "wireguard-config"},
-	session.RoleScanner:     {"approved-export", "definitions-update", "inventory", "offline-verification", "reconstruct", "scan", "scan-report"},
+	session.RoleScanner:     {"approved-export", "definitions-update", "inventory", "offline-verification", "reconstruct", "scan", "scan-report", "vpn-verification", "wireguard-config"},
 	session.RoleExporter:    {"usb-finalize", "usb-inspect", "usb-prepare", "usb-verify", "usb-write"},
 }
 

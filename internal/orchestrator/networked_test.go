@@ -272,7 +272,7 @@ func completeNetworkedStatus() guestvpn.Status {
 	return guestvpn.Status{
 		SchemaVersion: 1, State: guestvpn.StateVerified, KillSwitchArmed: true, Configured: true,
 		Handshake: true, DNSThroughTunnel: true, DNSBypassBlocked: true, IPv4ThroughTunnel: true,
-		IPv4BypassBlocked: true, IPv6BypassBlocked: true, Code: "GUEST_VPN_VERIFIED",
+		IPv4BypassBlocked: true, IPv6ThroughTunnel: true, IPv6BypassBlocked: true, Code: "GUEST_VPN_VERIFIED",
 	}
 }
 
@@ -360,6 +360,44 @@ func TestNetworkedRuntimeOrdersVerifiedStartAndIdempotentCleanup(t *testing.T) {
 	case <-launcher.process.done:
 	default:
 		t.Fatal("QEMU was not stopped")
+	}
+}
+
+func TestScannerUpdateNetworkRequiresTypedVPNAndHostEgressProof(t *testing.T) {
+	request, _, _, _, guest := networkedFixture(t)
+	request.Role = session.RoleScanner
+	request.ScannerUpdate = true
+	request.Spec.Role = session.RoleScanner
+	request.Spec.ScannerMode = qemu.ScannerModeUpdate
+	runtime, err := StartNetworked(t.Context(), request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for before, after := range map[string]string{
+		"guest.handshake": "guest.configure",
+		"guest.configure": "guest.verify",
+		"guest.verify":    "egress.verify",
+	} {
+		if request.Network.(*fakeNetworkLease).log.index(before) < 0 ||
+			request.Network.(*fakeNetworkLease).log.index(before) >= request.Network.(*fakeNetworkLease).log.index(after) {
+			t.Fatalf("scanner update did not preserve %s before %s", before, after)
+		}
+	}
+	if err := runtime.Stop(t.Context(), true); err != nil || runtime.Audit(t.Context()) != nil {
+		t.Fatal("scanner update cleanup did not converge")
+	}
+	select {
+	case <-guest.monitorStarted:
+	case <-time.After(time.Second):
+		t.Fatal("scanner VPN loss monitor did not start")
+	}
+
+	missing, _, _, _, _ := networkedFixture(t)
+	missing.Role = session.RoleScanner
+	missing.Spec.Role = session.RoleScanner
+	missing.Spec.ScannerMode = qemu.ScannerModeUpdate
+	if _, err := StartNetworked(t.Context(), missing); !errors.Is(err, ErrNetworkedStart) {
+		t.Fatalf("scanner update without explicit mode gate = %v", err)
 	}
 }
 

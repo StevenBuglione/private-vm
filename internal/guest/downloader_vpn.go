@@ -38,6 +38,14 @@ type WorkstationVPNServer struct {
 	network *DownloaderVPNServer
 }
 
+// ScannerVPNServer decorates only the scanner role service. The two VPN RPCs
+// are used exclusively by the definitions-update boot; the offline boot has no
+// QEMU NIC and therefore cannot successfully configure this controller.
+type ScannerVPNServer struct {
+	privatevmv1.ScannerGuestServiceServer
+	network *DownloaderVPNServer
+}
+
 // NewWorkstationVPNServer adds the role-safe network methods without exposing
 // downloader torrent methods in the workstation image.
 func NewWorkstationVPNServer(workspace privatevmv1.WorkstationGuestServiceServer, factory DownloaderControllerFactory) (*WorkstationVPNServer, error) {
@@ -47,6 +55,16 @@ func NewWorkstationVPNServer(workspace privatevmv1.WorkstationGuestServiceServer
 	return &WorkstationVPNServer{
 		WorkstationGuestServiceServer: workspace,
 		network:                       &DownloaderVPNServer{expectedRole: session.RoleWorkstation, controllerFactory: factory},
+	}, nil
+}
+
+func NewScannerVPNServer(scanner privatevmv1.ScannerGuestServiceServer, factory DownloaderControllerFactory) (*ScannerVPNServer, error) {
+	if scanner == nil || factory == nil {
+		return nil, errors.New("scanner owner and VPN factory are required")
+	}
+	return &ScannerVPNServer{
+		ScannerGuestServiceServer: scanner,
+		network:                   &DownloaderVPNServer{expectedRole: session.RoleScanner, controllerFactory: factory},
 	}, nil
 }
 
@@ -127,8 +145,11 @@ func (server *DownloaderVPNServer) VerifyVPN(ctx context.Context, request *priva
 }
 
 func (server *DownloaderVPNServer) role() session.Role {
-	if server != nil && server.expectedRole == session.RoleWorkstation {
-		return session.RoleWorkstation
+	if server != nil {
+		switch server.expectedRole {
+		case session.RoleWorkstation, session.RoleDownloader, session.RoleScanner:
+			return server.expectedRole
+		}
 	}
 	return session.RoleDownloader
 }
@@ -173,6 +194,47 @@ func (server *WorkstationVPNServer) Close(ctx context.Context) error {
 	return server.StopVPN(ctx)
 }
 
+func (server *ScannerVPNServer) ConfigureWireGuard(ctx context.Context, request *privatevmv1.ConfigureWireGuardRequest) (*privatevmv1.VPNStatus, error) {
+	if server == nil || server.network == nil {
+		return nil, guestRPCError(codes.FailedPrecondition, "GUEST_VPN_COMPOSITION_FAILED", "The guest network adapters are unavailable.", "Destroy the guest and install the verified scanner image.", false)
+	}
+	return server.network.ConfigureWireGuard(ctx, request)
+}
+
+func (server *ScannerVPNServer) VerifyVPN(ctx context.Context, request *privatevmv1.VerifyVPNRequest) (*privatevmv1.VPNStatus, error) {
+	if server == nil || server.network == nil {
+		return nil, guestRPCError(codes.FailedPrecondition, "GUEST_VPN_COMPOSITION_FAILED", "The guest network adapters are unavailable.", "Destroy the guest and install the verified scanner image.", false)
+	}
+	return server.network.VerifyVPN(ctx, request)
+}
+
+func (server *ScannerVPNServer) UpdateDefinitions(ctx context.Context, request *privatevmv1.ScannerRequest) (*privatevmv1.DefinitionsStatus, error) {
+	if server == nil || server.network == nil || server.ScannerGuestServiceServer == nil || request == nil {
+		return nil, guestRPCError(codes.FailedPrecondition, "GUEST_VPN_UNVERIFIED", "Scanner definitions cannot update before the guest VPN is verified.", "Configure and verify Proton through the authenticated host workflow before updating definitions.", false)
+	}
+	verified, err := server.network.VerifyVPN(ctx, &privatevmv1.VerifyVPNRequest{Context: request.GetContext()})
+	if err != nil || verified == nil || !verified.GetConfigured() || !verified.GetHandshake() ||
+		!verified.GetDnsThroughTunnel() || !verified.GetDnsBypassBlocked() || !verified.GetIpv4ThroughTunnel() ||
+		!verified.GetIpv6ThroughTunnel() || !verified.GetIpv4BypassBlocked() || !verified.GetIpv6BypassBlocked() {
+		return nil, guestRPCError(codes.FailedPrecondition, "GUEST_VPN_UNVERIFIED", "Scanner definitions cannot update before the guest VPN is verified.", "Configure and verify Proton through the authenticated host workflow before updating definitions.", false)
+	}
+	return server.ScannerGuestServiceServer.UpdateDefinitions(ctx, request)
+}
+
+// Close tears down the scanner's VPN before closing parser/output resources.
+// The embedded scanner owner remains the sole service-phase serializer.
+func (server *ScannerVPNServer) Close(ctx context.Context) error {
+	if server == nil {
+		return nil
+	}
+	networkErr := server.network.StopVPN(ctx)
+	var scannerErr error
+	if closer, ok := server.ScannerGuestServiceServer.(interface{ Close(context.Context) error }); ok {
+		scannerErr = closer.Close(ctx)
+	}
+	return errors.Join(networkErr, scannerErr)
+}
+
 func protoVPNStatus(status guestvpn.Status) *privatevmv1.VPNStatus {
 	severity := privatevmv1.Diagnostic_SEVERITY_BLOCKING
 	if status.State == guestvpn.StateVerified {
@@ -212,3 +274,4 @@ func vpnRPCError(err error) error {
 
 var _ privatevmv1.DownloaderGuestServiceServer = (*DownloaderVPNServer)(nil)
 var _ privatevmv1.WorkstationGuestServiceServer = (*WorkstationVPNServer)(nil)
+var _ privatevmv1.ScannerGuestServiceServer = (*ScannerVPNServer)(nil)

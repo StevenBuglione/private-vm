@@ -56,6 +56,25 @@ func (rpcVPNVerifier) Verify(context.Context, guestvpn.RolePolicy) (guestvpn.Pro
 	}, nil
 }
 
+type scannerRPCVPNVerifier struct{}
+
+func (scannerRPCVPNVerifier) Verify(context.Context, guestvpn.RolePolicy) (guestvpn.Proof, error) {
+	return guestvpn.Proof{
+		Handshake: true, DNSThroughTunnel: true, DNSBypassBlocked: true, IPv4ThroughTunnel: true, IPv6ThroughTunnel: true,
+		IPv4BypassBlocked: true, IPv6BypassBlocked: true,
+	}, nil
+}
+
+type scannerDefinitionsFixture struct {
+	privatevmv1.UnimplementedScannerGuestServiceServer
+	updates int
+}
+
+func (fixture *scannerDefinitionsFixture) UpdateDefinitions(context.Context, *privatevmv1.ScannerRequest) (*privatevmv1.DefinitionsStatus, error) {
+	fixture.updates++
+	return &privatevmv1.DefinitionsStatus{Current: true, DatabaseVersion: "fixture", UpdatedUnixSeconds: 1}, nil
+}
+
 func downloaderVPNHandler(t *testing.T) *DownloaderVPNServer {
 	t.Helper()
 	return &DownloaderVPNServer{controllerFactory: func(underlay guestvpn.Underlay, _ guestvpn.ProbeTargets) (*guestvpn.Controller, error) {
@@ -172,6 +191,54 @@ func TestWorkstationVPNRPCUsesWorkstationRoleWithoutDownloaderService(t *testing
 	})
 	if status.Code(err) != codes.FailedPrecondition || !allZeroGuestBytes(wrong) {
 		t.Fatalf("workstation accepted downloader role: %v", err)
+	}
+	if err := handler.Close(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestScannerVPNRPCRequiresScannerUpdatePolicyAndRole(t *testing.T) {
+	factory := func(underlay guestvpn.Underlay, _ guestvpn.ProbeTargets) (*guestvpn.Controller, error) {
+		return guestvpn.NewController(
+			&rpcVPNBackend{}, scannerRPCVPNVerifier{}, guestvpn.RolePolicy{Role: session.RoleScanner, ScannerUpdate: true}, underlay,
+		)
+	}
+	definitions := &scannerDefinitionsFixture{}
+	handler, err := NewScannerVPNServer(definitions, factory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = handler.UpdateDefinitions(t.Context(), &privatevmv1.ScannerRequest{Context: helloRequest(session.RoleScanner, APIMajor, APIMinor).GetContext()})
+	if status.Code(err) != codes.FailedPrecondition || definitions.updates != 0 {
+		t.Fatalf("scanner definitions ran before VPN verification: %v updates=%d", err, definitions.updates)
+	}
+	raw := downloaderProfile()
+	underlay, targets := downloaderNetworkFields(t)
+	configured, err := handler.ConfigureWireGuard(t.Context(), &privatevmv1.ConfigureWireGuardRequest{
+		Context: helloRequest(session.RoleScanner, APIMajor, APIMinor).GetContext(),
+		Profile: raw, Underlay: underlay, ProbeTargets: targets,
+	})
+	if err != nil || !configured.GetConfigured() || !configured.GetHandshake() || configured.GetTorrentBound() {
+		t.Fatalf("scanner ConfigureWireGuard = %#v, %v", configured, err)
+	}
+	verified, err := handler.VerifyVPN(t.Context(), &privatevmv1.VerifyVPNRequest{
+		Context: helloRequest(session.RoleScanner, APIMajor, APIMinor).GetContext(),
+	})
+	if err != nil || !verified.GetHandshake() {
+		t.Fatalf("scanner VerifyVPN = %#v, %v", verified, err)
+	}
+	updated, err := handler.UpdateDefinitions(t.Context(), &privatevmv1.ScannerRequest{Context: helloRequest(session.RoleScanner, APIMajor, APIMinor).GetContext()})
+	if err != nil || !updated.GetCurrent() || definitions.updates != 1 {
+		t.Fatalf("scanner definitions after VPN = %#v, %v updates=%d", updated, err, definitions.updates)
+	}
+	wrong := downloaderProfile()
+	underlay, targets = downloaderNetworkFields(t)
+	_, err = handler.ConfigureWireGuard(t.Context(), &privatevmv1.ConfigureWireGuardRequest{
+		Context: helloRequest(session.RoleDownloader, APIMajor, APIMinor).GetContext(),
+		Profile: wrong, Underlay: underlay, ProbeTargets: targets,
+	})
+	if status.Code(err) != codes.FailedPrecondition || !allZeroGuestBytes(wrong) {
+		t.Fatalf("scanner accepted downloader role: %v", err)
 	}
 	if err := handler.Close(t.Context()); err != nil {
 		t.Fatal(err)

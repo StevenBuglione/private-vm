@@ -22,6 +22,10 @@ Required checks:
 - no update error or rate-limit ambiguity
 
 Then scanner shuts down. Its root overlay is retained only for the same session.
+The image has no automatic FreshClam timer or boot-started updater. The daemon
+exposes the definitions client only after the typed scanner VPN configure and
+verify RPCs plus host egress proof succeed. The fixed updater oneshot is
+reserved for the serialized guestd `UpdateDefinitions` adapter.
 
 ## Offline scan boot
 

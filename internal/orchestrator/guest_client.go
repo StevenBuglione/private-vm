@@ -41,6 +41,7 @@ func (connector VSOCKGuestConnector) Connect(ctx context.Context, cid uint32, ro
 		common:           privatevmv1.NewGuestCommonServiceClient(connection),
 		workstation:      privatevmv1.NewWorkstationGuestServiceClient(connection),
 		downloader:       privatevmv1.NewDownloaderGuestServiceClient(connection),
+		scanner:          privatevmv1.NewScannerGuestServiceClient(connection),
 		probeTargets:     connector.ProbeTargets,
 		workspaceExports: make(map[string][32]byte),
 	}, nil
@@ -55,6 +56,7 @@ type vsockGuestConnection struct {
 	common           privatevmv1.GuestCommonServiceClient
 	workstation      privatevmv1.WorkstationGuestServiceClient
 	downloader       privatevmv1.DownloaderGuestServiceClient
+	scanner          privatevmv1.ScannerGuestServiceClient
 	probeTargets     guestvpn.ProbeTargets
 	workspaceExports map[string][32]byte
 	closed           bool
@@ -72,7 +74,7 @@ func (connection *vsockGuestConnection) Handshake(ctx context.Context) error {
 }
 
 func (connection *vsockGuestConnection) ConfigureVPN(ctx context.Context, underlay guestvpn.Underlay, profile io.Reader) (guestvpn.Status, error) {
-	if connection.role != session.RoleWorkstation && connection.role != session.RoleDownloader {
+	if connection.role != session.RoleWorkstation && connection.role != session.RoleDownloader && connection.role != session.RoleScanner {
 		return guestvpn.Status{}, ErrNetworkedStart
 	}
 	data, err := io.ReadAll(io.LimitReader(profile, maximumGuestVPNProfileBytes+1))
@@ -102,6 +104,8 @@ func (connection *vsockGuestConnection) ConfigureVPN(ctx context.Context, underl
 		response, err = connection.workstation.ConfigureWireGuard(ctx, configure)
 	case session.RoleDownloader:
 		response, err = connection.downloader.ConfigureWireGuard(ctx, configure)
+	case session.RoleScanner:
+		response, err = connection.scanner.ConfigureWireGuard(ctx, configure)
 	default:
 		err = ErrNetworkedStart
 	}
@@ -121,6 +125,8 @@ func (connection *vsockGuestConnection) VerifyVPN(ctx context.Context) (guestvpn
 		response, err = connection.workstation.VerifyVPN(ctx, &privatevmv1.VerifyVPNRequest{Context: request})
 	case session.RoleDownloader:
 		response, err = connection.downloader.VerifyVPN(ctx, &privatevmv1.VerifyVPNRequest{Context: request})
+	case session.RoleScanner:
+		response, err = connection.scanner.VerifyVPN(ctx, &privatevmv1.VerifyVPNRequest{Context: request})
 	default:
 		err = ErrNetworkedStart
 	}
@@ -168,10 +174,21 @@ func (connection *vsockGuestConnection) respondToVPNLoss(ctx context.Context) er
 		_, err = connection.workstation.ShowNetworkWarning(ctx, &privatevmv1.NetworkWarningRequest{Context: request, WarningCode: "VPN_DEGRADED"})
 	case session.RoleDownloader:
 		_, err = connection.downloader.PauseDownload(ctx, &privatevmv1.TorrentRequest{Context: request})
+	case session.RoleScanner:
+		_, err = connection.common.Shutdown(ctx, &privatevmv1.ShutdownRequest{Context: request, Poweroff: true})
 	default:
 		err = ErrNetworkedStart
 	}
 	return err
+}
+
+func (connection *vsockGuestConnection) ScannerClient() (privatevmv1.ScannerGuestServiceClient, error) {
+	connection.mu.Lock()
+	defer connection.mu.Unlock()
+	if connection.role != session.RoleScanner || connection.closed || connection.scanner == nil {
+		return nil, ErrNetworkedStart
+	}
+	return connection.scanner, nil
 }
 
 func (connection *vsockGuestConnection) WorkspaceDirty(ctx context.Context) (bool, error) {

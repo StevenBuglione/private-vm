@@ -140,8 +140,12 @@ func composeGuestServerConfig(identity guest.Identity, token *guest.Token) (gues
 	if err != nil {
 		return guest.ServerConfig{}, nil, err
 	}
-	config.Scanner = scannerService
-	return config, scannerService, nil
+	scannerNetwork, err := guest.NewScannerVPNServer(scannerService, productionVPNFactory(session.RoleScanner, nil))
+	if err != nil {
+		return guest.ServerConfig{}, nil, err
+	}
+	config.Scanner = scannerNetwork
+	return config, scannerNetwork, nil
 }
 
 type downloaderCleanup struct {
@@ -266,7 +270,7 @@ func productionVPNFactory(role session.Role, client *torrent.LocalQBittorrentSer
 			return nil, err
 		}
 		bindingProbe := guestvpn.TorrentBindingProbe(prohibitedTorrentBindingProbe{})
-		policy := guestvpn.RolePolicy{Role: role}
+		policy := guestvpn.RolePolicy{Role: role, ScannerUpdate: role == session.RoleScanner}
 		if role == session.RoleDownloader {
 			if client == nil {
 				return nil, errors.New("downloader qBittorrent owner is unavailable")
@@ -281,7 +285,7 @@ func productionVPNFactory(role session.Role, client *torrent.LocalQBittorrentSer
 		if err != nil {
 			return nil, err
 		}
-		if role == session.RoleWorkstation {
+		if role == session.RoleWorkstation || role == session.RoleScanner {
 			return guestvpn.NewController(networkBackend, verifier, policy, underlay)
 		}
 		return guestvpn.NewControllerWithOnlineService(
