@@ -155,7 +155,10 @@ Mitigations:
 - `0600` QMP/SPICE sockets
 - no secrets in argv/env
 - unpredictable session IDs
-- daemon validates path ownership and never follows symlinks
+- daemon-created runtime/session paths never follow symlinks; the sole
+  daemon-side exception permits an ordinary NixOS `/etc` configuration link only after the
+  opened target is proven root-owned, non-writable and on an allowlisted local
+  filesystem (magic links remain forbidden)
 
 ### A7: compromised host
 

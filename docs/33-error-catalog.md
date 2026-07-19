@@ -43,6 +43,33 @@ CLI API.
 | `INTERNAL_ERROR` | 70 | An invalid or unclassified internal result was normalized to the redacted internal-error contract. |
 | `COMPLETION_FAILED` | 70 | Shell completion generation exceeded its bound or could not be safely produced or written. |
 
+## Configuration and policy errors
+
+All `CONFIG_*` errors returned by the CLI use exit 11. `POLICY_*` errors use
+exit 11 when surfaced by policy validation. Messages and remediations are
+redacted and never include a selected path, rejected key/value or wrapped
+parser, migration or filesystem cause.
+
+| Code | Safe meaning |
+|---|---|
+| `CONFIG_READ` | A selected layer is missing, unreadable or fails file trust checks. |
+| `CONFIG_TOO_LARGE` | Input or migrated output exceeds 1 MiB. |
+| `CONFIG_PARSE` | TOML types, syntax or fields do not match the closed contract. |
+| `CONFIG_SCHEMA_VERSION` | `schema_version` is missing, invalid or unsupported. |
+| `CONFIG_MIGRATION` | The migration registry/hook is missing or invalid. |
+| `CONFIG_SECRET_FIELD` | A forbidden secret-bearing field name was detected. |
+| `CONFIG_PATH` | The default user configuration base is not a clean absolute path. |
+| `CONFIG_INVALID` | The merged effective snapshot violates a semantic invariant. |
+| `POLICY_READ` | A selected policy is unreadable or fails file trust checks. |
+| `POLICY_TOO_LARGE` | Policy input or migrated output exceeds 1 MiB. |
+| `POLICY_PARSE` | TOML types, syntax or fields do not match the policy contract. |
+| `POLICY_SCHEMA_VERSION` | Policy `schema_version` is missing, invalid or unsupported. |
+| `POLICY_MIGRATION` | A policy migration registry/hook is missing or invalid. |
+| `POLICY_SECRET_FIELD` | A forbidden secret-bearing policy field was detected. |
+| `POLICY_INVALID` | Policy identity, mode or fixed semantics are invalid. |
+| `POLICY_LIMIT` | A finite content/archive/timeout bound is invalid. |
+| `POLICY_WEAKENING` | A mandatory fail-closed or reconstruction rule was disabled. |
+
 These meanings are safe for logs and automation. Human error records add a
 bounded remediation but never serialize a wrapped cause or raw command output.
 

@@ -5,6 +5,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"sync"
@@ -15,6 +17,7 @@ import (
 
 	"github.com/StevenBuglione/private-vm/internal/apperror"
 	"github.com/StevenBuglione/private-vm/internal/buildinfo"
+	"github.com/StevenBuglione/private-vm/internal/config"
 	"github.com/StevenBuglione/private-vm/internal/exitcode"
 	"github.com/StevenBuglione/private-vm/internal/preflight"
 )
@@ -129,6 +132,131 @@ func TestGlobalFlagsAndRootOnlyVersion(t *testing.T) {
 	code := New(Dependencies{Stdout: &stdout, Stderr: &stderr}).Execute(context.Background(), []string{"desktop", "--version"})
 	if code != exitcode.Usage {
 		t.Fatalf("subcommand --version code=%d output=%q/%q", code, stdout.String(), stderr.String())
+	}
+}
+
+func TestCLIConfigLayerIsLoadedBeforeDispatch(t *testing.T) {
+	const selectedPath = "/tmp/private-vm-selected-config.toml"
+	invoker := &recordingInvoker{}
+	var gotPath string
+	var gotOverrides config.Overrides
+	load := func(path string, overrides config.Overrides) (config.Config, error) {
+		gotPath, gotOverrides = path, overrides
+		return config.Defaults(), nil
+	}
+	code := New(Dependencies{Invoker: invoker, LoadConfig: load}).Execute(
+		context.Background(),
+		[]string{"desktop", "start", "--config", selectedPath, "--strict=false"},
+	)
+	if code != exitcode.OK || gotPath != selectedPath || gotOverrides.Strict == nil || *gotOverrides.Strict {
+		t.Fatalf("code=%d path=%q overrides=%#v", code, gotPath, gotOverrides)
+	}
+	if len(invoker.calls) != 1 {
+		t.Fatalf("dispatch calls=%#v", invoker.calls)
+	}
+	intent, ok := invoker.calls[0].intent.(WorkstationIntent)
+	if !ok || intent.Bundle != "development" || intent.Memory != "17179869184B" || intent.CPUs != 8 {
+		t.Fatalf("configuration defaults did not reach dispatch: %#v", invoker.calls[0].intent)
+	}
+}
+
+func TestCLIUsesProductionSelectedConfigForWorkstationDefaults(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "selected.toml")
+	if err := os.WriteFile(path, []byte(`
+schema_version = 1
+[desktop]
+bundle = "basic"
+audio = true
+memory_bytes = 2147483648
+vcpus = 1
+`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	invoker := &recordingInvoker{}
+	code := New(Dependencies{Invoker: invoker}).Execute(
+		context.Background(), []string{"desktop", "start", "--config", path},
+	)
+	if code != exitcode.OK || len(invoker.calls) != 1 {
+		t.Fatalf("code=%d calls=%#v", code, invoker.calls)
+	}
+	want := WorkstationIntent{Bundle: "basic", Audio: true, Memory: "2147483648B", CPUs: 1}
+	if !reflect.DeepEqual(invoker.calls[0].intent, want) {
+		t.Fatalf("got=%#v want=%#v", invoker.calls[0].intent, want)
+	}
+}
+
+func TestAbsentStrictFlagDoesNotOverrideLayerAndDoctorUsesSnapshot(t *testing.T) {
+	configuration, err := config.Decode(strings.NewReader("schema_version=1\nstrict=false\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var gotOverrides config.Overrides
+	var doctorStrict bool
+	code := New(Dependencies{
+		LoadConfig: func(_ string, overrides config.Overrides) (config.Config, error) {
+			gotOverrides = overrides
+			return configuration, nil
+		},
+		Doctor: func(_ context.Context, strict bool) preflight.Report {
+			doctorStrict = strict
+			return preflight.Report{Runnable: true}
+		},
+	}).Execute(context.Background(), []string{"doctor"})
+	if code != exitcode.OK || gotOverrides.Strict != nil || doctorStrict {
+		t.Fatalf("code=%d overrides=%#v doctorStrict=%v", code, gotOverrides, doctorStrict)
+	}
+}
+
+func TestConfigFailureIsRedactedStableExitEleven(t *testing.T) {
+	for _, machine := range []bool{false, true} {
+		var stdout, stderr bytes.Buffer
+		args := []string{"doctor"}
+		if machine {
+			args = append(args, "--json")
+		}
+		code := New(Dependencies{
+			Stdout: &stdout,
+			Stderr: &stderr,
+			LoadConfig: func(string, config.Overrides) (config.Config, error) {
+				return config.Config{}, &config.Error{
+					Code: "CONFIG_PARSE", Message: "The configuration is invalid.",
+					Remediation: "Compare it with the installed example.",
+				}
+			},
+		}).Execute(context.Background(), args)
+		if code != exitcode.Configuration || stdout.Len() != 0 ||
+			!strings.Contains(stderr.String(), "CONFIG_PARSE") {
+			t.Fatalf("machine=%v code=%d stdout=%q stderr=%q", machine, code, stdout.String(), stderr.String())
+		}
+		if machine && !json.Valid(stderr.Bytes()) {
+			t.Fatalf("invalid JSON error: %q", stderr.String())
+		}
+	}
+
+	const marker = "SENSITIVE-CONFIG-MARKER"
+	invoker := &recordingInvoker{}
+	var stdout, stderr bytes.Buffer
+	code := New(Dependencies{
+		Stdout: &stdout, Stderr: &stderr, Invoker: invoker,
+		LoadConfig: func(string, config.Overrides) (config.Config, error) {
+			return config.Config{}, errors.New(marker)
+		},
+	}).Execute(context.Background(), []string{"init", "--json"})
+	if code != exitcode.Configuration || stdout.Len() != 0 || !json.Valid(stderr.Bytes()) ||
+		strings.Contains(stderr.String(), marker) || len(invoker.calls) != 0 {
+		t.Fatalf("code=%d stdout=%q stderr=%q calls=%#v", code, stdout.String(), stderr.String(), invoker.calls)
+	}
+}
+
+func TestReferenceCommandsDoNotLoadConfiguration(t *testing.T) {
+	load := func(string, config.Overrides) (config.Config, error) {
+		t.Fatal("reference command loaded configuration")
+		return config.Config{}, errors.New("unreachable")
+	}
+	for _, args := range [][]string{{"version"}, {"--version"}, {"completion", "bash"}, {"--help"}} {
+		if code := New(Dependencies{LoadConfig: load}).Execute(context.Background(), args); code != exitcode.OK {
+			t.Fatalf("args=%v code=%d", args, code)
+		}
 	}
 }
 

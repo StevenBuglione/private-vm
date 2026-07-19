@@ -55,7 +55,8 @@ func run() error {
 	if err != nil || gid < 0 {
 		return fmt.Errorf("daemon group %q has an invalid numeric ID", groupName)
 	}
-	store, err := session.NewStore(cfg.Runtime.Directory)
+	runtimeConfig := cfg.Runtime()
+	store, err := session.NewStore(runtimeConfig.Directory())
 	if err != nil {
 		return err
 	}
@@ -73,7 +74,7 @@ func run() error {
 	}
 	service := &daemon.Service{Sessions: manager, Polkit: daemon.PKCheck{Binary: pkcheck}}
 	server, err := daemon.NewServer(daemon.ServerOptions{
-		SocketPath: filepath.Join(cfg.Runtime.Directory, "control.sock"),
+		SocketPath: filepath.Join(runtimeConfig.Directory(), "control.sock"),
 		OwnerUID:   0,
 		GroupGID:   gid,
 		Service:    service,
@@ -93,7 +94,10 @@ func run() error {
 	case err := <-done:
 		return err
 	case <-ctx.Done():
-		shutdownContext, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		shutdownContext, cancel := context.WithTimeout(
+			context.Background(),
+			time.Duration(runtimeConfig.CleanupTimeoutSeconds())*time.Second,
+		)
 		defer cancel()
 		if err := server.Shutdown(shutdownContext); err != nil {
 			return fmt.Errorf("bounded daemon shutdown: %w", err)

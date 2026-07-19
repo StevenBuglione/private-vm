@@ -16,6 +16,13 @@
 
 Debug logging must still redact sensitive values.
 
+Operational commands resolve configuration in built-in, system, user and
+explicit non-secret flag order before dispatch. `--config PATH` replaces the
+default user layer with one required file. It never replaces the root daemon's
+system policy. Configuration and policy fields cannot contain secrets; load or
+validation failures return a stable `CONFIG_*` error with exit 11. See
+`docs/08-config-policy.md` for the complete field and file-trust contract.
+
 `--help` and shell-completion scripts are intentionally human/tooling text, not
 machine records. Combining `--json` with `--help`, invoking the root with only
 `--json`, or passing `--json` to `completion` fails with `CLI_USAGE` (exit 2)

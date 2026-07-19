@@ -1,153 +1,112 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://private-vm.dev/schema/config-v1.json",
-  "title": "private-vm host configuration",
+  "title": "private-vm effective host configuration",
   "type": "object",
   "additionalProperties": false,
   "properties": {
-    "schema_version": {
-      "const": 1
-    },
-    "strict": {
-      "type": "boolean",
-      "default": true
-    },
+    "schema_version": { "const": 1 },
+    "strict": { "type": "boolean" },
     "image_source": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
         "registry": {
           "type": "string",
-          "default": "ghcr.io"
+          "maxLength": 255,
+          "pattern": "^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)(?:\\.(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?))*(?::(?:[1-9][0-9]{0,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5]))?$"
         },
         "repository": {
           "type": "string",
-          "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,62}/[A-Za-z0-9][A-Za-z0-9_.-]{0,62}$"
         },
-        "channel": {
-          "enum": [
-            "stable",
-            "edge"
-          ],
-          "default": "stable"
-        },
-        "require_attestation": {
-          "type": "boolean",
-          "const": true
-        }
+        "channel": { "enum": ["stable", "edge"] },
+        "require_attestation": { "const": true }
       },
-      "required": [
-        "repository",
-        "require_attestation"
-      ]
+      "required": ["registry", "repository", "channel", "require_attestation"]
     },
     "runtime": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "directory": {
-          "type": "string",
-          "default": "/run/private-vm"
-        },
-        "image_cache": {
-          "type": "string",
-          "default": "/var/lib/private-vm/images"
-        },
-        "scratch_directory": {
-          "type": "string",
-          "default": "/var/lib/private-vm/scratch"
-        },
+        "directory": { "const": "/run/private-vm" },
+        "image_cache": { "const": "/var/lib/private-vm/images" },
+        "scratch_directory": { "const": "/var/lib/private-vm/scratch" },
         "small_scratch_max_bytes": {
           "type": "integer",
-          "minimum": 0,
-          "default": 17179869184
+          "minimum": 1,
+          "maximum": 1099511627776
         },
         "cleanup_timeout_seconds": {
           "type": "integer",
           "minimum": 5,
-          "maximum": 300,
-          "default": 30
+          "maximum": 300
         }
-      }
+      },
+      "required": [
+        "directory",
+        "image_cache",
+        "scratch_directory",
+        "small_scratch_max_bytes",
+        "cleanup_timeout_seconds"
+      ]
     },
     "desktop": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "bundle": {
-          "enum": [
-            "basic",
-            "office",
-            "development"
-          ],
-          "default": "development"
-        },
-        "viewer": {
-          "enum": [
-            "remote-viewer"
-          ],
-          "default": "remote-viewer"
-        },
-        "audio": {
-          "type": "boolean",
-          "default": false
-        },
+        "bundle": { "enum": ["basic", "office", "development"] },
+        "viewer": { "const": "remote-viewer" },
+        "audio": { "type": "boolean" },
         "memory_bytes": {
           "type": "integer",
-          "minimum": 2147483648
+          "minimum": 2147483648,
+          "maximum": 274877906944
         },
-        "vcpus": {
-          "type": "integer",
-          "minimum": 2
-        }
-      }
+        "vcpus": { "type": "integer", "minimum": 1, "maximum": 64 }
+      },
+      "required": ["bundle", "viewer", "audio", "memory_bytes", "vcpus"]
     },
     "vpn": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
         "profile_name": {
-          "type": "string"
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$"
         },
-        "disable_ipv6_if_not_tunneled": {
-          "type": "boolean",
-          "const": true
-        }
-      }
+        "disable_ipv6_if_not_tunneled": { "const": true }
+      },
+      "required": ["profile_name", "disable_ipv6_if_not_tunneled"]
     },
     "usb": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "require_usbguard": {
-          "type": "boolean",
-          "default": true
-        },
-        "default_filesystem": {
-          "enum": [
-            "luks2-ext4"
-          ],
-          "default": "luks2-ext4"
-        }
-      }
+        "require_usbguard": { "const": true },
+        "default_filesystem": { "const": "luks2-ext4" }
+      },
+      "required": ["require_usbguard", "default_filesystem"]
     },
     "logging": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "persistent_lifecycle_metadata": {
-          "type": "boolean",
-          "default": false
-        },
-        "telemetry": {
-          "type": "boolean",
-          "const": false
-        }
-      }
+        "persistent_lifecycle_metadata": { "type": "boolean" },
+        "telemetry": { "const": false }
+      },
+      "required": ["persistent_lifecycle_metadata", "telemetry"]
     }
   },
   "required": [
     "schema_version",
-    "image_source"
+    "strict",
+    "image_source",
+    "runtime",
+    "desktop",
+    "vpn",
+    "usb",
+    "logging"
   ]
 }

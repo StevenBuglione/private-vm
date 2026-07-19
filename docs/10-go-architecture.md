@@ -32,6 +32,15 @@ construct the same intent and command ID as their canonical workflow entry
 point. The default invoker fails closed with `NOT_IMPLEMENTED` until the owning
 backlog task installs a tested orchestrator implementation.
 
+Operational command pre-run resolves an immutable `internal/config.Config`
+snapshot. The loader distinguishes absent boolean flags from explicit false
+values and maps its redacted stable errors to exit 11 without wrapping raw file
+or parser errors. Workstation request defaults are copied from that snapshot
+into the sealed intent; changed flags replace only their corresponding values.
+The daemon independently uses `config.LoadDaemon`, which accepts one required
+root-owned system layer and no user layer. Privileged handlers must treat the
+CLI snapshot as a request and revalidate it against the daemon snapshot.
+
 Machine records use closed success, error and event envelopes plus reviewed
 typed payloads. Encoding is buffered, size-bounded and written as one record;
 wrapped error causes never cross the presentation boundary. Sensitive terminal
@@ -166,7 +175,14 @@ Create a type that:
 
 Every daemon-created path is derived from an internal session ID, not user input.
 Use `openat2` with restrictive resolution flags where available. Refuse symlinks
-and unexpected ownership.
+and unexpected ownership for those runtime paths. System configuration is the
+narrow daemon-side exception needed by declarative NixOS `/etc` links: magic links are
+rejected and an ordinary link is accepted only when the opened target descriptor
+is a root-owned, non-writable regular file on an allowlisted local filesystem.
+User-selected CLI configuration and policy files may likewise be ordinary
+dotfile-manager links, but they are not daemon-created paths and their opened
+targets must pass effective-user/root ownership, mode, type and filesystem
+checks.
 
 ## Concurrency
 
