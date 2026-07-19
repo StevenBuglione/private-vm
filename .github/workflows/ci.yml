@@ -78,6 +78,9 @@ jobs:
         with:
           persist-credentials: false
           fetch-depth: 0
+      - uses: DeterminateSystems/nix-installer-action@ef8a148080ab6020fd15196c2084a2eea5ff2d25 # v22
+      - name: Validate workflow security policy
+        run: nix build .#checks.x86_64-linux.workflow-policy --print-build-logs
       - name: Reject shell product logic
         run: |
           if find . -path './.git' -prune -o -path './vendor' -prune -o -type f \( -name '*.sh' -o -name '*.bash' \) -print | grep -q .; then

@@ -410,6 +410,8 @@
               go-tools
               golangci-lint
               gitleaks
+              actionlint
+              zizmor
               buf
               protobuf
               protoc-gen-go
@@ -427,7 +429,10 @@
               cosign
               zstd
               jq
-              (python3.withPackages (ps: [ ps.jsonschema ]))
+              (python3.withPackages (ps: [
+                ps.jsonschema
+                ps.pyyaml
+              ]))
             ];
           };
         }
@@ -437,7 +442,10 @@
         system:
         let
           pkgs = pkgsFor system;
-          python = pkgs.python3.withPackages (ps: [ ps.jsonschema ]);
+          python = pkgs.python3.withPackages (ps: [
+            ps.jsonschema
+            ps.pyyaml
+          ]);
           sourceCheck =
             name: commands:
             pkgs.runCommand name
@@ -468,6 +476,11 @@
               go test -race ./...
             '';
             static-binaries = staticBinariesCheckFor system;
+            workflow-policy = sourceCheck "private-vm-workflow-policy" ''
+              export PATH="${pkgs.actionlint}/bin:${pkgs.zizmor}/bin:$PATH"
+              python3 tools/test_workflow_policy.py
+              python3 tools/check_workflow_policy.py
+            '';
           };
         in
         baseChecks

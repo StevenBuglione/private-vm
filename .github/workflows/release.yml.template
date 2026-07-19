@@ -1,4 +1,4 @@
-# Security-sensitive template. Activate only after REL-001 through REL-006 pass.
+# Security-sensitive template. Activate only after REL-001 through REL-004 pass.
 name: Release
 
 on:
@@ -6,21 +6,27 @@ on:
     tags: ["v*"]
 
 permissions:
-  contents: write
-  packages: write
-  id-token: write
-  attestations: write
+  contents: read
 
 jobs:
   release:
     runs-on: ubuntu-latest
     environment: release
+    permissions:
+      contents: write
+      packages: write
+      id-token: write
+      attestations: write
     steps:
-      - uses: actions/checkout@FULL_COMMIT_SHA_REQUIRED
-      - uses: actions/setup-go@FULL_COMMIT_SHA_REQUIRED
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
           go-version: "1.26.5"
-      - uses: DeterminateSystems/nix-installer-action@FULL_COMMIT_SHA_REQUIRED
+          cache: false
+      - uses: DeterminateSystems/nix-installer-action@ef8a148080ab6020fd15196c2084a2eea5ff2d25 # v22
       - name: Verify protected clean tag
         run: private-vm release verify-tag "${GITHUB_REF_NAME}"
       - name: Build and test

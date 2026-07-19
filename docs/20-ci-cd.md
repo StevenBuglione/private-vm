@@ -25,11 +25,12 @@ Add only per job:
 
 - `packages: write` for publishing
 - `id-token: write` and `attestations: write` for provenance
+- `contents: write` only for the protected release job
 - no write permission on pull-request builds
 
 Never use `pull_request_target` to execute untrusted code.
 
-## `ci.yml`
+## Active workflow: `ci.yml`
 
 For pull requests and pushes:
 
@@ -42,17 +43,38 @@ For pull requests and pushes:
 - protobuf lint/breaking checks
 - clean protobuf regeneration with committed-output drift rejection
 - schema tests
-- fuzz smoke runs
 - Nix flake check/evaluation
 - package builds
+- workflow policy validation with locked actionlint and zizmor
 - no publishing
+
+Fuzz targets and their bounded smoke runs are planned but are not an active gate
+until task-specific fuzz harnesses are committed. `image-build.yml.template` and
+`release.yml.template` are policy-checked dormant templates; renaming either
+file is a separate reviewed activation change. There is no active nightly
+workflow yet.
+
+Before template activation, create and protect the exact `image-publish` and
+`release` GitHub environments, configure their deployment rules, finish the
+backlog dependencies named in each template, and re-run the repository settings
+audit. Merely naming an environment in YAML does not create server-side
+protection.
+
+Reproduce the workflow-security gate with the locked flake tools:
+
+```bash
+nix build .#checks.x86_64-linux.workflow-policy --print-build-logs
+```
+
+The gate validates active and dormant workflow sources, exercises negative
+fixtures, runs actionlint, and runs offline zizmor at low severity or higher.
 
 The protobuf generator plugins are pinned by version and registry revision in
 `buf.gen.yaml`. CI checks out full history, compares pull requests with their
 exact base SHA and main pushes with the exact pre-push SHA, then runs `buf
 generate` and rejects modified, deleted, or untracked output under `gen/`.
 
-## `image-build.yml`
+## Planned workflow: `image-build.yml`
 
 Matrix, one role/bundle per job:
 
@@ -103,7 +125,7 @@ If an image does not fit 14 GB:
 A self-hosted KVM job may supplement but must not be required for ordinary public
 contribution.
 
-## `nightly.yml`
+## Planned workflow: `nightly.yml`
 
 - rebuild locked images
 - full TCG boot matrix
@@ -113,7 +135,7 @@ contribution.
 - cleanup/recovery fault injection
 - do not automatically update lockfiles
 
-## `release.yml`
+## Planned workflow: `release.yml`
 
 Triggered by protected semantic tag.
 
@@ -132,14 +154,21 @@ Triggered by protected semantic tag.
 
 ## Action pinning
 
-All third-party actions are pinned by full commit SHA. A comment may show the
-human-readable version.
+All active actions and dormant template references are pinned by full commit
+SHA. A comment may show the human-readable version. CI validates action pins,
+checkout credential handling, triggers, permissions and protected publishing
+job isolation. GitHub server-side SHA pin enforcement is also required.
 
 ## Caching
 
-Caches must not contain secrets. Nix and Go caches are keyed by lockfiles and
-architecture. Release jobs must not trust writable caches as release artifacts;
-they rebuild/verify outputs and attest final digests.
+Caches must not contain secrets. The active Go cache is managed by `setup-go`,
+is dependency-keyed only by `go.sum`, and is additionally scoped by runner OS,
+architecture and resolved Go toolchain by the action. Nix inputs are pinned by
+`flake.lock`; the active Determinate installer does not configure an untrusted
+binary cache. Explicit cache actions are currently rejected; enabling one
+requires a separately reviewed policy defining exact keys and safe paths.
+Release jobs must not trust writable caches as release artifacts; they rebuild
+or verify outputs and attest final digests.
 
 ## CI secrets
 
