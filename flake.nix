@@ -440,8 +440,10 @@
             machine.succeed("test -b /dev/disk/by-id/virtio-quarantine")
             machine.succeed("findmnt -n -o FSTYPE /mnt/quarantine | grep -Fx ext4")
             machine.succeed("findmnt -n -o OPTIONS /mnt/quarantine | grep -E '(^|,)nodev(,|$)' | grep -E '(^|,)nosuid(,|$)' | grep -E '(^|,)noexec(,|$)'")
-            machine.succeed("systemctl is-enabled private-vm-qbittorrent.service | grep -Fx static")
-            machine.succeed("! systemctl is-active --quiet private-vm-qbittorrent.service")
+            machine.fail("systemctl cat private-vm-qbittorrent.service")
+            machine.succeed("test -x /etc/private-vm/qbittorrent")
+            machine.succeed("readlink -f /etc/private-vm/qbittorrent | grep -E '^/nix/store/[^/]+-qbittorrent-[^/]+/bin/qbittorrent$'")
+            machine.succeed("! pgrep -u private -x qbittorrent")
             machine.succeed("test $(stat -c '%U:%G:%a' /run/private-vm-qbittorrent/config/qBittorrent/qBittorrent.conf) = root:users:440")
             machine.succeed("grep -Fx 'Session\\Interface=proton0' /run/private-vm-qbittorrent/config/qBittorrent/qBittorrent.conf")
             machine.succeed("grep -Fx 'Session\\InterfaceName=proton0' /run/private-vm-qbittorrent/config/qBittorrent/qBittorrent.conf")
@@ -449,22 +451,10 @@
             machine.succeed("grep -E '^WebUI\\\\Password_PBKDF2=\"@ByteArray\\([A-Za-z0-9+/=]+:[A-Za-z0-9+/=]+\\)\"$' /run/private-vm-qbittorrent/config/qBittorrent/qBittorrent.conf")
             machine.succeed("! grep -Eiq '(private.?key|magnet:|endpoint)' /run/private-vm-qbittorrent/config/qBittorrent/qBittorrent.conf")
 
-            machine.succeed("ip link add proton0 type dummy")
-            machine.succeed("ip link set proton0 up")
-            start_status, start_output = machine.execute("systemctl start private-vm-qbittorrent.service")
-            if start_status != 0:
-              log.error(start_output)
-              log.error(machine.succeed("journalctl --no-pager -u private-vm-qbittorrent.service -n 100"))
-            assert start_status == 0, "fixed qBittorrent unit did not start"
-            machine.wait_until_succeeds("systemctl is-active --quiet private-vm-qbittorrent.service")
             listeners = machine.succeed("ss -H -ltn")
             for listener in listeners.splitlines():
               address = listener.split()[3]
-              assert address.startswith("127.0.0.1:") or address.startswith("127.0.0.53:") or address.startswith("127.0.0.54:"), listener
-
-            machine.succeed("systemctl stop private-vm-qbittorrent.service")
-            machine.wait_until_succeeds("! systemctl is-active --quiet private-vm-qbittorrent.service")
-            machine.succeed("! pgrep -u private -x qbittorrent")
+              assert address.startswith("127.0.0.53:") or address.startswith("127.0.0.54:"), listener
 
             machine.succeed("cp /etc/private-vm/nftables/downloader-vpn-ipv4.nft.in /run/downloader-vpn-ipv4.nft")
             machine.succeed("sed -i -e 's/__PVM_ENDPOINT_IPV4__/192.0.2.1/g' -e 's/__PVM_ENDPOINT_PORT__/51820/g' /run/downloader-vpn-ipv4.nft")
@@ -718,22 +708,31 @@
         assert !scannerConfiguration.config.services.clamav.updater.enable;
         assert !(builtins.hasAttr "clamav-freshclam" scannerConfiguration.config.systemd.services);
         assert !(builtins.hasAttr "clamav-freshclam" scannerConfiguration.config.systemd.timers);
-        assert builtins.hasAttr "private-vm-scanner-definitions-update" scannerConfiguration.config.systemd.services;
-        assert scannerConfiguration.config.systemd.services.private-vm-scanner-definitions-update.wantedBy == [ ];
-        assert scannerConfiguration.config.systemd.services.private-vm-guestd.serviceConfig.User == "private-vm-scanner";
-        assert scannerConfiguration.config.systemd.services.private-vm-guestd.serviceConfig.StateDirectory == "private-vm/scanner";
+        assert builtins.hasAttr "private-vm-scanner-definitions-update"
+          scannerConfiguration.config.systemd.services;
+        assert
+          scannerConfiguration.config.systemd.services.private-vm-scanner-definitions-update.wantedBy == [ ];
+        assert
+          scannerConfiguration.config.systemd.services.private-vm-guestd.serviceConfig.User
+          == "private-vm-scanner";
+        assert
+          scannerConfiguration.config.systemd.services.private-vm-guestd.serviceConfig.StateDirectory
+          == "private-vm/scanner";
         assert scannerConfiguration.config.security.polkit.enable;
         assert builtins.hasAttr "private-vm/policy.safe.toml" scannerConfiguration.config.environment.etc;
         assert !offlineConfiguration.networking.networkmanager.enable;
         assert !offlineConfiguration.networking.dhcpcd.enable;
         assert !offlineConfiguration.services.resolved.enable;
-        assert offlineConfiguration.fileSystems."/mnt/quarantine".device == "/dev/disk/by-id/virtio-quarantine";
-        assert builtins.all (option: builtins.elem option offlineConfiguration.fileSystems."/mnt/quarantine".options) [
-          "ro"
-          "nodev"
-          "nosuid"
-          "noexec"
-        ];
+        assert
+          offlineConfiguration.fileSystems."/mnt/quarantine".device == "/dev/disk/by-id/virtio-quarantine";
+        assert builtins.all
+          (option: builtins.elem option offlineConfiguration.fileSystems."/mnt/quarantine".options)
+          [
+            "ro"
+            "nodev"
+            "nosuid"
+            "noexec"
+          ];
         assert !offlineConfiguration.services.clamav.updater.enable;
         assert !(builtins.hasAttr "clamav-freshclam" offlineConfiguration.systemd.services);
         assert !(builtins.hasAttr "clamav-freshclam" offlineConfiguration.systemd.timers);
@@ -1155,18 +1154,23 @@
           };
           imagePackages = nixpkgs.lib.optionalAttrs (system == "x86_64-linux") {
             image-workstation-basic = workstationBasic.config.system.build.images.qemu-efi;
-            closure-workstation-basic = workstationBasic.config.system.build.images.qemu-efi.passthru.config.system.build.toplevel;
+            closure-workstation-basic =
+              workstationBasic.config.system.build.images.qemu-efi.passthru.config.system.build.toplevel;
             image-workstation-office = workstationOffice.config.system.build.images.qemu-efi;
-            closure-workstation-office = workstationOffice.config.system.build.images.qemu-efi.passthru.config.system.build.toplevel;
+            closure-workstation-office =
+              workstationOffice.config.system.build.images.qemu-efi.passthru.config.system.build.toplevel;
             image-workstation-development = workstationDevelopment.config.system.build.images.qemu-efi;
-            closure-workstation-development = workstationDevelopment.config.system.build.images.qemu-efi.passthru.config.system.build.toplevel;
+            closure-workstation-development =
+              workstationDevelopment.config.system.build.images.qemu-efi.passthru.config.system.build.toplevel;
             image-downloader = downloader.config.system.build.images.qemu-efi;
-            closure-downloader = downloader.config.system.build.images.qemu-efi.passthru.config.system.build.toplevel;
+            closure-downloader =
+              downloader.config.system.build.images.qemu-efi.passthru.config.system.build.toplevel;
             image-scanner = scanner.config.system.build.images.qemu-efi;
             closure-scanner = scanner.config.system.build.images.qemu-efi.passthru.config.system.build.toplevel;
             sbom-scanner = scannerSBOMFor system;
             image-exporter = exporter.config.system.build.images.qemu-efi;
-            closure-exporter = exporter.config.system.build.images.qemu-efi.passthru.config.system.build.toplevel;
+            closure-exporter =
+              exporter.config.system.build.images.qemu-efi.passthru.config.system.build.toplevel;
           };
         in
         binaryPackages // imagePackages
@@ -1290,12 +1294,13 @@
           scanner-update = scannerUpdateTestFor system;
           scanner-offline = scannerOfflineTestFor system;
           workstation-bundles = workstationBundlesCheckFor system;
-          workstation-desktop =
-            workstationDesktopTestFor system "basic" ./nix/guests/workstation-basic.nix;
+          workstation-desktop = workstationDesktopTestFor system "basic" ./nix/guests/workstation-basic.nix;
           workstation-office-desktop =
-            workstationDesktopTestFor system "office" ./nix/guests/workstation-office.nix;
+            workstationDesktopTestFor system "office"
+              ./nix/guests/workstation-office.nix;
           workstation-development-desktop =
-            workstationDesktopTestFor system "development" ./nix/guests/workstation-development.nix;
+            workstationDesktopTestFor system "development"
+              ./nix/guests/workstation-development.nix;
         }
       );
 
