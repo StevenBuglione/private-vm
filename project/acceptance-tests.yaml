@@ -54,6 +54,74 @@
       ]
     },
     {
+      "id": "RUNTIME",
+      "tests": [
+        {
+          "id": "RUN-001",
+          "name": "Single actor owns session transitions",
+          "given": "concurrent valid and invalid lifecycle requests for one session",
+          "when": "the daemon applies them",
+          "then": "events have contiguous monotonic sequence numbers and cleanup-only states cannot be entered externally"
+        },
+        {
+          "id": "RUN-002",
+          "name": "Cleanup is coalesced and retryable",
+          "given": "concurrent cleanup callers and one injected resource cleanup failure",
+          "when": "cleanup is retried",
+          "then": "one owner cleans in reverse order, records every attempt and resumes from the failed resource"
+        },
+        {
+          "id": "RUN-003",
+          "name": "Event stream is bounded",
+          "given": "a valid replay cursor, a future cursor and a slow subscriber",
+          "when": "clients follow session events",
+          "then": "valid replay is gap-free and invalid or slow consumers receive stable fail-closed errors"
+        },
+        {
+          "id": "RUN-004",
+          "name": "Volatile store resists path substitution",
+          "given": "symlinks, hardlinks, replaced roots, oversized records and malformed journals",
+          "when": "the daemon opens or updates session state",
+          "then": "dirfd-bound operations reject every untrusted object and never follow it"
+        },
+        {
+          "id": "RUN-005",
+          "name": "Typed QEMU model rejects forbidden transport",
+          "given": "TCP display, TCP QMP, shared filesystem, arbitrary device or writable base requests",
+          "when": "a launch specification is validated",
+          "then": "launch fails with no child process or session resource"
+        },
+        {
+          "id": "RUN-006",
+          "name": "QEMU death and QMP loss converge",
+          "given": "a running fake QEMU process",
+          "when": "QMP disconnects, the process exits or cancellation occurs",
+          "then": "bounded termination and the session cleanup owner remove all registered resources"
+        },
+        {
+          "id": "RUN-007",
+          "name": "Overlay base is trusted and immutable",
+          "given": "untrusted ownership, writable mode, symlink substitution or a changed base image",
+          "when": "an overlay is planned or created",
+          "then": "creation is blocked and no overlay remains"
+        },
+        {
+          "id": "RUN-008",
+          "name": "Capacity planning is overflow safe",
+          "given": "bounded memory, runtime and scratch probes including active disk swap",
+          "when": "the storage backend is selected",
+          "then": "the plan reserves required headroom, accepts only zram swap and blocks impossible capacity"
+        },
+        {
+          "id": "RUN-009",
+          "name": "LUKS scratch lifecycle is owned",
+          "given": "an exact private scratch directory with the no-backup marker",
+          "when": "allocation fails at each step or cleanup is repeated",
+          "then": "loop, mapper, mount, ciphertext and volatile key resources converge to absent"
+        }
+      ]
+    },
+    {
       "id": "DISPLAY",
       "tests": [
         {

@@ -45,7 +45,7 @@ continue to fail closed.
 
 ## What is included
 
-- 37 numbered design and operations documents
+- 38 numbered design, operations, and acceptance-evidence documents
 - 10 architecture decision records
 - complete v1 CLI and error catalog
 - host and guest protobuf contracts

@@ -210,3 +210,29 @@ Use `project/backlog.yaml` as the seed for GitHub issues. Each issue includes:
 - security notes
 
 Do not start later phases by bypassing an exit gate.
+
+## Approved six-batch delivery plan
+
+The phase ordering above remains the security dependency order. For delivery,
+the remaining backlog is grouped into six reviewable batches so independent
+source work can continue while a previous batch's remote CI is running:
+
+1. Runtime foundation: `D-002`, `D-003`, `STOR-001`, `STOR-002`, and
+   `STOR-003` (issues 16, 17, and 21-23).
+2. Images and trust: `NIX-002` through `NIX-006`, `IMG-001` through
+   `IMG-003`, `REL-002`, and `REL-003` (issues 12-14, 28-30, and 50-51).
+3. Workstation networking: `VPN-001`, `NET-001` through `NET-003`,
+   `WS-001`, and `WS-003` (issues 24-27, 40, and 42).
+4. Torrent and scanning: `TOR-001` through `TOR-003`, `SCAN-001` through
+   `SCAN-006`, and `WS-002` (issues 31-39 and 41).
+5. Recovery and export: `D-005` and `USB-001` through `USB-003` (issues 19
+   and 43-45).
+6. Packaging and release: `PKG-001` through `PKG-003` and `REL-004`
+   (issues 46-48 and 52).
+
+Each original backlog task retains its own acceptance evidence and focused
+commit even when several tasks share a pull request. A batch may begin local,
+dependency-safe source work while the prior pull request runs remotely, but it
+must not consume an unmerged contract or bypass a required exit gate. Required
+GitHub checks still have to pass before merge; the project does not idle solely
+to watch them.

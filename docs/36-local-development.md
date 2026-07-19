@@ -16,6 +16,24 @@ nix flake check
 nix build .#checks.x86_64-linux.host-module-contract
 ```
 
+### 16 GiB workstation resource guard
+
+The project workstation is swap-free and has 16 GiB RAM. Its user Nix
+configuration must serialize derivations:
+
+```ini
+# ~/.config/nix/nix.conf
+max-jobs = 1
+cores = 2
+```
+
+Run only one heavyweight local command at a time and require at least 8 GiB
+available memory before starting it. Use `GOMAXPROCS=2` and `go test -p=1` for
+local Go gates. Build or boot role images one at a time; never run multiple
+`nix flake check`, race-test or QEMU/TCG jobs concurrently. Remote protected
+checks may run while dependency-safe source work continues, but their required
+result is still enforced before merge.
+
 `buf generate` removes stale generated files before invoking the immutable
 plugin version/revision pins in `buf.gen.yaml`. A clean checkout must remain
 unchanged after regeneration. When preparing a pull request, replace the branch

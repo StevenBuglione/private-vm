@@ -74,6 +74,13 @@ become a new stable daemon application code.
 | `SESSION_OWNER_MISMATCH` | `PermissionDenied` | no | The requested session belongs to another user. | Use a session created by the current user. |
 | `SESSION_QUOTA_EXCEEDED` | `ResourceExhausted` | yes | The per-user session limit was reached. | Stop or clean up an existing session before creating another. |
 | `SESSION_TRANSITION_INVALID` | `FailedPrecondition` | no | The requested lifecycle transition is not valid for the current state. | Inspect session status and request an operation valid for its current state. |
+| `WORKFLOW_TRANSITION_INVALID` | `FailedPrecondition` | no | The requested role workflow transition is not valid for the current role/state. | Inspect the role workflow and request its documented successor. |
+| `CLEANUP_INCOMPLETE` | `FailedPrecondition` | yes | One or more owned resources could not be proven absent. | Preserve the recovery record, correct the host condition, and retry cleanup. |
+| `EVENT_CURSOR_NOT_ALLOWED` | `InvalidArgument` | no | A nonzero event cursor was supplied to `GetSession`. | Use `after_sequence` only with `StreamEvents`. |
+| `EVENT_CURSOR_INVALID` | `InvalidArgument` | no | The event cursor is ahead of the current lifetime sequence. | Reconnect at or below the current sequence. |
+| `EVENT_CONSUMER_TOO_SLOW` | `ResourceExhausted` | yes | A subscriber exhausted its bounded event queue. | Reconnect with the last confirmed sequence. |
+| `EVENT_LIMIT_REACHED` | `ResourceExhausted` | no | The bounded lifetime event limit was reached. | Stop and clean up the session; do not continue without complete evidence. |
+| `DAEMON_SHUTTING_DOWN` | `Unavailable` | yes | Shutdown has begun and new sessions are blocked. | Retry after the daemon is running again. |
 | `REQUEST_CANCELED` | `Canceled` | yes | The request was canceled before completion. | Retry the operation only if its session state permits it. |
 | `REQUEST_TIMEOUT` | `DeadlineExceeded` | yes | The request exceeded its bounded deadline. | Inspect session status before retrying the operation. |
 | `NOT_IMPLEMENTED` | `Unimplemented` | no | The method is intentionally fail-closed until its implementation gates pass. | Do not bypass the security boundary; install a build that implements and verifies the operation. |
@@ -179,6 +186,31 @@ the Go error text directly.
 - `IMAGE_ARCH_MISMATCH`
 - `IMAGE_API_INCOMPATIBLE`
 - `IMAGE_SBOM_MISSING`
+
+### Storage
+
+- `STORAGE_CAPACITY_EVIDENCE_INVALID`
+- `STORAGE_CAPACITY_EXHAUSTED`
+- `STORAGE_RESERVATION_CONFLICT`
+- `STORAGE_BASE_IDENTITY_CHANGED`
+- `STORAGE_IMAGE_ACTIVE`
+- `STORAGE_BACKUP_EXCLUSION_UNVERIFIED`
+- `STORAGE_LOOP_IDENTITY_MISMATCH`
+- `STORAGE_MAPPER_IDENTITY_MISMATCH`
+- `STORAGE_MOUNT_IDENTITY_MISMATCH`
+- `STORAGE_ROLLBACK_INCOMPLETE`
+
+### QEMU runtime
+
+- `QEMU_EXECUTABLE_UNTRUSTED`
+- `QEMU_SPEC_INVALID`
+- `QEMU_SOCKET_UNSAFE`
+- `QEMU_PEER_IDENTITY_MISMATCH`
+- `QEMU_QMP_PROTOCOL_INVALID`
+- `QEMU_QMP_DISCONNECTED`
+- `QEMU_START_TIMEOUT`
+- `QEMU_EXIT_UNEXPECTED`
+- `QEMU_CLEANUP_INCOMPLETE`
 
 ### Network
 

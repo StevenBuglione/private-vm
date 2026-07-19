@@ -88,6 +88,33 @@ Completion evidence must continue to cover role rejection, every session-error
 mapping, and safe remediation on every typed error. No test may accept a race by
 unlinking an unverified path.
 
+### Session, QEMU and ephemeral-storage evidence
+
+Batch 1 runtime tests exhaust every allowed lifecycle transition and each
+role-specific workflow transition, reject cross-role and cleanup-state bypasses,
+and race concurrent requests against the fixed per-owner quota. Allocation tests
+prove that cancellation rolls an unregistered resource back, duplicate and late
+registrations fail, concurrent cleanup callers coalesce behind one owner, caller
+cancellation does not abandon cleanup, a failed reverse-order cleanup resumes,
+and daemon shutdown rejects new sessions while converging existing ones.
+
+Event tests cover bounded replay plus follow, future cursors, contiguous sequence
+validation, terminal closure, slow subscribers, and the 4,096-event fail-closed
+limit. Volatile-record tests pin the `/run/private-vm` root identity and use
+`openat2`/dirfd-relative operations to reject symlink, hardlink, magic-link and
+root-replacement attacks. The journal decoder is bounded to 1 MiB and rejects
+unknown fields, duplicates and trailing documents; its seed corpus is also a
+short single-worker fuzz target.
+
+Typed QEMU tests validate executable and image identity before launch, reject
+TCP QMP/SPICE and shared-filesystem device shapes, bound QMP frames and command
+deadlines, and inject process exit, QMP loss, cancellation, TERM timeout and
+KILL escalation through the fake process harness. Storage tests cover trusted
+read-only bases, fresh overlay teardown, tmpfs and LUKS resource audits,
+overflow-safe host capacity probes, zram-only swap policy, exact loop-to-file
+ownership, the private no-backup marker, rollback at each allocation boundary,
+and repeated cleanup.
+
 The bounded fuzz smoke is reproducible with:
 
 ```bash
@@ -100,6 +127,23 @@ context-bearing daemon request shapes, resource and role validation, a
 contextual transfer begin, and the stat, status, and pidfd-info parsers. Stateful
 handlers are deliberately excluded. CI and the Nix `daemon-rpc-fuzz` check run
 the same two-second, single-worker gate.
+
+The volatile journal and strict QMP envelope decoders have corresponding local
+single-worker smokes:
+
+```bash
+GOMAXPROCS=2 nix develop --offline --command \
+  go test -p=1 ./internal/session -run='^$' \
+  -fuzz='^FuzzDecodeVolatileSessionJournal$' -fuzztime=2s -parallel=1
+
+GOMAXPROCS=2 nix develop --offline --command \
+  go test -p=1 ./internal/qemu -run='^$' \
+  -fuzz='^FuzzQMPEnvelope$' -fuzztime=2s -parallel=1
+```
+
+The targets enforce the decoder's 1 MiB journal bound or a 64 KiB QMP fuzz
+input bound and exercise strict unknown-field, trailing-document, message-shape
+and legal-transition validation without launching external processes.
 
 ### Volatile-secret evidence
 
