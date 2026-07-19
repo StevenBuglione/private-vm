@@ -1,0 +1,184 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: image-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    environment: image-publish
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    env:
+      NIX_CONFIG: "max-jobs = 1 cores = 2"
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: workstation-basic
+            image_target: image-workstation-basic
+            closure_target: closure-workstation-basic
+            role: workstation
+            bundle: basic
+            repository: ghcr.io/stevenbuglione/private-vm/workstation-basic
+          - image: workstation-office
+            image_target: image-workstation-office
+            closure_target: closure-workstation-office
+            role: workstation
+            bundle: office
+            repository: ghcr.io/stevenbuglione/private-vm/workstation-office
+          - image: workstation-development
+            image_target: image-workstation-development
+            closure_target: closure-workstation-development
+            role: workstation
+            bundle: development
+            repository: ghcr.io/stevenbuglione/private-vm/workstation-development
+          - image: downloader
+            image_target: image-downloader
+            closure_target: closure-downloader
+            role: downloader
+            bundle: ""
+            repository: ghcr.io/stevenbuglione/private-vm/downloader
+          - image: scanner
+            image_target: image-scanner
+            closure_target: closure-scanner
+            role: scanner
+            bundle: ""
+            repository: ghcr.io/stevenbuglione/private-vm/scanner
+          - image: exporter
+            image_target: image-exporter
+            closure_target: closure-exporter
+            role: exporter
+            bundle: ""
+            repository: ghcr.io/stevenbuglione/private-vm/exporter
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
+        with:
+          go-version: "1.26.5"
+          cache: false
+      - uses: DeterminateSystems/nix-installer-action@ef8a148080ab6020fd15196c2084a2eea5ff2d25
+      - name: Build bounded release producer
+        run: |
+          go build -trimpath -o "$RUNNER_TEMP/private-vm-image-release" ./cmd/private-vm-image-release
+          printf '%s\n' "$RUNNER_TEMP" >> "$GITHUB_PATH"
+      - name: Prepare exact image release
+        id: prepare
+        env:
+          PVM_RELEASE_TAG: ${{ github.ref_name }}
+          PVM_SOURCE_COMMIT: ${{ github.sha }}
+          PVM_SOURCE_REF: ${{ github.ref }}
+          PVM_RUN_ID: ${{ github.run_id }}
+          PVM_RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: >-
+          private-vm-image-release prepare
+          --workdir "$GITHUB_WORKSPACE"
+          --output "$RUNNER_TEMP/private-vm-release-${{ matrix.image }}"
+          --image-target '${{ matrix.image_target }}'
+          --closure-target '${{ matrix.closure_target }}'
+          --tag "$PVM_RELEASE_TAG"
+          --role '${{ matrix.role }}'
+          --bundle '${{ matrix.bundle }}'
+          --repository '${{ matrix.repository }}'
+          --source-repository 'StevenBuglione/private-vm'
+          --source-commit "$PVM_SOURCE_COMMIT"
+          --source-ref "$PVM_SOURCE_REF"
+          --workflow '.github/workflows/release.yml'
+          --repository-id '1305109560'
+          --owner-id '34593055'
+          --run-id "$PVM_RUN_ID"
+          --run-attempt "$PVM_RUN_ATTEMPT"
+          --github-output "$GITHUB_OUTPUT"
+      - name: Attest compressed image
+        id: attest
+        uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6
+        with:
+          subject-name: image.qcow2.zst
+          subject-digest: ${{ steps.prepare.outputs.subject_digest }}
+          predicate-type: https://slsa.dev/provenance/v1
+          predicate-path: ${{ steps.prepare.outputs.predicate_path }}
+      - name: Publish exact OCI artifact
+        env:
+          PVM_RELEASE_TAG: ${{ github.ref_name }}
+          PVM_USERNAME: ${{ github.actor }}
+        run: |
+          set +x
+          printf '%s' '${{ github.token }}' | private-vm-image-release publish --prepared '${{ steps.prepare.outputs.prepared_directory }}' --provenance '${{ steps.attest.outputs.bundle-path }}' --repository '${{ matrix.repository }}' --tag "$PVM_RELEASE_TAG" --username "$PVM_USERNAME" --token-stdin
+
+  verify:
+    needs: publish
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: workstation-basic
+            image_target: image-workstation-basic
+            closure_target: closure-workstation-basic
+            role: workstation
+            bundle: basic
+            repository: ghcr.io/stevenbuglione/private-vm/workstation-basic
+          - image: workstation-office
+            image_target: image-workstation-office
+            closure_target: closure-workstation-office
+            role: workstation
+            bundle: office
+            repository: ghcr.io/stevenbuglione/private-vm/workstation-office
+          - image: workstation-development
+            image_target: image-workstation-development
+            closure_target: closure-workstation-development
+            role: workstation
+            bundle: development
+            repository: ghcr.io/stevenbuglione/private-vm/workstation-development
+          - image: downloader
+            image_target: image-downloader
+            closure_target: closure-downloader
+            role: downloader
+            bundle: ""
+            repository: ghcr.io/stevenbuglione/private-vm/downloader
+          - image: scanner
+            image_target: image-scanner
+            closure_target: closure-scanner
+            role: scanner
+            bundle: ""
+            repository: ghcr.io/stevenbuglione/private-vm/scanner
+          - image: exporter
+            image_target: image-exporter
+            closure_target: closure-exporter
+            role: exporter
+            bundle: ""
+            repository: ghcr.io/stevenbuglione/private-vm/exporter
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
+        with:
+          go-version: "1.26.5"
+          cache: false
+      - name: Build bounded anonymous verifier
+        run: |
+          go build -trimpath -o "$RUNNER_TEMP/private-vm-image-release" ./cmd/private-vm-image-release
+          printf '%s\n' "$RUNNER_TEMP" >> "$GITHUB_PATH"
+      - name: Verify public artifact anonymously
+        env:
+          PVM_RELEASE_TAG: ${{ github.ref_name }}
+        run: private-vm-image-release verify-anonymous --repository '${{ matrix.repository }}' --tag "$PVM_RELEASE_TAG" --role '${{ matrix.role }}' --bundle '${{ matrix.bundle }}' --timeout 30m

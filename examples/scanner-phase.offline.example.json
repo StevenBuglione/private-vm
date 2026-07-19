@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "role": "scanner",
+  "phase": "scan-offline",
+  "network_device_policy": "forbidden",
+  "quarantine_device_policy": "required-read-only",
+  "quarantine_mount_options": ["nodev", "noexec", "nosuid", "ro"],
+  "definitions_update": "disabled"
+}

@@ -28,6 +28,7 @@ aarch64 variants
 - QEMU guest profile and virtio kernel modules
 - systemd-networkd or NetworkManager according to role
 - no SSH server
+- no inherited NixOS curl/OpenSSH core clients; roles add network tools explicitly
 - no reusable password
 - no sudo for desktop user
 - volatile journald
@@ -41,6 +42,12 @@ aarch64 variants
 - no host keys baked in
 - role and build metadata in `/etc/private-vm/image.json`
 - automatic poweroff on guestd completion when role requires it
+
+The common image replaces NixOS's normal interactive core package set with a
+small audited shell/diagnostic set. This prevents `curl`, the stock OpenSSH
+output and unrelated administration tools from appearing in every role by
+default. Workstation bundles add curl and a server-pruned OpenSSH client
+explicitly; the scanner contract rejects both in its update and offline boots.
 
 ## XFCE workstation
 
@@ -132,6 +139,47 @@ Applications are intentionally limited:
 - no browser in offline scan boot if it can be omitted
 - no file auto-open
 
+The scanner is one immutable image with two boot configurations over the same
+per-session root overlay. The default `definitions-update` configuration enables
+NetworkManager and `freshclam` but declares quarantine attachment forbidden. The
+`scan-offline` specialization disables NetworkManager, DHCP, resolved and the
+FreshClam service/timer. The daemon must also render the scan launch with no NIC;
+disabling guest services is not accepted as evidence that a network device is
+absent.
+
+The image task does not claim that the update phase has the production Proton
+kill switch. SCAN-001 and the NET tasks must install that policy before any
+external definition update is allowed; the Nix image gate uses only a local,
+non-secret FreshClam fixture and is not VPN-readiness evidence.
+
+`/etc/private-vm/scanner-toolchain.json` records the exact Nix package name and
+version for ClamAV, file identification, bounded archive primitives, parser
+containment, PDF/Office/image/media reconstruction and metadata inspection.
+It is a closed schema-versioned record validated by
+`schemas/scanner-toolchain.schema.json`; both scanner phase records are
+validated by `schemas/scanner-phase.schema.json`.
+Those same direct tool identities appear in the embedded SPDX 2.3 document at
+`/etc/private-vm/scanner-sbom.spdx.json` and the separate `sbom-scanner` flake
+output. This toolchain SBOM is immutable image identity evidence; release
+publication later augments it with the complete image-closure SBOM and artifact
+digest.
+Its SPDX document namespace includes a digest over the guest source commit,
+architecture, flake-lock digest and direct tool records, so two source revisions
+under the same dependency lock cannot reuse one document identity.
+
+The image contains no browser, password manager, source-control/SSH client,
+development toolchain or downloader client. LibreOffice is present only as the
+required headless Office-to-PDF reconstruction backend. Thunar and the terminal
+remain for the explicitly graphical inspection role, with thumbnailing, GVFS
+and UDisks disabled.
+
+The common root guestd service intentionally has only the privileges needed for
+authenticated AF_VSOCK control. It is not the eventual parser, downloader,
+network or block-device worker. TOR, SCAN and USB implementation tasks must add
+separate role-specific workers with only their documented paths, devices,
+namespaces and capabilities. Image construction alone therefore makes no claim
+that those privileged workflow operations are implemented.
+
 ## Downloader desktop
 
 - qBittorrent graphical interface
@@ -144,13 +192,30 @@ Applications are intentionally limited:
 ## Exporter image
 
 - no desktop
-- no login
+- no unlocked login or normal user
 - no network manager
 - guestd
 - cryptsetup
 - ext4 tools
 - USB storage/filesystem drivers
+- udev and USB identity inspection tools
 - checksum tools
+
+The exporter defaults to `multi-user.target`, overrides NixOS's normally
+inherited `system.fsPackages` to omit FAT/compatibility filesystem formatters,
+omits UDisks, and is boot-tested with no emulated NIC. Its role-specific
+guestd advertises the common service plus only the exact exporter capability
+set; workstation, downloader and scanner services are not registered. USB
+attachment and the narrowly scoped device access needed for a confirmed export
+are runtime responsibilities and are not exercised by the image test.
+
+`/etc/private-vm/exporter-tools.json`, validated by
+`schemas/exporter-tool-inventory.schema.json`, records the exact Nix package
+names, versions and store paths for the exporter formatting, filesystem,
+USB/udev and checksum tool closure. The boot test verifies those paths and
+commands. This inventory is image-local evidence for the later closure-based
+SPDX generation; it is not itself an SBOM and does not replace the published
+release SBOM.
 
 ## Image identity and published manifest
 
@@ -188,6 +253,14 @@ required devices
 forbidden devices
 package/SBOM references
 ```
+
+All published-manifest fields are required, including explicit `bundle` and
+`source_ref`. It records compressed size, installed/uncompressed QCOW2 size and
+virtual disk size as distinct values. The compressed and installed identities
+must equal the immutable cache record, while the strict SPDX layer follows
+`schemas/image-sbom.schema.json` and binds the installed QCOW2 plus the full
+runtime Nix closure. The scanner's embedded toolchain SPDX is narrower
+image-local evidence and cannot substitute for this release SBOM.
 
 Both identity records' capability sets must exactly equal the compiled role map
 in `docs/09-rpc-protocol.md`. Extra, missing, or duplicate capabilities are a

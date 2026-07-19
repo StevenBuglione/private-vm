@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://private-vm.dev/schema/scanner-phase-v1.json",
+  "title": "private-vm scanner boot phase",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": { "const": 1 },
+    "role": { "const": "scanner" },
+    "phase": { "enum": ["definitions-update", "scan-offline"] },
+    "network_device_policy": { "enum": ["proton-only", "forbidden"] },
+    "quarantine_device_policy": {
+      "enum": ["forbidden", "required-read-only"]
+    },
+    "quarantine_mount_options": {
+      "type": "array",
+      "prefixItems": [
+        { "const": "nodev" },
+        { "const": "noexec" },
+        { "const": "nosuid" },
+        { "const": "ro" }
+      ],
+      "items": false,
+      "minItems": 4,
+      "maxItems": 4,
+      "uniqueItems": true
+    },
+    "definitions_update": { "enum": ["enabled", "disabled"] }
+  },
+  "required": [
+    "schema_version",
+    "role",
+    "phase",
+    "network_device_policy",
+    "quarantine_device_policy",
+    "definitions_update"
+  ],
+  "oneOf": [
+    {
+      "properties": {
+        "phase": { "const": "definitions-update" },
+        "network_device_policy": { "const": "proton-only" },
+        "quarantine_device_policy": { "const": "forbidden" },
+        "definitions_update": { "const": "enabled" }
+      },
+      "required": ["phase", "network_device_policy", "quarantine_device_policy", "definitions_update"],
+      "not": { "required": ["quarantine_mount_options"] }
+    },
+    {
+      "properties": {
+        "phase": { "const": "scan-offline" },
+        "network_device_policy": { "const": "forbidden" },
+        "quarantine_device_policy": { "const": "required-read-only" },
+        "definitions_update": { "const": "disabled" }
+      },
+      "required": [
+        "phase",
+        "network_device_policy",
+        "quarantine_device_policy",
+        "quarantine_mount_options",
+        "definitions_update"
+      ]
+    }
+  ]
+}

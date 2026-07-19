@@ -58,12 +58,24 @@
 
 - [ ] SHA-256
 - [ ] SPDX SBOM
-- [ ] OCI digest
-- [ ] GitHub artifact attestation
-- [ ] clean-runner anonymous pull
-- [ ] repository/workflow verification
+- [ ] all six fixed GHCR repositories selected by exact role/bundle mapping
+- [ ] OCI digest and exact empty config/four-layer graph
+- [ ] canonical SemVer or `-rc.N` tag was absent and was not overwritten
+- [ ] GitHub artifact attestation binds `image.qcow2.zst` and its exact SHA-256
+- [ ] saved Sigstore bundle passes local `NewOfficialVerifier` before publish
+- [ ] version-1 release receipt validates and contains no credential/path/output
+- [ ] protected `image-publish` environment rules verified in GitHub settings
+- [ ] all six package versions are public without workflow visibility mutation
+- [ ] clean fresh-runner anonymous digest pull succeeds for all six images
+- [ ] exact repository/workflow/ref/numeric-ID/invocation verification succeeds
 - [ ] revocation list checked
 - [ ] normalized reproducibility comparison
+
+Local source and policy tests may be recorded without waiting for the remote
+image workflow. Do not check any protected-environment, actual publication,
+package-visibility, OIDC or anonymous-pull item until the corresponding remote
+run has completed successfully and its immutable run URL and commit are saved
+in the release record.
 
 ## Documentation
 

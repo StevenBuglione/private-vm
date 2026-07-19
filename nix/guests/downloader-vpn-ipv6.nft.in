@@ -1,0 +1,31 @@
+# Runtime template. private-vm-guestd must replace each placeholder from typed,
+# validated values and submit the complete file as one nftables transaction.
+# It must never use text supplied by the WireGuard profile as nftables syntax.
+destroy table inet private_vm_downloader
+
+table inet private_vm_downloader {
+  chain input {
+    type filter hook input priority -150; policy drop;
+
+    iifname "lo" accept
+    ct state invalid drop
+    iifname "proton0" ct state { established, related } accept
+    iifname "eth0" ip6 saddr __PVM_ENDPOINT_IPV6__ udp sport __PVM_ENDPOINT_PORT__ ct state established accept
+    iifname "eth0" ip6 saddr __PVM_ENDPOINT_IPV6__ icmpv6 type { destination-unreachable, packet-too-big, time-exceeded, parameter-problem } accept
+    iifname "eth0" icmpv6 type { nd-neighbor-solicit, nd-neighbor-advert } accept
+  }
+
+  chain output {
+    type filter hook output priority -150; policy drop;
+
+    oifname "lo" accept
+    ct state invalid drop
+    oifname "proton0" accept
+    oifname "eth0" ip6 daddr __PVM_ENDPOINT_IPV6__ udp dport __PVM_ENDPOINT_PORT__ accept
+    oifname "eth0" icmpv6 type { nd-neighbor-solicit, nd-neighbor-advert } accept
+  }
+
+  chain forward {
+    type filter hook forward priority -150; policy drop;
+  }
+}

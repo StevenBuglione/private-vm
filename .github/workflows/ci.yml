@@ -48,14 +48,22 @@ jobs:
 
   nix:
     runs-on: ubuntu-latest
+    env:
+      NIX_CONFIG: |
+        max-jobs = 1
+        cores = 2
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
           persist-credentials: false
           fetch-depth: 0
       - uses: DeterminateSystems/nix-installer-action@ef8a148080ab6020fd15196c2084a2eea5ff2d25 # v22
-      - name: Flake evaluation and checks
-        run: nix flake check --print-build-logs
+      - name: Flake evaluation and non-image Nix gates
+        run: |
+          nix flake check --no-build --print-build-logs
+          nix build .#checks.x86_64-linux.runtime-fuzz --no-link --print-build-logs
+          nix build .#checks.x86_64-linux.host-module-contract --no-link --print-build-logs
+          nix build .#checks.x86_64-linux.static-binaries --no-link --print-build-logs
       - name: Protobuf lint, breaking, and generated-code drift
         env:
           BUF_BREAKING_AGAINST: ${{ github.event_name == 'pull_request' && format('.git#ref={0}', github.event.pull_request.base.sha) || format('.git#ref={0}', github.event.before) }}
@@ -92,7 +100,7 @@ jobs:
           fi
       - name: Reject credentials and torrent identifiers
         run: |
-          if git grep -nEI '(PrivateKey[[:space:]]*=[[:space:]]*[A-Za-z0-9+/=]{20,}|BEGIN (RSA|OPENSSH|EC) PRIVATE KEY|magnet:\?xt=urn:btih:)'; then
+          if git grep -nEI '(PrivateKey[[:space:]]*=[[:space:]]*[A-Za-z0-9+/=]{20,}|BEGIN (RSA|OPENSSH|EC) PRIVATE KEY|magnet:\?xt=urn:btih:)' -- . ':(exclude)vendor/**'; then
             echo "Potential credential or torrent identifier committed."
             exit 1
           fi

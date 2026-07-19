@@ -26,12 +26,26 @@ packages.x86_64-linux.image-workstation-development
 packages.x86_64-linux.image-downloader
 packages.x86_64-linux.image-scanner
 packages.x86_64-linux.image-exporter
+packages.x86_64-linux.closure-workstation-basic
+packages.x86_64-linux.closure-workstation-office
+packages.x86_64-linux.closure-workstation-development
+packages.x86_64-linux.closure-downloader
+packages.x86_64-linux.closure-scanner
+packages.x86_64-linux.closure-exporter
+packages.x86_64-linux.sbom-scanner
 nixosModules.default
 checks.x86_64-linux.default
 checks.x86_64-linux.desktop-role-isolation
+checks.x86_64-linux.downloader-desktop
+checks.x86_64-linux.exporter
 checks.x86_64-linux.guest-common
+checks.x86_64-linux.scanner-image-contract
+checks.x86_64-linux.scanner-update
+checks.x86_64-linux.scanner-offline
 checks.x86_64-linux.workstation-bundles
 checks.x86_64-linux.workstation-desktop
+checks.x86_64-linux.workstation-office-desktop
+checks.x86_64-linux.workstation-development-desktop
 devShells.x86_64-linux.default
 ```
 
@@ -63,6 +77,49 @@ The embedded identity follows `schemas/guest-image-identity.schema.json`. It is
 distinct from the post-build release artifact manifest in
 `schemas/image-manifest.schema.json`, which adds output digests, sizes, SBOM,
 workflow identity, and build timestamp.
+
+REL-003 must generate the published `manifest.json` and
+`sbom.spdx.json` together after the QCOW2 and zstd layer exist. The manifest
+uses the exact frozen-v1 schema. The SPDX producer enumerates the complete
+runtime Nix closure, sorts unique store paths, derives each closure SPDX ID from
+its store hash, uses the exact store basename as package name, and emits the
+ordered relationship graph documented in `docs/21-supply-chain.md`. The root
+image package and QCOW2 file checksum bind the installed/uncompressed cache
+identity. The existing scanner-toolchain SPDX output is not an input or
+substitute for this full-closure release document.
+
+## Release producer contract
+
+The protected tag workflow builds one canonical image and its exact
+`system.build.toplevel` runtime closure in each of six independent
+`ubuntu-24.04` matrix jobs. The matrix contains workstation basic, office and
+development, plus downloader, scanner and exporter. Nix is limited to one job
+and two cores; no job builds a second canonical image.
+
+The release producer is bounded Go code. It accepts one reviewed image output,
+walks it without following links, permits only regular files, and requires
+exactly one QCOW2 candidate within its file-count, path-depth and byte limits.
+Before compression it validates the QCOW2 header, version, virtual size, backing
+file prohibition and encryption prohibition. It then hashes the complete source
+file and creates `image.qcow2.zst` with a deterministic single-worker zstd
+profile. Cancellation, timeout, input replacement, short read, close failure or
+limit failure removes the private staging directory.
+
+The same producer receives the exact runtime closure from Nix, canonicalizes
+and sorts its store paths, and emits the complete SPDX 2.3 graph and frozen-v1
+manifest. Shell steps do not select files, parse QCOW2, create the SBOM or OCI
+graph, decide whether a tag may be written, or verify an artifact. The bounded
+release receipt contains public digests and identities only; it contains no
+credential, runner path or captured external-command output and is validated by
+`schemas/image-release-receipt.schema.json`.
+
+After GitHub attests the closed SLSA predicate for the exact
+`image.qcow2.zst` SHA-256 subject, the Go
+publisher first verifies the returned bundle with the same official verifier
+used by clients, then creates the frozen four-layer OCI manifest documented in
+`docs/21-supply-chain.md`. A tag that already resolves is a blocking duplicate;
+the producer never overwrites it. Partial pushes may leave unreachable blobs or
+a digest-addressed manifest, but never a discovery tag.
 
 ## Reproducibility
 
@@ -108,6 +165,12 @@ nix build .#image-workstation-basic
 nix build .#image-downloader
 nix build .#checks.x86_64-linux.guest-common
 nix build .#checks.x86_64-linux.workstation-desktop
+nix build .#checks.x86_64-linux.workstation-office-desktop
+nix build .#checks.x86_64-linux.workstation-development-desktop
+nix build .#checks.x86_64-linux.scanner-image-contract
+nix build .#checks.x86_64-linux.scanner-update
+nix build .#checks.x86_64-linux.scanner-offline
+nix build .#checks.x86_64-linux.exporter
 ```
 
 ## Image tests
@@ -129,18 +192,91 @@ minimal common guest and verifies locked accounts, disabled SSH and sudo,
 tmpfs-backed writable logs/temporary paths, volatile journald, an exact embedded
 role identity, a matching compiled guestd identity, no TCP/UDP listeners, and a
 VSOCK listener on port 4050. The role-specific image tests extend this baseline.
+Pure Nix sandboxes do not expose `/dev/vhost-vsock`, so these gates use the
+kernel VSOCK loopback transport at CID 1. Their test-only client preserves the
+production gRPC authentication and bounds. Canonical images and the production
+QEMU specification are unchanged: they require `vhost-vsock-pci` and an
+allocated guest CID of at least 3.
 
-The `workstation-desktop` test forces TCG, supplies a SPICE vdagent channel with
-clipboard and agent file transfer disabled, and proves LightDM autologin reaches
-an XFCE session for the locked `private` user. It also verifies both agent
-processes and the channel, workspace directory permissions, exact basic-bundle
-manifest, exact locked Firefox enterprise policy values and crash-reporter
-environment, client-only OpenSSH output, absence of implicit XFCE applications,
-SSH/sudo services, and TCP/UDP listeners. The separate
-`workstation-bundles` check evaluates and compares the embedded manifests for
-all three official workstation variants.
+The `workstation-desktop`, `workstation-office-desktop`, and
+`workstation-development-desktop` tests force TCG, supply a SPICE vdagent
+channel with clipboard and agent file transfer disabled, and prove LightDM
+autologin reaches an XFCE session for the locked `private` user. Each test
+imports the same module and exact bundle used by its canonical image, then
+checks the embedded bundle-manifest digest. The tests also verify both agent
+processes and the channel, workspace directory permissions, exact locked
+Firefox enterprise policy values and crash-reporter environment, client-only
+OpenSSH output, absence of implicit XFCE applications, SSH/sudo services, and
+TCP/UDP listeners. The separate `workstation-bundles` check evaluates and
+compares all three embedded manifests to the versioned catalog.
 
 The `desktop-role-isolation` check builds the downloader and scanner system
 paths, proves their role-required tools are installed, and rejects workstation
 viewers, preview helpers, NetworkManager applet, and other implicit XFCE
 applications from those roles.
+
+The `downloader-desktop` test boots the downloader under TCG and proves its
+embedded identity, exact compiled role/capability set, authenticated guestd
+readiness over AF_VSOCK with the synthetic `fw_cfg` capability, XFCE and
+WireGuard tools, absence of personal-work applications and embedded VPN/torrent
+credentials, and an
+initial default-drop nftables policy. It mounts a disposable test quarantine,
+creates a dummy `proton0`, and verifies that qBittorrent cannot start before a
+root-owned volatile VPN-ready marker exists. After readiness it verifies the
+service and loopback-only listeners, the immutable `proton0` binding, volatile
+logging/profile paths, bounded stop, fail-closed restart, and syntax of both
+typed endpoint firewall templates. NET-003 remains responsible for rendering
+those templates and continuously withdrawing readiness on tunnel failure.
+TOR-002 remains responsible for replacing the first-boot profile copy with a
+per-boot authenticated qBittorrent Web API credential and testing a real
+authenticated API operation; the image gate does not claim that behavior.
+
+The scanner has three focused gates. `scanner-image-contract` checks both boot
+configurations, every required executable, fail-closed ClamAV limits, absence of
+workstation/downloader tools, and one-to-one package/version coverage between
+the embedded tool inventory and SPDX document. It validates both phase records
+and the toolchain record against their closed JSON schemas and proves that a
+different source revision under the same flake lock produces a different SPDX
+document namespace. `scanner-update` boots the online
+phase without quarantine and performs a deterministic FreshClam database update
+from a non-secret local test database, rather than treating `--version` as an
+update proof. `scanner-offline` passes explicit `-nic none`, attaches a generated
+quarantine filesystem through a read-only QEMU block backend, verifies that only
+loopback exists, mounts it `ro,nodev,nosuid,noexec`, and proves a write fails.
+Both boot tests compare the embedded image/build identity, scanner role and
+exact sorted RPC capability list, then prove authenticated guestd readiness over
+AF_VSOCK with the synthetic `fw_cfg` capability. They also repeat the common
+locked-account, no SSH/sudo, volatile journal/tmpfs and no TCP/UDP-listener
+invariants. The update gate's local FreshClam fixture is not evidence of the
+production Proton kill switch; SCAN-001 and the NET tasks own that control.
+
+These Nix gates do not grant guestd broad workflow privileges. TOR, SCAN and USB
+tasks must introduce narrowly scoped role workers for network, parser and block
+device operations and test their exact privilege boundaries before the
+corresponding workflow can be called complete.
+
+Run the two scanner VM gates serially. Each is configured for 2 GiB of guest RAM;
+do not run them together on a 16 GiB development host.
+
+The `exporter` check boots the exporter configuration under TCG with no test
+VLAN or emulated NIC. It proves that loopback is the only network interface,
+there are no TCP/UDP listeners, guestd is reachable only on VSOCK, and the
+embedded and compiled identities expose exactly the common plus exporter
+capabilities. It also verifies the multi-user target, locked login boundary,
+absence of a normal user, display stack, NetworkManager and UDisks, and presence
+of the pinned cryptsetup, ext4, partitioning, USB/udev inspection and checksum
+tools. It checks the exact package/version/store-path inventory embedded at
+`/etc/private-vm/exporter-tools.json` against
+`schemas/exporter-tool-inventory.schema.json`; the later release workflow uses
+the whole image closure to produce the SPDX SBOM. The harness explicitly
+requests no additional writable disk and proves no USB-backed block device is
+attached. This test neither attaches nor modifies a physical USB device.
+
+## Public-runner matrix
+
+`.github/workflows/image-build.yml` builds each canonical image in a separate
+fresh `ubuntu-24.04` standard public-runner job. Each job uses one Nix build at a
+time with two cores, creates no result symlink, and then runs only the TCG gates
+assigned to that role. Scanner update and offline gates run serially in the same
+scanner job. The workflow never requests KVM, credentials, artifact upload, or
+write permissions. REL-003, not this workflow version, owns publication.

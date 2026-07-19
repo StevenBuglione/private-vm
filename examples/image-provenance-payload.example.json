@@ -1,0 +1,47 @@
+{
+  "_type": "https://in-toto.io/Statement/v1",
+  "subject": [
+    {
+      "name": "image.qcow2.zst",
+      "digest": {
+        "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    }
+  ],
+  "predicateType": "https://slsa.dev/provenance/v1",
+  "predicate": {
+    "buildDefinition": {
+      "buildType": "https://slsa-framework.github.io/github-actions-buildtypes/workflow/v1",
+      "externalParameters": {
+        "workflow": {
+          "ref": "refs/tags/v0.1.0",
+          "repository": "https://github.com/StevenBuglione/private-vm",
+          "path": "/.github/workflows/release.yml"
+        }
+      },
+      "internalParameters": {
+        "github": {
+          "event_name": "push",
+          "repository_id": "1305109560",
+          "repository_owner_id": "34593055"
+        }
+      },
+      "resolvedDependencies": [
+        {
+          "uri": "git+https://github.com/StevenBuglione/private-vm@refs/tags/v0.1.0",
+          "digest": {
+            "gitCommit": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+          }
+        }
+      ]
+    },
+    "runDetails": {
+      "builder": {
+        "id": "https://github.com/actions/runner/github-hosted"
+      },
+      "metadata": {
+        "invocationId": "https://github.com/StevenBuglione/private-vm/actions/runs/123456/attempts/1"
+      }
+    }
+  }
+}

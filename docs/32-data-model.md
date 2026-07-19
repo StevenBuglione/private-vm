@@ -64,6 +64,26 @@ guest_api_major/minor nixos_version sbom_digest
 
 A tag is never an execution identity.
 
+## Image release receipt
+
+The closed version-1 pre-attestation receipt is validated by
+`schemas/image-release-receipt.schema.json` and contains:
+
+```text
+project release_tag role bundle repository
+source_repository source_commit source_ref workflow
+image_digest uncompressed_sha256 sbom_digest manifest_digest
+compressed_size_bytes uncompressed_size_bytes virtual_size_bytes
+files = image.qcow2.zst, manifest.json, sbom.spdx.json, predicate.json
+```
+
+The role/bundle selects exactly one official GHCR repository. The source ref is
+a canonical stable SemVer or `-rc.N` tag for the exact official release
+workflow. The receipt is not an execution identity and intentionally does not
+contain the later Sigstore bundle or final OCI-manifest digest. It also cannot
+contain an absolute staging path, registry credential, endpoint or raw command
+output.
+
 ## Device enrollment
 
 ```text

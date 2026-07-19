@@ -15,6 +15,7 @@ pkgs.buildGoModule {
     "cmd/private-vm"
     "cmd/private-vmd"
     "cmd/private-vm-guestd"
+    "cmd/private-vm-image-release"
   ];
   ldflags = [
     "-s"

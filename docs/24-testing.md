@@ -23,6 +23,8 @@
 - Unix peer PID/start-time/UID/group revalidation and PID-reuse rejection
 - control-socket path, ownership, mode, stale-socket, and replacement-race policy
 - exact Polkit action, subject, timeout, empty environment, and output redaction
+- OCI tag-to-digest ordering, descriptor hashing, bounded zstd extraction and
+  immutable cache records
 
 ### Fuzz
 
@@ -40,6 +42,99 @@ Targets:
 - USB descriptors
 - path normalization
 - stream sequence state
+
+### OCI pull and cache boundary
+
+`internal/image` uses an in-memory read-only registry fake to prove that tag
+resolution is the first remote operation, the final directory is the resolved
+manifest digest, cache hits never fetch tag-selected layers, and all four
+component descriptors are independently hashed. Adversarial cases cover
+digest substitution before decoder construction; every forbidden manifest,
+config and layer optional field; the exact `{}` config media type, size, digest
+and fetched bytes; required fixed titles; extra annotations; unsafe or absolute
+titles; duplicate and unknown media types; compressed and installed size limits;
+stream-close failure; verifier
+failure, cancellation, timeout, read-only modes, cache tampering and cleanup of
+every hidden `.partial-*` directory.
+
+The ORAS adapter test proves HTTPS-only, bounded and anonymous construction.
+After an official public image exists, maintainers can run the opt-in anonymous
+registry acceptance without embedding credentials:
+
+```bash
+PRIVATE_VM_TEST_PUBLIC_OCI_REFERENCE='ghcr.io/stevenbuglione/private-vm/workstation-basic:rc' \
+  go test ./internal/image -run '^TestORASAnonymousResolve$'
+```
+
+The opt-in test resolves only. Complete installation remains blocked until the
+IMG-002/IMG-003 verifier accepts the staged manifest, SBOM and provenance.
+
+IMG-002 tests construct only local staged fixtures. They prove exact
+role/bundle/architecture mapping, guest API minor policy, QEMU policy, sorted
+capabilities, source/lock/NixOS fields, compressed and installed cache bindings,
+SBOM layer binding, cancellation, timeout and hard byte/count limits. Manifest
+and SPDX decoders reject unknown, duplicate, trailing, missing and null fields,
+including nested package/file/checksum/relationship fields. The SPDX cases also
+cover duplicate or unsorted store paths, store-hash-derived IDs, exact store
+names, image/file checksum mismatch, incomplete closure packages and noncanonical
+relationship graphs. The package-private IMG-003 seam is used only by focused
+unit tests; the exported official constructor always installs the embedded-root
+verifier.
+
+IMG-003 tests use a local virtual Fulcio/Rekor/TSA deployment and no network.
+They prove a valid cryptographic DSSE bundle; exact repository/workflow/tag,
+numeric repository/owner IDs and invocation binding; wrong SAN/issuer/digest;
+untrusted and expired certificate material; malformed, duplicate, unknown,
+missing-proof and oversized inputs; cancellation, timeout and repeated offline
+cache reverification. Schema tests also reject mutable refs and repository-name
+reuse with a changed numeric ID.
+
+### OCI release producer and publication boundary
+
+REL-003 focused tests run serially and without Nix or a VM. They directly cover:
+
+- bounded regular-file discovery, QCOW2 v3 header/virtual-size validation,
+  deterministic single-worker zstd output and source/compressed hashes;
+- symlink, duplicate-image, backing-file, encryption, malformed-header,
+  incomplete-closure, cancellation and timeout rejection before publication;
+- exact empty OCI config and ordered four-layer descriptor bytes;
+- credential read only from bounded standard input with no cache, Docker store,
+  argv, environment or diagnostic copy;
+- duplicate-tag rejection before blob writes, a second pre-tag absence check,
+  conditional non-overwrite tag creation and post-write digest resolution;
+- injected failure after every blob/manifest operation, proving that a partial
+  push cannot create the tag and that local staging is removed; and
+- anonymous construction with no credential followed by digest-pinned pull;
+  the IMG-002/IMG-003 tests in the same package independently exercise the
+  complete `NewOfficialVerifier` manifest/SPDX/cryptographic policy.
+
+The same production selector additionally rejects missing images, special
+files, path/count/depth/size overflow and unsupported QCOW2 feature bits. Those
+bounds are enforced in Go even where the focused REL-003 suite uses a
+representative rejection rather than duplicating every selector mutation.
+
+Schema tests validate the release receipt and reject unknown fields, branch or
+arbitrary refs, non-official repositories/workflows, a mismatched role/bundle,
+missing/fifth/reordered file names, invalid digests, and any secret/path-shaped
+field. OCI graph tests independently reject a changed component media type.
+
+The local source gate is:
+
+```bash
+CGO_ENABLED=0 GOMAXPROCS=2 GOMEMLIMIT=3GiB \
+  go test -p=1 ./internal/image ./cmd/private-vm-image-release
+python3 tools/validate_schemas.py
+python3 tools/validate_examples.py
+python3 tools/test_workflow_policy.py
+python3 tools/check_workflow_policy.py
+```
+
+These checks are sufficient to continue local implementation without waiting
+for GitHub's image build. They do not prove server-side environment protection,
+an actual OIDC attestation, GHCR visibility or anonymous reachability. Those
+remote-only conclusions require all six protected publication rows and all six
+fresh anonymous-verification rows to succeed for the same protected Git tag and
+commit. Pending, skipped, cancelled and failed rows are not acceptance evidence.
 
 ### Integration without KVM
 
@@ -165,11 +260,11 @@ the package for Darwin so Linux syscalls cannot leak into common source files.
 Use QEMU TCG in public CI for:
 
 - image boot
-- guest role/capabilities
+- embedded guest identity and exact role/capabilities
 - XFCE/lightdm target
 - no SSH
 - volatile journal
-- VSOCK guestd
+- authenticated VSOCK guestd readiness with the synthetic `fw_cfg` capability
 - scanner no-network specialization
 - exporter headless behavior
 
@@ -185,17 +280,51 @@ not use a production capability or any VPN credential. NixOS test
 instrumentation may add its own control channel; that channel is not present in
 the canonical image derivations.
 
-The workstation desktop gate is run with:
+Pure Nix build sandboxes do not expose the host `/dev/vhost-vsock` device. VM
+gates therefore load the kernel `vsock_loopback` transport and exercise the
+real guestd AF_VSOCK listener at CID 1. The test-only client is compiled only
+for Linux, refuses every CID except 1, and retains the production transport
+credentials, message/header bounds and token interceptors. Production QEMU
+continues to require `vhost-vsock-pci` with an allocated CID of at least 3; its
+typed device model and host-to-guest behavior are verified separately. This
+split makes the TCG boot gate reproducible without weakening the production
+CID policy or adding an impure device to CI.
+
+The downloader and both scanner phase gates use a test-only client that first
+proves an incorrect capability is rejected and then authenticates `Hello` with
+that synthetic capability. The client is added only to VM-test configurations,
+never to a production package or image. Run the two 2 GiB scanner gates
+serially on the 16 GiB development host.
+
+The exporter boot gate is run with:
+
+```bash
+nix build .#checks.x86_64-linux.exporter
+```
+
+It uses TCG and an explicit empty VLAN list. The test requires loopback to be the
+only interface, rejects every TCP/UDP listener and desktop/network-management
+component, confirms the LUKS2/ext4/partitioning/USB-inspection/checksum tools and
+their embedded package/version/store-path inventory, and compares both embedded
+image identity and `private-vm-guestd --version` against the exact exporter
+capability set. The harness adds no writable quarantine disk and rejects any
+USB-backed block device. It does not attach, inspect, format or write a USB
+device.
+
+The three workstation desktop gates are run with:
 
 ```bash
 nix build .#checks.x86_64-linux.workstation-desktop
+nix build .#checks.x86_64-linux.workstation-office-desktop
+nix build .#checks.x86_64-linux.workstation-development-desktop
 ```
 
-It boots with explicit TCG and no test VLAN, waits for LightDM autologin and the
-XFCE session, verifies both SPICE agent processes and the virtio channel,
-validates the exact versioned basic-bundle manifest, installed/forbidden desktop
-applications, locked Firefox policy values, and crash-reporter environment, and
-repeats the no-SSH-server/sudo and no-TCP/UDP checks. The pure
+Each boots the exact canonical workstation module and bundle with explicit TCG
+and no test VLAN, waits for LightDM autologin and the XFCE session, verifies both
+SPICE agent processes and the virtio channel, validates its versioned bundle
+manifest, installed/forbidden desktop applications, locked Firefox policy
+values, and crash-reporter environment, and repeats the no-SSH-server/sudo and
+no-TCP/UDP checks. The pure
 `workstation-bundles` check compares all three embedded bundle manifests to the
 catalog. NixOS VM instrumentation uses its own test machine and devices, so this
 is an image boot gate rather than a production launch-spec proof. Host QEMU
@@ -206,6 +335,32 @@ fallback are absent.
 `checks.x86_64-linux.desktop-role-isolation` separately evaluates the downloader
 and scanner system paths so an implicit XFCE application cannot silently leak
 across role boundaries.
+
+Scanner acceptance is split so each TCG process stays within the public-runner
+and 16 GiB maintainer-host budget:
+
+- `scanner-image-contract` checks the online/offline module contract, ClamAV
+  bounds, required tool commands, forbidden cross-role commands, and exact
+  package/version coverage in the embedded and exported SPDX documents.
+- `scanner-update` boots only the update role, proves quarantine is absent, and
+  runs FreshClam against a deterministic local `.hdb` fixture. This exercises an
+  actual database installation while explicitly excluding the official main,
+  daily and bytecode databases, so it cannot rely on Internet availability or
+  a real credential.
+- `scanner-offline` uses explicit QEMU `-nic none`, verifies zero non-loopback
+  interfaces, attaches one read-only ext4 fixture, verifies the block read-only
+  bit and `ro,nodev,nosuid,noexec` mount flags, then proves writing fails.
+
+Both scanner boots verify the compiled `scanner` role and the exact advertised
+common-plus-scanner capability list. They also reject SSH/sudo, credential
+directories and workstation/downloader commands. Run the VM checks one at a
+time; they are deliberately not a multi-node test.
+
+The public image workflow maps the six canonical image outputs to these exact
+TCG gates in six independent standard-runner jobs. It builds no two canonical
+images in one workspace. A scanner job is the sole exception to one boot per
+job: its update and offline phase tests execute serially because both phases
+belong to the same scanner image contract.
 
 ### KVM acceptance
 

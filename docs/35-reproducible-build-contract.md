@@ -18,7 +18,21 @@ may introduce nondeterminism.
   and provenance-related metadata.
 - OCI artifacts are addressed by digest.
 - SBOMs enumerate included packages.
-- provenance attestations bind artifacts to the release workflow.
+- provenance attestations bind the compressed artifact digest to the exact
+  release workflow, protected immutable Git SemVer/RC tag, source commit, GitHub
+  repository/owner numeric IDs, and run invocation. The client verifies the
+  saved Sigstore bundle offline against its reviewed embedded trust snapshot.
+- a bounded Go producer validates the single regular QCOW2, records its virtual
+  size, hashes the complete source, uses a fixed single-worker zstd profile, and
+  derives the manifest and SPDX document from the same bytes and exact sorted
+  `system.build.toplevel` closure.
+- the exact empty OCI config and ordered four-layer manifest are canonical JSON;
+  each release receipt is a closed version-1 public-digest record with no local
+  staging path or credential.
+- the producer refuses an existing package SemVer/RC tag, rechecks absence,
+  creates it conditionally and confirms the resolved digest. GHCR tag
+  immutability is not assumed; the post-publication execution identity is the
+  resolved manifest digest.
 - release commands include `-trimpath` and deterministic version metadata.
 - build inputs never use mutable `latest` references.
 
@@ -45,6 +59,13 @@ A `private-vm images compare-builds` command should later compare:
 A periodic clean job rebuilds locked inputs and compares semantic image identity.
 It does not update dependencies. Dependency updates arrive through reviewed pull
 requests.
+
+The REL-003 verification job does not reuse the publisher workspace or
+credential. It starts on a fresh standard runner, resolves the just-published
+tag anonymously, pulls by the resolved digest and runs the official offline
+provenance/SBOM verifier. Local deterministic and policy tests may complete
+without waiting for that remote job, but remote publication and visibility are
+not reproducibility evidence until the job succeeds.
 
 ## Release trust statement
 

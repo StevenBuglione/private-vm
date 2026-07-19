@@ -19,9 +19,12 @@ secret was used by these tests or written to their output.
 | `STOR-002` | Bounded memory/swap/filesystem probes, immutable capacity snapshots, atomic reservations, and exact tmpfs ownership | Disk swap blocks admission; memory overcommit is rejected before allocation; concurrent reservations cannot exceed the pool; cancellation and allocation failures retain cleanup ownership until tmpfs teardown succeeds |
 | `STOR-003` | Memfd-backed random key, LUKS2 outer container, verified loop/mapper devices, opaque QEMU files, explicit backup-exclusion marker, and reverse-order cleanup | Key material is delivered by file descriptor and destroyed; partial failures at attach/format/open/mkfs/mount preserve retryable cleanup state; repeated cleanup is harmless; only the outer filesystem is host-mounted |
 
-`D-003` also depends on `NIX-003`. The source and fake-runtime acceptance is
-complete, and the common guest boot test passes, but the issue remains open
-until the workstation image boot evidence is completed in Batch 2.
+`D-003` also depends on `NIX-003`. Its deferred image dependency was completed
+on 2026-07-19 from the integrated Batch 2 tree: the
+`checks.x86_64-linux.workstation-desktop` TCG test booted the locked workstation
+configuration, reached the graphical target, verified LightDM/XFCE and the
+Unix-only hardened SPICE configuration, and authenticated the role-specific
+guest daemon. This closes the remaining `D-003` acceptance dependency.
 
 ## Commands and results
 
@@ -49,7 +52,11 @@ gitleaks dir . --redact --no-banner --exit-code 1
 The complete Go unit, race, vet, static-analysis, schema, protobuf, secret-scan,
 and Nix source gates passed. The `guest-common` NixOS VM booted under QEMU and
 completed its role/capability, no-SSH, volatile-journal, and guest-agent checks.
-The workstation desktop boot remains a Batch 2 gate.
+The integrated Batch 2 tree additionally passed:
+
+```text
+GOMAXPROCS=2 nix build --no-link --max-jobs 1 --cores 2 .#checks.x86_64-linux.workstation-desktop
+```
 
 ## Residual scope
 

@@ -139,6 +139,28 @@ in
     pkgs.nftables
     pkgs.util-linux
   ];
+  # NixOS's normal interactive core set includes general-purpose network
+  # clients such as curl and OpenSSH. Guest roles opt into every user-facing
+  # tool explicitly, so retain only the bounded administration primitives used
+  # by boot, diagnostics and the role acceptance tests. The workstation bundle
+  # adds its separately pruned client-only OpenSSH derivation when requested.
+  environment.corePackages = lib.mkForce (
+    with pkgs;
+    [
+      bashInteractive
+      coreutils
+      findutils
+      gawk
+      gnugrep
+      gnused
+      gnutar
+      gzip
+      procps
+      util-linux
+      xz
+    ]
+  );
+  environment.defaultPackages = [ ];
 
   systemd.services.private-vm-guestd = {
     description = "private-vm guest control daemon";

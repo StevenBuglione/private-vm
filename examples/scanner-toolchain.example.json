@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "project": "private-vm",
+  "role": "scanner",
+  "architecture": "x86_64",
+  "source_commit": "0123456789abcdef0123456789abcdef01234567",
+  "flake_lock_sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+  "archive_execution_contract": "guestd-bounded-unprivileged-private-namespace",
+  "tools": [
+    {
+      "id": "clamav",
+      "package": "clamav",
+      "version": "1.4.3",
+      "commands": ["clamd", "clamdscan", "clamscan", "freshclam"],
+      "purpose": "official-definition update and malware-signature evidence"
+    }
+  ]
+}

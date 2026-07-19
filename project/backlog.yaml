@@ -517,13 +517,17 @@
             "IMG-002"
           ],
           "deliverables": [
-            "Sigstore/GitHub attestation verifier",
-            "repository/workflow/ref policy",
-            "offline cache policy"
+            "bounded offline Sigstore bundle v0.3 verifier with embedded public-good roots",
+            "exact repository/workflow/immutable SemVer ref and numeric-ID policy",
+            "closed signed SLSA payload and Fulcio invocation binding",
+            "offline cache reverification policy"
           ],
           "acceptance": [
             "wrong repository is never overridable",
             "wrong workflow is never overridable",
+            "branch/arbitrary refs and repository-name reuse are rejected",
+            "wrong SAN, issuer, digest, trust, certificate time or proof is rejected",
+            "cached verification performs no network request",
             "digest mismatch blocks before decompression"
           ]
         }
@@ -941,14 +945,24 @@
             "IMG-003"
           ],
           "deliverables": [
-            "GHCR media types",
-            "anonymous pulls",
-            "SPDX SBOM",
-            "artifact attestations"
+            "tag-only release.yml with six independent ubuntu-24.04 image rows behind the protected image-publish environment",
+            "six exact role/bundle GHCR repositories and exact canonical image plus runtime-closure targets",
+            "bounded Go QCOW2 selector/validator, deterministic single-worker zstd producer, hasher and cleanup owner",
+            "complete canonical SPDX 2.3 runtime-closure producer, frozen-v1 manifest and closed pre-attestation release receipt",
+            "full-SHA-pinned GitHub custom SLSA attestation for image.qcow2.zst and its exact SHA-256",
+            "exact empty-config four-layer OCI graph published by ORAS without Docker or a credential store",
+            "non-overwriting SemVer/RC tag publication with duplicate and partial-push protection",
+            "fresh-runner anonymous digest pull through the official manifest/SBOM/Sigstore verifier",
+            "redacted versioned local and remote acceptance runbook"
           ],
           "acceptance": [
-            "clean client pulls anonymously",
-            "private-vm verifies by digest and provenance",
+            "focused local tests prove success, failure, cancellation, timeout and staging cleanup within bounded source-only limits",
+            "a noncanonical tag or commit outside fetched official origin/main, malformed or ambiguous QCOW2 input, incomplete closure, invalid receipt, wrong role/bundle/repository/ref or OCI graph drift fails before publication",
+            "attestation subject is exactly image.qcow2.zst and its producer hash, and the saved bundle passes NewOfficialVerifier before tag creation",
+            "credential input is bounded standard input and never appears in argv, environment, logs, Docker state or a credential cache",
+            "a pre-existing tag causes zero blob writes and every injected partial-push failure leaves the tag absent",
+            "a clean fresh runner pulls each of the six public images anonymously, resolves it to an immutable digest and passes complete official provenance/SBOM verification",
+            "protected environment enforcement, actual publication, public GHCR visibility and anonymous pulls are recorded as remote-only gates rather than pre-claimed by local tests",
             "tag mutation cannot change cached execution identity"
           ]
         },

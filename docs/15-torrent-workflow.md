@@ -79,6 +79,10 @@ session_required =
 Default safety margin: max(10%, 4 GiB).
 
 For unknown archive expansion, use policy maximum rather than compressed size.
+The v1 scanner accepts at most 4 GiB for one regular file and for total expanded
+archive work. `max_input_bytes` remains the cumulative quarantine-capacity
+bound, so a larger multi-file selection is valid only when every selected file
+and planned expansion remains within its scanner-specific limit.
 
 ## Download
 

@@ -1,6 +1,7 @@
 # Verified external sources
 
-Verified on 2026-07-18.
+Verified on 2026-07-18. IMG-003 Sigstore and REL-003 GitHub/OCI details were
+rechecked on 2026-07-19.
 
 ## NixOS
 
@@ -17,10 +18,20 @@ Verified on 2026-07-18.
 
 - Standard public runner specifications and free/unlimited public use:
   https://docs.github.com/en/actions/how-tos/write-workflows/choose-where-workflows-run/choose-the-runner-for-a-job
+  (4 CPU, 16 GB RAM, 14 GB SSD and the `ubuntu-24.04` label rechecked
+  2026-07-19)
 - Container registry OCI support and anonymous public pulls:
   https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry
+  (new container packages default private; anonymous pull requires public
+  visibility, rechecked 2026-07-19)
 - Artifact attestations:
   https://docs.github.com/actions/security-for-github-actions/using-artifact-attestations/using-artifact-attestations-to-establish-provenance-for-builds
+- `actions/attest` inputs and `bundle-path` output:
+  https://github.com/actions/attest
+- Artifact attestations REST API (current DSSE/Rekor bundle example):
+  https://docs.github.com/rest/orgs/orgs#list-attestations
+- Deployment environments and protection rules:
+  https://docs.github.com/en/actions/reference/workflows-and-actions/deployments-and-environments
 - Secure use and action pinning:
   https://docs.github.com/en/actions/reference/security/secure-use
 
@@ -54,11 +65,28 @@ Verified on 2026-07-18.
   https://www.man7.org/linux/man-pages/man8/cryptsetup-luksFormat.8.html
 - ORAS Go:
   https://github.com/oras-project/oras-go
+- ORAS push/pull model:
+  https://oras.land/docs/how_to_guides/pushing_and_pulling
+- OCI image manifest specification:
+  https://github.com/opencontainers/image-spec/blob/main/manifest.md
 
 ## Go
 
 - Go downloads; current stable at verification was Go 1.26.5:
   https://go.dev/dl/
+- sigstore-go v1.2.2 release and API, pinned at commit
+  `55aa6240784677449a564e66a0fca7a6a3605ecd`:
+  https://github.com/sigstore/sigstore-go/releases/tag/v1.2.2
+
+The embedded public-good root is copied from sigstore-go v1.2.2
+`examples/trusted-root-public-good.json` as
+`internal/image/trust/sigstore-public-good-trusted-root-v1.2.2.json`; its
+SHA-256 is `4364d7724c04cc912ce2a6c45ed2610e8d8d1c4dc857fb500292738d4d9c8d2c`.
+Updating it requires a reviewed pinned sigstore-go release and current Sigstore
+public-good TUF target, comparison of Fulcio/CT/Rekor keys and validity windows,
+an updated filename/embed/hash/source record, all cryptographic/offline tests,
+`go mod tidy -diff`, and regenerated `vendor/`. Runtime network replacement of
+the trust snapshot is forbidden.
 
 ## Desktop
 

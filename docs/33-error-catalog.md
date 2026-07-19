@@ -158,6 +158,46 @@ the Go error text directly.
 | `ErrCallback` | A bounded secret-reader callback was not supplied. |
 | `ErrSerialization` | A supported serialization path was rejected. |
 
+## Image pull/cache errors
+
+These stable internal classifications map to CLI exit 12 at the image command
+boundary, except cancellation and timeout, which normalize to the canonical
+`OPERATION_CANCELLED` exit 21 and `OPERATION_TIMEOUT` exit 15 records. Their
+messages and remediations never include a registry response, source reference,
+cache path or wrapped filesystem/network failure.
+The Go error retains its wrapped cause for trusted `errors.Is`/`errors.As`
+classification, but implements safe formatting and Go-string behavior so
+ordinary, detailed and structural `fmt` verbs cannot reveal that cause.
+
+| Code | Safe meaning |
+|---|---|
+| `IMAGE_REFERENCE_INVALID` | The OCI reference is malformed or omits both tag and digest. |
+| `IMAGE_RESOLVE_FAILED` | A repository or reference could not be resolved to an immutable manifest descriptor. |
+| `IMAGE_OCI_MANIFEST_INVALID` | The OCI v1 manifest, descriptor set, media type, title or component count is unsupported. |
+| `IMAGE_ARTIFACT_LIMIT` | Manifest, metadata, compressed image, installed image, component count or deadline limits are invalid or exceeded. |
+| `IMAGE_DIGEST_MISMATCH` | Resolved, downloaded or installed bytes do not match their canonical SHA-256 identity. |
+| `IMAGE_DOWNLOAD_FAILED` | A bounded OCI response could not be fetched, read or closed completely. |
+| `IMAGE_EXTRACTION_FAILED` | The zstd image or fixed cache file could not be decoded, written, synchronized or closed. |
+| `IMAGE_CACHE_INVALID` | Cache ownership, mode, type, layout, schema or recorded file integrity is invalid. |
+| `IMAGE_CACHE_CONFLICT` | A digest entry could not be atomically published or reconciled with a valid concurrent entry. |
+| `IMAGE_VERIFICATION_FAILED` | The mandatory manifest/SBOM/provenance verifier rejected the complete staged entry. |
+| `IMAGE_VERIFICATION_UNAVAILABLE` | No IMG-002/IMG-003 verifier was installed, so no cache entry was published. |
+| `IMAGE_MANIFEST_INVALID` | The published manifest is missing, malformed, noncanonical or violates the frozen-v1 build contract. |
+| `IMAGE_ROLE_MISMATCH` | The published image role differs from the requested compartment. |
+| `IMAGE_BUNDLE_MISMATCH` | The workstation bundle differs, or a non-workstation image does not use an explicit null bundle. |
+| `IMAGE_ARCHITECTURE_MISMATCH` | The image architecture does not match the immutable amd64/x86_64 or arm64/aarch64 host mapping. |
+| `IMAGE_GUEST_API_MISMATCH` | The image guest API major/minor is outside the immutable host compatibility policy. |
+| `IMAGE_QEMU_VERSION_MISMATCH` | The image QEMU requirement is noncanonical or unsupported by the host policy. |
+| `IMAGE_CAPABILITY_MISMATCH` | The capability list is not the exact sorted common-plus-role contract. |
+| `IMAGE_SBOM_REQUIRED` | The official strict artifact has no readable SPDX layer. |
+| `IMAGE_SBOM_INVALID` | The SPDX 2.3 document or its image/Nix-closure binding is malformed, incomplete or noncanonical. |
+| `IMAGE_PROVENANCE_REQUIRED` | The immutable cache entry has no complete recorded Sigstore provenance bundle. |
+| `IMAGE_PROVENANCE_INVALID` | The bounded offline bundle, signature, trust chain, Rekor proof, SCT or observer timestamp is invalid. |
+| `IMAGE_PROVENANCE_IDENTITY_MISMATCH` | The authenticated repository, workflow, immutable release ref, commit or compressed-image identity is not official. |
+| `IMAGE_PROVENANCE_PREDICATE_INVALID` | The signed closed SLSA/GitHub Actions payload violates the exact official producer profile. |
+| `IMAGE_PULL_CANCELLED` | The caller cancelled before atomic publication; partial data was removed. |
+| `IMAGE_PULL_TIMEOUT` | The bounded pull deadline expired; partial data was removed. |
+
 ## Mandatory blocking diagnostic codes
 
 ### Host

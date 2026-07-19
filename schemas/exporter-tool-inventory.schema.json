@@ -1,0 +1,138 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://private-vm.dev/schema/exporter-tool-inventory-v1.json",
+  "title": "private-vm exporter tool inventory",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "packages": {
+      "type": "array",
+      "minItems": 6,
+      "maxItems": 6,
+      "items": {
+        "$ref": "#/$defs/package"
+      },
+      "allOf": [
+        {
+          "contains": {
+            "properties": {
+              "name": {
+                "const": "coreutils"
+              }
+            },
+            "required": [
+              "name"
+            ]
+          },
+          "minContains": 1,
+          "maxContains": 1
+        },
+        {
+          "contains": {
+            "properties": {
+              "name": {
+                "const": "cryptsetup"
+              }
+            },
+            "required": [
+              "name"
+            ]
+          },
+          "minContains": 1,
+          "maxContains": 1
+        },
+        {
+          "contains": {
+            "properties": {
+              "name": {
+                "const": "e2fsprogs"
+              }
+            },
+            "required": [
+              "name"
+            ]
+          },
+          "minContains": 1,
+          "maxContains": 1
+        },
+        {
+          "contains": {
+            "properties": {
+              "name": {
+                "const": "systemd"
+              }
+            },
+            "required": [
+              "name"
+            ]
+          },
+          "minContains": 1,
+          "maxContains": 1
+        },
+        {
+          "contains": {
+            "properties": {
+              "name": {
+                "const": "usbutils"
+              }
+            },
+            "required": [
+              "name"
+            ]
+          },
+          "minContains": 1,
+          "maxContains": 1
+        },
+        {
+          "contains": {
+            "properties": {
+              "name": {
+                "const": "util-linux"
+              }
+            },
+            "required": [
+              "name"
+            ]
+          },
+          "minContains": 1,
+          "maxContains": 1
+        }
+      ]
+    }
+  },
+  "required": [
+    "schema_version",
+    "packages"
+  ],
+  "$defs": {
+    "package": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[a-z0-9][a-z0-9+._-]*$"
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "store_path": {
+          "type": "string",
+          "pattern": "^/nix/store/[0-9a-z]{32}-[^/]{1,128}$"
+        }
+      },
+      "required": [
+        "name",
+        "version",
+        "store_path"
+      ]
+    }
+  }
+}

@@ -89,10 +89,15 @@ rules enforce its safety boundary.
 Policy files are immutable typed snapshots described by
 `schemas/policy.schema.json`. They use the same 1 MiB, schema-version, strict
 unknown-field, secret-field, migration-output, local-file and redacted-error
-rules as configuration. Limits are finite: input at most 1 TiB, at most one
-million files, archive depth at most 10, expansion ratio at most 1000, expanded
-content at most 4 TiB and scan timeout from 30 seconds through 24 hours. A
-zero-value or unvalidated Go `Rules` value always denies approval.
+rules as configuration. Limits are finite: cumulative selected input at most 1
+TiB, each regular input file at most 4 GiB, at most one million files, archive
+depth at most 10, expansion ratio at most 1000, total expanded archive work at
+most 4 GiB, and each one-file ClamAV scan invocation from 30 through 300
+seconds. Directory/batch submission cannot use one timeout to cover multiple
+files. The cumulative input limit is a quarantine-capacity bound and does not
+permit a single file to exceed the scanner limit. Workflow/session deadlines are
+independent, bounded orchestration limits. A zero-value or unvalidated Go
+`Rules` value always denies approval.
 
 ## Applying changes
 

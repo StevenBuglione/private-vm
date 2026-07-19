@@ -204,6 +204,13 @@ private-vm images test REF [--backend qemu|packer]
 private-vm images prune
 ```
 
+`images pull` resolves a tag to an immutable OCI manifest digest before layer
+download. It exposes no cache entry until all bounded component transfers,
+digest checks, extraction, manifest/SBOM/provenance verification and an atomic
+read-only install succeed. Cancellation, timeout or verification failure
+removes the hidden partial entry. A mutable tag is never an execution identity
+or persisted cache key.
+
 ### Sessions
 
 ```text
