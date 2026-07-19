@@ -181,3 +181,48 @@ versions in `/etc/private-vm/scanner-toolchain.json` and repeats those identitie
 in `/etc/private-vm/scanner-sbom.spdx.json`. A missing, empty or mismatched entry
 is an image-build failure; the scanner workflow must copy the verified versions
 into the eventual scan report rather than probing an untracked host tool.
+
+## Source implementation contract
+
+`internal/scan` owns the scanner security decisions; it does not delegate them
+to shell. The update receipt binds current official ClamAV evidence to one
+opaque scanner-overlay identity. The offline verifier requires that same
+overlay, no non-loopback interface, one read-only quarantine attachment and
+the exact sorted mount options `nodev,noexec,nosuid,ro`.
+
+Inventory uses descriptor-relative Linux traversal with `openat2` beneath the
+quarantine root. It never follows links, crosses a mount boundary or invokes a
+classifier with a filename. Regular files are reopened and compared by
+device/inode/mode/size, hashed completely and checked again after the read.
+Symlinks, multiple hard links, devices, sockets, FIFOs, replacements and any
+count/byte/path uncertainty reject the scan.
+
+ClamAV content is sent with bounded `INSTREAM` frames over its Unix socket.
+Only a strict NUL-terminated `stream:` verdict is accepted. `FOUND`, encrypted
+content, skipped/unreadable files, scan limits, timeouts, protocol ambiguity and
+transport errors are blocking. Raw clamd responses are never returned or
+logged.
+
+ZIP and TAR manifests are validated before extraction. Absolute/traversing,
+duplicate, encrypted, linked and special entries reject. Declared count,
+per-file size, total expansion, depth and compression ratio are checked before
+writing, and actual extracted content is reinventoried. Extraction can run only
+as a non-root worker in a verified private tmpfs boundary; its identity-pinned
+directory is removed on success, failure or cancellation.
+
+Reconstruction accepts the validated `safe` policy only. External tools receive
+content on stdin and return content on stdout with fixed filename-free
+arguments. PDF output is raster-only and page-count checked, Office first
+renders to PDF and then uses the same raster path, PNG/JPEG is fully decoded and
+re-encoded as PNG, and media is fully decoded/re-encoded with metadata,
+attachments and chapters omitted. Every output has a new volatile file object,
+bounded size, verified MIME/hash/tool evidence and a mandatory ClamAV rescan.
+Unsupported and active types fail closed.
+
+The canonical report schema records scanner/image/definition identity,
+isolation and phase completion, every input verdict, archives, findings, tools,
+transformations and output rescans. It is authenticated with HMAC-SHA-256 using
+the 32-byte volatile session capability. Verification occurs before JSON
+decoding, rejects noncanonical/unknown/trailing JSON, and permits promotion only
+for a complete authenticated `approved` report. There is no torrent or magnet
+identifier field.

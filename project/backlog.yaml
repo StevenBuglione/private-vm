@@ -628,7 +628,8 @@
           "acceptance": [
             "quarantine absent during update",
             "scan boot has no NIC device",
-            "outdated definitions block"
+            "outdated definitions block",
+            "offline scan proves the same opaque overlay identity that received the update"
           ]
         },
         {
@@ -647,7 +648,8 @@
           "acceptance": [
             "write attempts fail",
             "extension mismatch recorded",
-            "host never mounts quarantine filesystem"
+            "host never mounts quarantine filesystem",
+            "descriptor-relative traversal rejects links, special files and identity replacement"
           ]
         },
         {
@@ -665,7 +667,8 @@
             "malware rejects",
             "skipped file rejects",
             "scan error rejects",
-            "timeout rejects"
+            "timeout rejects",
+            "unknown, malformed and oversized ClamAV responses reject"
           ]
         },
         {
@@ -684,7 +687,8 @@
             "zip bombs reject before disk exhaustion",
             "absolute paths reject",
             "symlink/hardlink escapes reject",
-            "encrypted archives reject safe policy"
+            "encrypted archives reject safe policy",
+            "failure and cancellation remove only the identity-pinned extraction directory"
           ]
         },
         {
@@ -704,7 +708,8 @@
             "safe output contains no original active content by design",
             "tool failure rejects",
             "output rescanned",
-            "transformation recorded in report"
+            "transformation recorded in report",
+            "output MIME, structure, hash and pinned tool identity are verified before approval"
           ]
         },
         {
@@ -722,7 +727,8 @@
           "acceptance": [
             "incomplete report cannot approve",
             "report verifies before transfer",
-            "no private torrent identifier persists by default"
+            "no private torrent identifier persists by default",
+            "canonical bytes are authenticated by the volatile session key before strict decoding"
           ]
         }
       ]

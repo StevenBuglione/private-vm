@@ -38,6 +38,12 @@ Do not weaken host nftables to "make it work."
 - stop workflow
 - do not attach quarantine
 - retry with a new scanner overlay
+
+For scanner-core source evidence, run the four bounded commands in
+`docs/24-testing.md`. A source pass proves parser, policy, report-MAC and cleanup
+behavior only. Before release, also run the scanner update/offline image gates
+and KVM corpus workflow; do not infer no-NIC, read-only block attachment,
+freshclam success or external reconstruction-tool behavior from unit tests.
 - inspect safe error code
 - rotate image if engine/database incompatible
 

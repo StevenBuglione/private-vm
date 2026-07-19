@@ -115,6 +115,8 @@ image_sbom_schema = json.loads(
 image_sbom = json.loads(
     (ROOT / "examples/image-sbom.spdx.example.json").read_text(encoding="utf-8")
 )
+scan_report_schema = json.loads((ROOT / "schemas/scan-report.schema.json").read_text(encoding="utf-8"))
+scan_report = json.loads((ROOT / "examples/scan-report.example.json").read_text(encoding="utf-8"))
 
 negative_cases = []
 unsigned = deepcopy(config)
@@ -264,6 +266,16 @@ negative_cases.append(("missing closure checksum field", image_sbom_schema, miss
 unknown_sbom_field = deepcopy(image_sbom)
 unknown_sbom_field["packages"][0]["source"] = "unsupported"
 negative_cases.append(("unknown SPDX package field", image_sbom_schema, unknown_sbom_field))
+incomplete_report = deepcopy(scan_report)
+incomplete_report["phases"]["output_rescan_complete"] = False
+incomplete_report["complete"] = False
+negative_cases.append(("incomplete approved scan report", scan_report_schema, incomplete_report))
+networked_report = deepcopy(scan_report)
+networked_report["isolation"]["no_network"] = False
+negative_cases.append(("networked scan report", scan_report_schema, networked_report))
+unrescanned_report = deepcopy(scan_report)
+unrescanned_report["sanitized_outputs"][0]["rescan_verdict"] = "SKIPPED"
+negative_cases.append(("unrescanned scan output", scan_report_schema, unrescanned_report))
 
 for label, schema, value in negative_cases:
     if Draft202012Validator(schema).is_valid(value):

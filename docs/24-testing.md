@@ -397,6 +397,23 @@ maintainers; do not expose secrets to public PR jobs.
 - slowloris stream
 - USB composite descriptor fixture
 
+The source-level scanner gate is intentionally credential-free and runs with
+one Go package worker:
+
+```bash
+CGO_ENABLED=0 GOMAXPROCS=2 go test -p=1 ./internal/scan
+CGO_ENABLED=0 GOMAXPROCS=2 go vet ./internal/scan
+python3 tools/validate_schemas.py
+python3 tools/validate_examples.py
+```
+
+It generates ZIP/TAR fixtures in memory and proves traversal, absolute path,
+symlink, hardlink, FIFO, encrypted archive, nesting, expansion-ratio and output
+replacement failures. A local `net.Pipe` implements the ClamAV protocol fixture;
+no daemon, definitions download or hostile public corpus is required. Real
+freshclam, offline boot/device enforcement and pinned PDF/Office/media tools
+remain separate scanner-image and KVM acceptance gates.
+
 ## Network tests
 
 VPN-001 unit and fuzz evidence uses synthetic WireGuard keys and mock resolvers

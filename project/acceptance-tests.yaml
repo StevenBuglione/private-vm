@@ -438,6 +438,13 @@
           "given": "a selection within cumulative quarantine capacity that contains an oversized file or expanded work",
           "when": "policy planning and each one-file ClamAV invocation are bounded",
           "then": "the cumulative capacity remains independent while every file and expanded operation is at most 4 GiB and every one-file ClamAV invocation is at most 300 seconds"
+        },
+        {
+          "id": "SCAN-006-REPORT",
+          "name": "Authenticated complete report",
+          "given": "canonical scanner evidence and a volatile per-session MAC key",
+          "when": "promotion verifies the report envelope",
+          "then": "tampering, wrong key, incomplete phases, skipped output rescan and noncanonical JSON reject"
         }
       ]
     },

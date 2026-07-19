@@ -108,9 +108,21 @@ ordered chunks. It is never a general filesystem tunnel.
 
 ## Scan report
 
-The report records scanner image, definitions, input identity, findings,
-transformations, output identities and final result. `complete=false` or a
-missing field cannot approve a transfer.
+The v1 canonical report records scanner image/source/guestd identity, ClamAV
+engine/database identity and timestamp, exact offline isolation evidence, every
+phase-completion bit, sorted input identities/verdicts, bounded archive records,
+findings, reconstruction tools, transformations, output identities/rescan
+verdicts and the final result. Session IDs use the internal `pvm-` form; output
+IDs use the opaque `scan-out-` form. There is deliberately no magnet, torrent
+info-hash or torrent identifier field.
+
+The guest returns the canonical JSON plus a 32-byte HMAC-SHA-256 tag made with
+the per-boot volatile session capability. The verifier authenticates bytes
+before strict decoding and requires byte-for-byte canonical re-encoding.
+Unknown fields, trailing documents, malformed ordering, a mismatched envelope
+completeness flag, `complete=false`, an unfinished phase, stale definitions, a
+blocking finding, a missing output rescan or any missing identity cannot approve
+a transfer. Reports remain under `/run` unless explicitly exported.
 
 ## Workspace state
 

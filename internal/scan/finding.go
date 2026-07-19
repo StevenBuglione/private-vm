@@ -9,11 +9,11 @@ const (
 )
 
 type Finding struct {
-	Code         string
-	Severity     Severity
-	RelativePath string
-	Detail       string
-	Identifier   string
+	Code         string   `json:"code"`
+	Severity     Severity `json:"severity"`
+	RelativePath string   `json:"path,omitempty"`
+	Detail       string   `json:"detail"`
+	Identifier   string   `json:"identifier,omitempty"`
 }
 
 func (finding Finding) valid() bool {
