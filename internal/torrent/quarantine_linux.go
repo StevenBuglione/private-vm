@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 
 	"golang.org/x/sys/unix"
 )
@@ -193,7 +194,7 @@ func (backend *linuxQuarantineBackend) PrepareDirectories(ctx context.Context) e
 		if err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
 			return errors.New("quarantine directory identity invalid")
 		}
-		stat, ok := info.Sys().(*unix.Stat_t)
+		stat, ok := info.Sys().(*syscall.Stat_t)
 		if !ok || stat.Nlink < 2 || (stat.Uid != 0 && stat.Uid != uint32(backend.uid)) {
 			return errors.New("quarantine directory identity invalid")
 		}
@@ -350,14 +351,18 @@ func inspectQuarantineFormat(file *os.File) (quarantineFormatState, error) {
 
 func validateMountTarget(path string) error {
 	info, err := os.Lstat(path)
-	if err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 || info.Mode().Perm()&0o077 != 0 {
-		return ErrQuarantineMountTargetUnsafe
-	}
-	stat, ok := info.Sys().(*unix.Stat_t)
-	if !ok || stat.Uid != 0 || stat.Nlink != 2 {
+	if err != nil || !validMountTargetInfo(info, 0) {
 		return ErrQuarantineMountTargetUnsafe
 	}
 	return nil
+}
+
+func validMountTargetInfo(info os.FileInfo, owner uint32) bool {
+	if info == nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 || info.Mode().Perm()&0o077 != 0 {
+		return false
+	}
+	stat, ok := info.Sys().(*syscall.Stat_t)
+	return ok && stat.Uid == owner && stat.Nlink == 2
 }
 
 func readSmallFile(path string, maximum int64) ([]byte, error) {

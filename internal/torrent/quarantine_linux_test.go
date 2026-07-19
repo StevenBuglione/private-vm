@@ -4,6 +4,7 @@ package torrent
 
 import (
 	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -43,6 +44,30 @@ func TestInspectQuarantineFormatAcceptsOnlyBlankOrExt4(t *testing.T) {
 				t.Fatalf("inspect=%d err=%v", got, err)
 			}
 		})
+	}
+}
+
+func TestValidateMountTargetUsesStandardLibraryStatIdentity(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "quarantine")
+	if err := os.Mkdir(path, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Lstat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !validMountTargetInfo(info, uint32(os.Getuid())) {
+		t.Fatal("safe standard-library file identity rejected")
+	}
+	if err := os.Chmod(path, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	info, err = os.Lstat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if validMountTargetInfo(info, uint32(os.Getuid())) {
+		t.Fatal("unsafe mount target accepted")
 	}
 }
 
