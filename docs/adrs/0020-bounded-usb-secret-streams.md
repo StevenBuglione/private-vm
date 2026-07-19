@@ -1,4 +1,4 @@
-# ADR 0012: Bounded USB secret streams and semantic export RPCs
+# ADR 0020: Bounded USB secret streams and semantic export RPCs
 
 Status: accepted
 
