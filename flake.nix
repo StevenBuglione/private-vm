@@ -351,7 +351,9 @@
             listeners = machine.succeed("ss -H -lntu")
             for listener in listeners.splitlines():
               address = listener.split()[-2]
-              assert (address.startswith("127.0.0.53") or address.startswith("127.0.0.54")) and address.endswith(":53"), listener
+              host, port = address.rsplit(":", 1)
+              host = host.split("%", 1)[0]
+              assert host in ("127.0.0.53", "127.0.0.54") and port == "53", listener
           '';
         };
 
@@ -459,7 +461,9 @@
             listeners = machine.succeed("ss -H -ltn")
             for listener in listeners.splitlines():
               address = listener.split()[-2]
-              assert address.startswith("127.0.0.53:") or address.startswith("127.0.0.54:"), listener
+              host, port = address.rsplit(":", 1)
+              host = host.split("%", 1)[0]
+              assert host in ("127.0.0.53", "127.0.0.54") and port == "53", listener
 
             machine.succeed("cp /etc/private-vm/nftables/downloader-vpn-ipv4.nft.in /run/downloader-vpn-ipv4.nft")
             machine.succeed("sed -i -e 's/__PVM_ENDPOINT_IPV4__/192.0.2.1/g' -e 's/__PVM_ENDPOINT_PORT__/51820/g' /run/downloader-vpn-ipv4.nft")
