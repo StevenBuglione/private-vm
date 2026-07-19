@@ -407,7 +407,11 @@
           "acceptance": [
             "private key never converted to string in logs",
             "invalid AllowedIPs rejected",
-            "stale endpoint gives actionable failure"
+            "stale endpoint gives actionable failure",
+            "mapped and special-use endpoint answers rejected before normalization",
+            "owner/name/generation/epoch endpoint plan cannot be substituted",
+            "CLI streams bounded input to the authenticated daemon without source path, argv, environment, disk or log exposure",
+            "daemon shutdown destroys every volatile profile generation"
           ]
         },
         {

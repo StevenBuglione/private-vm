@@ -171,7 +171,7 @@ private-vm scan reject --session ID
 private-vm vpn import [--from-file FILE|--stdin]
 private-vm vpn inspect
 private-vm vpn test
-private-vm vpn rotate
+private-vm vpn rotate [--from-file FILE|--stdin]
 private-vm vpn remove
 ```
 
@@ -183,6 +183,18 @@ the bytes directly into protected volatile storage. A successful import
 atomically replaces and destroys the prior generation; it creates no profile
 file. `remove` is idempotent, and daemon shutdown or restart destroys every
 imported generation.
+
+Without a source flag, an interactive invocation securely prompts on
+`/dev/tty` for the path of an existing profile; it does not attempt to accept a
+multi-line WireGuard file as one terminal line. The selected file must pass the
+same caller-owner, mode-0600, regular-file and no-symlink checks as
+`--from-file`. Non-interactive callers must select `--from-file` or `--stdin`.
+
+The CLI sends one contextual begin frame followed by at most 64 non-empty
+16-KiB chunks over `/run/private-vm/control.sock`. The source path is consumed
+only by the unprivileged CLI and is not part of the RPC. Chunks and input
+buffers are cleared after use; the profile is never placed in argv or the
+environment. `rotate` uses this exact import path and source-selection contract.
 
 `inspect` returns only the versioned status in
 `schemas/vpn-profile-status.schema.json`: presence, an opaque generation,

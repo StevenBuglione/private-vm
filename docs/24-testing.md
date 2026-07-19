@@ -403,15 +403,22 @@ VPN-001 unit and fuzz evidence uses synthetic WireGuard keys and mock resolvers
 only. Parser tables cover the accepted IPv4/IPv6 profile, every hook and unknown
 field, multiple peers, duplicate fields, invalid key shapes, unsafe DNS and
 addresses, missing/partial/additional default routes, missing endpoint ports,
-line/input bounds, read failure and destroyed input. Formatting and
+IPv4-mapped public/loopback values, special-use ranges, malformed key padding,
+`PersistentKeepalive`, zoned addresses, line/input bounds, read failure and
+destroyed input. Formatting and
 serialization tests prove that the private key, endpoint, address and DNS values
 cannot enter status JSON or diagnostic formatting.
 
 Resolver tests prove literal-IP behavior, trusted-host hostname resolution,
-deduplication/order, unsafe/empty/oversized result rejection, cancellation and a
-bounded timeout. Memory-store tests prove atomic generation replacement, stale
-generation rejection, actionable rotation status, idempotent remove/close and
-no restore after daemon shutdown. Guest-config tests consume the ephemeral
+absolute-name lookup, mapped/special/empty/oversized result rejection,
+deduplication/order, cancellation and a bounded timeout. Memory-store tests
+prove owner isolation, atomic generation replacement, exact-plan binding,
+cross-profile and cross-owner substitution rejection, invalidation on every
+resolution attempt, non-cooperative resolver isolation, actionable rotation
+status, idempotent remove/close and no restore after daemon shutdown.
+Daemon/CLI tests cover bounded import framing, authenticated Unix transport,
+source destruction on every outcome, stable local/RPC error mapping, shutdown
+cleanup, and aggregate-only status output. Guest-config tests consume the ephemeral
 reader and cover success, callback failure and cancellation; fixtures never use
 a real Proton credential.
 

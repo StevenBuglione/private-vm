@@ -30,6 +30,7 @@ const (
 	CodeVersion       Code = "VERSION_REPORTED"
 	CodeDoctorReport  Code = "DOCTOR_REPORT"
 	CodeAcknowledged  Code = "ACKNOWLEDGED"
+	CodeVPNProfile    Code = "VPN_PROFILE_STATUS"
 	CodeInternalError Code = "INTERNAL_ERROR"
 	CodeRenderFailed  Code = "OUTPUT_RENDER_FAILED"
 )
@@ -76,6 +77,28 @@ type AcknowledgementPayload struct {
 }
 
 func (AcknowledgementPayload) machinePayload() {}
+
+// VPNStatusPayload is the aggregate-only volatile profile status. It cannot
+// represent keys, source paths, endpoints, interface addresses or DNS values.
+type VPNStatusPayload struct {
+	SchemaVersion uint32                `json:"schema_version"`
+	Present       bool                  `json:"present"`
+	Generation    uint64                `json:"generation"`
+	Rotation      string                `json:"rotation"`
+	Code          string                `json:"code"`
+	Remediation   string                `json:"remediation"`
+	Profile       *VPNInspectionPayload `json:"profile,omitempty"`
+}
+
+type VPNInspectionPayload struct {
+	SchemaVersion         uint32 `json:"schema_version"`
+	IPv4Enabled           bool   `json:"ipv4_enabled"`
+	IPv6Enabled           bool   `json:"ipv6_enabled"`
+	InterfaceAddressCount uint32 `json:"interface_address_count"`
+	DNSServerCount        uint32 `json:"dns_server_count"`
+}
+
+func (VPNStatusPayload) machinePayload() {}
 
 // EventPayload is deliberately sealed independently from success payloads.
 // Adding an event shape requires an explicit, reviewed concrete type.
@@ -240,6 +263,24 @@ func validSuccess(success SuccessEnvelope) bool {
 		return true
 	case AcknowledgementPayload:
 		return success.Code == CodeAcknowledged && validRequiredString(data.Message, 512)
+	case VPNStatusPayload:
+		if success.Code != CodeVPNProfile || data.SchemaVersion != 1 ||
+			!oneOf(data.Rotation, "not_imported", "resolution_required", "current", "rotation_required") ||
+			!validCode(Code(data.Code)) || !validRequiredString(data.Remediation, 256) {
+			return false
+		}
+		if !data.Present {
+			return data.Generation == 0 && data.Rotation == "not_imported" && data.Code == "VPN_PROFILE_NOT_IMPORTED" && data.Profile == nil
+		}
+		expectedCode := map[string]string{
+			"resolution_required": "VPN_ENDPOINT_CHECK_REQUIRED",
+			"current":             "VPN_PROFILE_CURRENT",
+			"rotation_required":   "VPN_PROFILE_ROTATION_REQUIRED",
+		}[data.Rotation]
+		return data.Generation > 0 && data.Profile != nil && data.Profile.SchemaVersion == 1 && data.Profile.IPv4Enabled &&
+			data.Profile.InterfaceAddressCount > 0 && data.Profile.InterfaceAddressCount <= 8 &&
+			data.Profile.DNSServerCount > 0 && data.Profile.DNSServerCount <= 8 &&
+			expectedCode != "" && data.Code == expectedCode
 	default:
 		return false
 	}
@@ -326,6 +367,19 @@ func humanSuccess(code Code, data MachinePayload) string {
 		return buffer.String()
 	case AcknowledgementPayload:
 		return fmt.Sprintf("%s: %s\n", safeLine(string(code)), safeLine(value.Message))
+	case VPNStatusPayload:
+		ipv4, ipv6 := false, false
+		addresses, dns := uint32(0), uint32(0)
+		if value.Profile != nil {
+			ipv4, ipv6 = value.Profile.IPv4Enabled, value.Profile.IPv6Enabled
+			addresses, dns = value.Profile.InterfaceAddressCount, value.Profile.DNSServerCount
+		}
+		return fmt.Sprintf(
+			"%s: present=%t generation=%d rotation=%s ipv4=%t ipv6=%t addresses=%d dns=%d\nremediation: %s\n",
+			safeLine(value.Code), value.Present, value.Generation, safeLine(value.Rotation),
+			ipv4, ipv6, addresses, dns,
+			safeLine(value.Remediation),
+		)
 	default:
 		// MachinePayload is sealed; this protects against new payload types being
 		// added without a corresponding reviewed human representation.

@@ -13,6 +13,10 @@ service PrivateVMDaemonService {
   rpc CreateSession(CreateSessionRequest) returns (Session);
   rpc GetSession(GetSessionRequest) returns (Session);
   rpc ListSessions(ListSessionsRequest) returns (ListSessionsResponse);
+  rpc ImportVPNProfile(stream VPNProfileImportFrame) returns (VPNProfileStatus);
+  rpc InspectVPNProfile(VPNProfileRequest) returns (VPNProfileStatus);
+  rpc TestVPNProfile(VPNProfileRequest) returns (VPNProfileStatus);
+  rpc RemoveVPNProfile(VPNProfileRequest) returns (VPNProfileStatus);
   rpc StartRole(StartRoleRequest) returns (Session);
   rpc StopRole(StopRoleRequest) returns (Session);
   rpc AbortSession(AbortSessionRequest) returns (Session);
@@ -80,9 +84,40 @@ message ListSessionsRequest {
 message ListSessionsResponse {
   repeated Session sessions = 1;
 }
-message StartRoleRequest {
+
+message VPNProfileImportBegin {
   RequestContext context = 1;
+  string profile_name = 2;
 }
+
+message VPNProfileChunk { bytes data = 1; }
+
+message VPNProfileImportFrame {
+  oneof frame {
+    VPNProfileImportBegin begin = 1;
+    VPNProfileChunk chunk = 2;
+  }
+}
+
+message VPNProfileRequest {
+  RequestContext context = 1;
+  string profile_name = 2;
+}
+
+message VPNProfileStatus {
+  uint32 schema_version = 1;
+  bool present = 2;
+  uint64 generation = 3;
+  string rotation = 4;
+  string code = 5;
+  string remediation = 6;
+  bool ipv4_enabled = 7;
+  bool ipv6_enabled = 8;
+  uint32 interface_address_count = 9;
+  uint32 dns_server_count = 10;
+}
+
+message StartRoleRequest { RequestContext context = 1; }
 
 message StopRoleRequest {
   RequestContext context = 1;

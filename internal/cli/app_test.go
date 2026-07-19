@@ -330,7 +330,7 @@ func TestValidatedParametersReachSemanticInvoker(t *testing.T) {
 		{name: "torrent input", args: []string{"torrent", "add", "--torrent-file", "/tmp/input.torrent"}, want: TorrentInputIntent{TorrentFile: "/tmp/input.torrent"}},
 		{name: "torrent selection", args: []string{"torrent", "select", "--files", "1,2,4"}, want: TorrentSelectionIntent{Files: []uint32{1, 2, 4}}},
 		{name: "scanner approval", args: []string{"scan", "approve", "--session", session, "--to", "usb"}, want: ScanApprovalIntent{SessionID: session, To: "usb"}},
-		{name: "vpn import", args: []string{"vpn", "import", "--from-file", "/tmp/profile.conf"}, want: VPNImportIntent{FromFile: "/tmp/profile.conf"}},
+		{name: "vpn import", args: []string{"vpn", "import", "--from-file", "/tmp/profile.conf"}, want: VPNImportIntent{ProfileName: "proton-p2p", FromFile: "/tmp/profile.conf"}},
 		{name: "usb device", args: []string{"usb", "enroll", "--device", "usb-1"}, want: USBDeviceIntent{DeviceID: "usb-1"}},
 		{name: "usb prepare", args: []string{"usb", "prepare", "--format", "luks2-ext4"}, want: USBPrepareIntent{Format: "luks2-ext4"}},
 		{name: "image selection", args: []string{"images", "sync", "--role", "workstation", "--bundle", "basic"}, want: ImageSelectionIntent{Role: "workstation", Bundle: "basic"}},

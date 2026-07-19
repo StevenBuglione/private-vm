@@ -21,7 +21,7 @@ Do not persist:
 - tracker URLs
 - filenames
 - file hashes unless user exports report
-- VPN endpoint/private key
+- VPN endpoint/private key/profile source path
 - public IP
 - DNS answers
 - USB volume content
@@ -45,6 +45,12 @@ endpoint types reject machine serialization and render fixed redaction tokens.
 not alter these contracts. A profile exists only in the daemon's protected
 memory store and the bounded guest-delivery callback; neither is included in a
 diagnostic bundle.
+
+The unprivileged CLI alone opens a selected profile file. Its source path is not
+sent over RPC. Profile bytes travel only in bounded client-streaming protobuf
+chunks over the authenticated Unix socket; they are never placed in argv or the
+environment and are not formatted into RPC errors. CLI, protobuf-chunk and
+daemon receive buffers are cleared after each ownership boundary.
 
 ## Session events
 

@@ -274,6 +274,13 @@ VPN profile operations additionally use these stable safe codes:
 | `VPN_ENDPOINT_CHECK_REQUIRED` | 13 | The imported generation has not completed endpoint verification. | Run the trusted-host endpoint check before delivery. |
 | `VPN_PROFILE_ROTATED` | 13 | The generation changed between endpoint planning and delivery. | Resolve the current generation and rebuild its endpoint policy. |
 | `VPN_PROFILE_LIMIT` | 13 | The daemon's bounded volatile profile-name limit was reached. | Remove an unused profile before importing another name. |
+| `VPN_PROFILE_BEGIN_REQUIRED` | 13 | The first import frame is absent or not a contextual begin frame. | Start the bounded stream with `VPNProfileImportBegin`. |
+| `VPN_PROFILE_STREAM_INVALID` | 13 | Import chunks are empty, oversized, excessive or use an unexpected frame shape. | Send at most 64 non-empty chunks of at most 16 KiB. |
+| `VPN_PROFILE_TOO_LARGE` | 13 | Sensitive input exceeds the 64-KiB profile limit. | Generate a standard bounded Proton WireGuard profile. |
+| `VPN_PROFILE_SOURCE_UNSAFE` | 13 | The selected source file fails owner, mode, regular-file or no-follow checks. | Use a caller-owned mode-0600 regular file without symlinks. |
+| `VPN_PROFILE_READ_FAILED` | 13 | The selected sensitive-input adapter could not read the profile safely. | Select a readable owner-only file or bounded standard input. |
+| `VPN_REQUEST_INVALID` | 13 | The CLI VPN intent or local control-socket configuration is invalid. | Use the documented VPN command syntax and installed control socket. |
+| `DAEMON_UNAVAILABLE` | 13 | A VPN RPC failed without a valid safe daemon `ErrorDetail`. | Verify `private-vmd` and its Unix control socket, then retry. |
 
 The redacted VPN status schema uses corresponding state codes
 `VPN_ENDPOINT_CHECK_REQUIRED`, `VPN_PROFILE_CURRENT` and

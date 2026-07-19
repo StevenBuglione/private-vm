@@ -21,36 +21,33 @@ func TestEndpointResolverReturnsBoundedSortedPublicAddresses(t *testing.T) {
 	profile := mustParseProfile(t, validProfile(false, "vpn.proton.test:51820"))
 	defer profile.Destroy()
 	resolver := NewEndpointResolverWithLookup(lookupFunc(func(_ context.Context, network, host string) ([]netip.Addr, error) {
-		if network != "ip" || host != "vpn.proton.test" {
+		if network != "ip" || host != "vpn.proton.test." {
 			t.Fatal("resolver received an unexpected request")
 		}
 		return []netip.Addr{
-			netip.MustParseAddr("2001:db8::20"),
-			netip.MustParseAddr("198.51.100.20"),
-			netip.MustParseAddr("198.51.100.20"),
+			netip.MustParseAddr("2606:4700:4700::1111"),
+			netip.MustParseAddr("1.1.1.1"),
+			netip.MustParseAddr("1.1.1.1"),
 		}, nil
 	}))
-	resolved, err := resolver.Resolve(context.Background(), profile)
+	resolved, err := resolver.resolve(context.Background(), profile)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(resolved) != 2 || resolved[0].Address() != netip.MustParseAddr("198.51.100.20") || resolved[1].Port() != 51820 {
+	if len(resolved) != 2 || resolved[0].address != netip.MustParseAddr("1.1.1.1") || resolved[1].port != 51820 {
 		t.Fatalf("unexpected resolved endpoint set: %#v", resolved)
-	}
-	if rendered := resolved[0].String(); rendered != "[REDACTED VPN ENDPOINT]" {
-		t.Fatalf("endpoint String() = %q", rendered)
 	}
 }
 
 func TestEndpointResolverLiteralDoesNotCallDNS(t *testing.T) {
-	profile := mustParseProfile(t, validProfile(false, "198.51.100.80:443"))
+	profile := mustParseProfile(t, validProfile(false, "1.0.0.1:443"))
 	defer profile.Destroy()
 	resolver := NewEndpointResolverWithLookup(lookupFunc(func(context.Context, string, string) ([]netip.Addr, error) {
 		t.Fatal("literal endpoint used DNS")
 		return nil, nil
 	}))
-	resolved, err := resolver.Resolve(context.Background(), profile)
-	if err != nil || len(resolved) != 1 || resolved[0].Address() != netip.MustParseAddr("198.51.100.80") || resolved[0].Port() != 443 {
+	resolved, err := resolver.resolve(context.Background(), profile)
+	if err != nil || len(resolved) != 1 || resolved[0].address != netip.MustParseAddr("1.0.0.1") || resolved[0].port != 443 {
 		t.Fatalf("Resolve() = %#v, %v", resolved, err)
 	}
 }
@@ -65,6 +62,9 @@ func TestEndpointResolverFailureIsActionableAndRedacted(t *testing.T) {
 		"unsafe address": func(context.Context, string, string) ([]netip.Addr, error) {
 			return []netip.Addr{netip.MustParseAddr("127.0.0.1")}, nil
 		},
+		"mapped public address": func(context.Context, string, string) ([]netip.Addr, error) {
+			return []netip.Addr{netip.MustParseAddr("::ffff:1.1.1.1")}, nil
+		},
 		"too many": func(context.Context, string, string) ([]netip.Addr, error) {
 			values := make([]netip.Addr, maximumResolvedIPs+1)
 			for index := range values {
@@ -75,7 +75,7 @@ func TestEndpointResolverFailureIsActionableAndRedacted(t *testing.T) {
 	}
 	for name, lookup := range cases {
 		t.Run(name, func(t *testing.T) {
-			_, err := NewEndpointResolverWithLookup(lookup).Resolve(context.Background(), profile)
+			_, err := NewEndpointResolverWithLookup(lookup).resolve(context.Background(), profile)
 			if !errors.Is(err, ErrEndpointUnresolved) {
 				t.Fatalf("Resolve error = %v", err)
 			}
@@ -97,12 +97,12 @@ func TestEndpointResolverCancellationAndTimeout(t *testing.T) {
 
 	canceled, cancel := context.WithCancel(context.Background())
 	cancel()
-	if _, err := NewEndpointResolverWithLookup(blocking).Resolve(canceled, profile); !errors.Is(err, context.Canceled) {
+	if _, err := NewEndpointResolverWithLookup(blocking).resolve(canceled, profile); !errors.Is(err, context.Canceled) {
 		t.Fatalf("canceled Resolve error = %v", err)
 	}
 	resolver := &EndpointResolver{lookup: blocking, timeout: 10 * time.Millisecond}
 	started := time.Now()
-	if _, err := resolver.Resolve(context.Background(), profile); !errors.Is(err, ErrEndpointUnresolved) {
+	if _, err := resolver.resolve(context.Background(), profile); !errors.Is(err, ErrEndpointUnresolved) {
 		t.Fatalf("timed out Resolve error = %v", err)
 	}
 	if time.Since(started) > time.Second {

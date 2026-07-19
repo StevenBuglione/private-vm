@@ -14,8 +14,9 @@ private-vm vpn import
 private-vm usb enroll
 ```
 
-`vpn import` reads the configuration through a secure prompt or explicit file
-descriptor. The imported key is not copied into ordinary configuration.
+`vpn import` securely prompts for an existing owner-only profile path; use
+`--from-file FILE` or `--stdin` to select an explicit non-interactive source.
+The imported key is not copied into ordinary configuration.
 
 ## Start a graphical workstation
 

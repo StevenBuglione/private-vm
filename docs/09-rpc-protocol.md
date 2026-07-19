@@ -95,7 +95,8 @@ against the already verified image manifest. Any mismatch destroys the guest.
 Every other unary request must carry a supported API version and an opaque
 8-128 character request ID. Session-scoped methods additionally require a valid
 internal `pvm-...` session ID; pre-session methods such as `Doctor`,
-`PlanSession`, `CreateSession`, and `ListSessions` do not. Planning and creation
+`PlanSession`, `CreateSession`, `ListSessions`, `InspectVPNProfile`,
+`TestVPNProfile`, and `RemoveVPNProfile` do not. Planning and creation
 validate the selected role, image bundle, policy name, and bounded resources
 before use. The unary interceptor rejects any method that violates this method
 to context contract before its handler runs.
@@ -104,6 +105,11 @@ Server and client streams are authenticated before their handlers run.
 `StreamEvents` and `ExportWorkspaceFile` validate their request context, while
 `ImportWorkspaceFile` requires a contextual `TransferBegin` as the first frame
 and returns `TRANSFER_BEGIN_REQUIRED` for EOF or any other first-frame shape.
+`ImportVPNProfile` similarly requires a contextual `VPNProfileImportBegin` and
+then accepts at most 64 non-empty chunks of at most 16 KiB each, with a 64-KiB
+cumulative profile limit. It never accepts a source path. Malformed framing and
+oversized input are rejected before parsing, and the receiving buffers are
+cleared on every return path.
 Request/session correlation metadata is attached after stream validation. The
 current fail-closed import stub has a ten-second authenticated first-frame and
 overall ceiling; later transfer implementations must add the documented
@@ -197,6 +203,10 @@ Core methods:
 - `CreateSession`
 - `GetSession`
 - `ListSessions`
+- `ImportVPNProfile`
+- `InspectVPNProfile`
+- `TestVPNProfile`
+- `RemoveVPNProfile`
 - `StartRole`
 - `StopRole`
 - `AbortSession`

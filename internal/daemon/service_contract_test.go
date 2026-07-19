@@ -30,6 +30,9 @@ func TestUnaryRequestContextContractCoversEveryContextualMethod(t *testing.T) {
 		{privatevmv1.PrivateVMDaemonService_CreateSession_FullMethodName, &privatevmv1.CreateSessionRequest{}},
 		{privatevmv1.PrivateVMDaemonService_GetSession_FullMethodName, &privatevmv1.GetSessionRequest{}},
 		{privatevmv1.PrivateVMDaemonService_ListSessions_FullMethodName, &privatevmv1.ListSessionsRequest{}},
+		{privatevmv1.PrivateVMDaemonService_InspectVPNProfile_FullMethodName, &privatevmv1.VPNProfileRequest{}},
+		{privatevmv1.PrivateVMDaemonService_TestVPNProfile_FullMethodName, &privatevmv1.VPNProfileRequest{}},
+		{privatevmv1.PrivateVMDaemonService_RemoveVPNProfile_FullMethodName, &privatevmv1.VPNProfileRequest{}},
 		{privatevmv1.PrivateVMDaemonService_StartRole_FullMethodName, &privatevmv1.StartRoleRequest{}},
 		{privatevmv1.PrivateVMDaemonService_StopRole_FullMethodName, &privatevmv1.StopRoleRequest{}},
 		{privatevmv1.PrivateVMDaemonService_AbortSession_FullMethodName, &privatevmv1.AbortSessionRequest{}},
@@ -211,15 +214,20 @@ func TestStreamRequestMetadataAndInitialDeadline(t *testing.T) {
 	identity := currentProcessIdentity(t)
 	authorizer := Authorizer{AllowedGroup: identity.GID}
 	stream := &contextOnlyServerStream{ctx: peer.NewContext(context.Background(), &peer.Peer{AuthInfo: PeerAuthInfo{PeerIdentity: identity}})}
-	err = authorizer.StreamInterceptor(nil, stream, &grpc.StreamServerInfo{FullMethod: privatevmv1.PrivateVMDaemonService_ImportWorkspaceFile_FullMethodName}, func(_ any, wrapped grpc.ServerStream) error {
-		deadline, present := wrapped.Context().Deadline()
-		if !present || time.Until(deadline) <= 0 || time.Until(deadline) > 10*time.Second {
-			t.Fatalf("import first-frame deadline = %v, present=%v", deadline, present)
+	for _, method := range []string{
+		privatevmv1.PrivateVMDaemonService_ImportWorkspaceFile_FullMethodName,
+		privatevmv1.PrivateVMDaemonService_ImportVPNProfile_FullMethodName,
+	} {
+		err = authorizer.StreamInterceptor(nil, stream, &grpc.StreamServerInfo{FullMethod: method}, func(_ any, wrapped grpc.ServerStream) error {
+			deadline, present := wrapped.Context().Deadline()
+			if !present || time.Until(deadline) <= 0 || time.Until(deadline) > 10*time.Second {
+				t.Fatalf("import first-frame deadline = %v, present=%v", deadline, present)
+			}
+			return nil
+		})
+		if err != nil {
+			t.Fatal(err)
 		}
-		return nil
-	})
-	if err != nil {
-		t.Fatal(err)
 	}
 }
 

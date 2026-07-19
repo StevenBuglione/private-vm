@@ -34,6 +34,8 @@ const (
 	redactedProfile     = "[REDACTED VPN PROFILE]"
 )
 
+var allocateProfileBuffer = func() []byte { return make([]byte, MaximumProfileBytes+1) }
+
 type section uint8
 
 const (
@@ -42,9 +44,24 @@ const (
 	sectionPeer
 )
 
-// Profile is an immutable parsed profile. Destroy invalidates all future use
-// and destroys the protected private-key mapping. A Profile must not be copied.
-type Profile struct {
+// Profile is the sealed, opaque parsed-profile contract. Its concrete state is
+// package-private, so callers cannot dereference it and accidentally format
+// endpoint, address, DNS or key fields.
+type Profile interface {
+	Inspect() (Inspection, error)
+	Destroy()
+	privateVPNProfile()
+	endpointSnapshot() (endpoint, error)
+	withResolvedConfig(context.Context, resolvedEndpoint, func(context.Context, io.Reader) error) error
+}
+
+// profile is a copy-safe handle to shared private state. Value and pointer
+// formatting/serialization are both explicitly redacted or rejected.
+type profile struct {
+	state *profileState
+}
+
+type profileState struct {
 	mu sync.Mutex
 
 	privateKey *secret.Bytes
@@ -74,12 +91,12 @@ type Inspection struct {
 
 // Parse reads one bounded profile and clears its private parsing buffer before
 // returning. Callers own and must close or destroy the input source itself.
-func Parse(reader io.Reader) (*Profile, error) {
+func Parse(reader io.Reader) (Profile, error) {
 	if reader == nil {
 		return nil, invalidProfile()
 	}
-	raw, err := io.ReadAll(io.LimitReader(reader, MaximumProfileBytes+1))
-	if err != nil || len(raw) == 0 || len(raw) > MaximumProfileBytes {
+	raw := allocateProfileBuffer()
+	if len(raw) != MaximumProfileBytes+1 || cap(raw) != MaximumProfileBytes+1 {
 		clear(raw)
 		return nil, invalidProfile()
 	}
@@ -87,31 +104,57 @@ func Parse(reader io.Reader) (*Profile, error) {
 		clear(raw)
 		runtime.KeepAlive(raw)
 	}()
-	return parse(raw)
+	used := 0
+	emptyReads := 0
+	for used < len(raw) {
+		read, err := reader.Read(raw[used:])
+		if read < 0 || read > len(raw)-used {
+			return nil, invalidProfile()
+		}
+		used += read
+		if err != nil {
+			if err != io.EOF {
+				return nil, invalidProfile()
+			}
+			break
+		}
+		if read == 0 {
+			emptyReads++
+			if emptyReads >= 100 {
+				return nil, invalidProfile()
+			}
+		} else {
+			emptyReads = 0
+		}
+	}
+	if used == 0 || used > MaximumProfileBytes {
+		return nil, invalidProfile()
+	}
+	return parse(raw[:used])
 }
 
 // ParseSecret is the normal daemon import adapter. The source remains owned by
 // the caller and should be destroyed immediately after this method returns.
-func ParseSecret(source *secret.Bytes) (*Profile, error) {
+func ParseSecret(source *secret.Bytes) (Profile, error) {
 	if source == nil {
 		return nil, invalidProfile()
 	}
-	var profile *Profile
+	var parsed Profile
 	err := source.WithReader(func(reader io.Reader) error {
 		var parseErr error
-		profile, parseErr = Parse(reader)
+		parsed, parseErr = Parse(reader)
 		return parseErr
 	})
 	if err != nil {
-		if profile != nil {
-			profile.Destroy()
+		if parsed != nil {
+			parsed.Destroy()
 		}
 		return nil, invalidProfile()
 	}
-	return profile, nil
+	return parsed, nil
 }
 
-func parse(raw []byte) (*Profile, error) {
+func parse(raw []byte) (Profile, error) {
 	if !utf8.Valid(raw) || bytes.IndexByte(raw, 0) >= 0 {
 		return nil, invalidProfile()
 	}
@@ -214,14 +257,14 @@ func parse(raw []byte) (*Profile, error) {
 		return nil, invalidProfile()
 	}
 	valid = true
-	return &Profile{
+	return profile{state: &profileState{
 		privateKey: privateKey,
 		addresses:  addresses,
 		dnsServers: dnsServers,
 		publicKey:  publicKey,
 		allowedV6:  allowedV6,
 		endpoint:   peerEndpoint,
-	}, nil
+	}}, nil
 }
 
 func allowedField(current section, name string) bool {
@@ -323,8 +366,7 @@ func parseAddresses(value []byte) ([]netip.Prefix, bool, bool) {
 
 func safeInterfaceAddress(prefix netip.Prefix) bool {
 	address := prefix.Addr()
-	if !prefix.IsValid() || address.Is4In6() || address.IsUnspecified() || address.IsLoopback() ||
-		address.IsMulticast() || address.IsLinkLocalUnicast() || address.IsLinkLocalMulticast() {
+	if !prefix.IsValid() || !safeTunnelAddress(address) {
 		return false
 	}
 	if address.Is4() {
@@ -343,10 +385,9 @@ func parseDNS(value []byte) ([]netip.Addr, bool, bool) {
 	hasV6 := false
 	for _, part := range parts {
 		address, err := netip.ParseAddr(string(part))
-		if err != nil {
+		if err != nil || address.Is4In6() {
 			return nil, false, false
 		}
-		address = address.Unmap()
 		if !safeDNSAddress(address) {
 			return nil, false, false
 		}
@@ -361,8 +402,19 @@ func parseDNS(value []byte) ([]netip.Addr, bool, bool) {
 }
 
 func safeDNSAddress(address netip.Addr) bool {
-	return address.IsValid() && address.IsGlobalUnicast() && !address.IsLoopback() &&
-		!address.IsLinkLocalUnicast() && !address.IsLinkLocalMulticast()
+	return safeTunnelAddress(address)
+}
+
+// safeTunnelAddress is deliberately different from endpoint policy. Proton's
+// in-tunnel interface and DNS addresses may be RFC1918 or ULA. Every other
+// address must satisfy the reviewed public-routability policy; CGNAT,
+// documentation, benchmark, link-local and other special-use ranges remain
+// forbidden.
+func safeTunnelAddress(address netip.Addr) bool {
+	if !address.IsValid() || address.Zone() != "" || address.Is4In6() || !address.IsGlobalUnicast() {
+		return false
+	}
+	return address.IsPrivate() || publicEndpointAddress(address)
 }
 
 func parseAllowedIPs(value []byte) (bool, bool) {
@@ -397,8 +449,10 @@ func parseEndpoint(value []byte) (endpoint, bool) {
 		return endpoint{}, false
 	}
 	if literal, err := netip.ParseAddr(host); err == nil {
-		literal = literal.Unmap()
-		if !safeEndpointAddress(literal) {
+		if literal.Is4In6() {
+			return endpoint{}, false
+		}
+		if !publicEndpointAddress(literal) {
 			return endpoint{}, false
 		}
 		return endpoint{literal: literal, port: uint16(port)}, true
@@ -407,7 +461,7 @@ func parseEndpoint(value []byte) (endpoint, bool) {
 	if !safeEndpointHostname(host) {
 		return endpoint{}, false
 	}
-	return endpoint{host: host, port: uint16(port)}, true
+	return endpoint{host: host + ".", port: uint16(port)}, true
 }
 
 func safeEndpointHostname(host string) bool {
@@ -436,89 +490,148 @@ func safeEndpointHostname(host string) bool {
 	return true
 }
 
-func safeEndpointAddress(address netip.Addr) bool {
-	return address.IsValid() && address.IsGlobalUnicast() && !address.IsPrivate() &&
-		!address.IsLoopback() && !address.IsLinkLocalUnicast() && !address.IsLinkLocalMulticast()
+var forbiddenPublicEndpointPrefixes = []netip.Prefix{
+	// IANA IPv4 special-purpose, non-routable, documentation, benchmark,
+	// multicast and reserved ranges. Reject the complete containing range even
+	// where IANA lists a narrow protocol exception: Proton endpoints must be
+	// ordinary public unicast addresses.
+	netip.MustParsePrefix("0.0.0.0/8"),
+	netip.MustParsePrefix("10.0.0.0/8"),
+	netip.MustParsePrefix("100.64.0.0/10"),
+	netip.MustParsePrefix("127.0.0.0/8"),
+	netip.MustParsePrefix("169.254.0.0/16"),
+	netip.MustParsePrefix("172.16.0.0/12"),
+	netip.MustParsePrefix("192.0.0.0/24"),
+	netip.MustParsePrefix("192.0.2.0/24"),
+	netip.MustParsePrefix("192.31.196.0/24"),
+	netip.MustParsePrefix("192.52.193.0/24"),
+	netip.MustParsePrefix("192.88.99.0/24"),
+	netip.MustParsePrefix("192.168.0.0/16"),
+	netip.MustParsePrefix("192.175.48.0/24"),
+	netip.MustParsePrefix("198.18.0.0/15"),
+	netip.MustParsePrefix("198.51.100.0/24"),
+	netip.MustParsePrefix("203.0.113.0/24"),
+	netip.MustParsePrefix("224.0.0.0/4"),
+	netip.MustParsePrefix("240.0.0.0/4"),
+	// IPv6 unspecified/loopback, translation/local/discard, IETF protocol,
+	// documentation, 6to4, ULA, link-local, multicast and reserved examples.
+	netip.MustParsePrefix("::/128"),
+	netip.MustParsePrefix("::1/128"),
+	netip.MustParsePrefix("::ffff:0:0/96"),
+	netip.MustParsePrefix("64:ff9b::/96"),
+	netip.MustParsePrefix("64:ff9b:1::/48"),
+	netip.MustParsePrefix("100::/64"),
+	netip.MustParsePrefix("100:0:0:1::/64"),
+	netip.MustParsePrefix("2001::/23"),
+	netip.MustParsePrefix("2001:db8::/32"),
+	netip.MustParsePrefix("2002::/16"),
+	netip.MustParsePrefix("2620:4f:8000::/48"),
+	netip.MustParsePrefix("3fff::/20"),
+	netip.MustParsePrefix("5f00::/16"),
+	netip.MustParsePrefix("fc00::/7"),
+	netip.MustParsePrefix("fe80::/10"),
+	netip.MustParsePrefix("ff00::/8"),
+}
+
+var allocatedIPv6GlobalUnicast = netip.MustParsePrefix("2000::/3")
+
+func publicEndpointAddress(address netip.Addr) bool {
+	if !address.IsValid() || address.Zone() != "" || address.Is4In6() || !address.IsGlobalUnicast() {
+		return false
+	}
+	if address.Is6() && !allocatedIPv6GlobalUnicast.Contains(address) {
+		return false
+	}
+	for _, prefix := range forbiddenPublicEndpointPrefixes {
+		if prefix.Contains(address) {
+			return false
+		}
+	}
+	return true
 }
 
 // Inspect returns only aggregate, non-sensitive properties.
-func (p *Profile) Inspect() (Inspection, error) {
-	if p == nil {
+func (p profile) Inspect() (Inspection, error) {
+	if p.state == nil {
 		return Inspection{}, invalidProfile()
 	}
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	if p.destroyed {
+	p.state.mu.Lock()
+	defer p.state.mu.Unlock()
+	if p.state.destroyed {
 		return Inspection{}, invalidProfile()
 	}
 	return Inspection{
 		SchemaVersion:         1,
 		IPv4Enabled:           true,
-		IPv6Enabled:           p.allowedV6,
-		InterfaceAddressCount: len(p.addresses),
-		DNSServerCount:        len(p.dnsServers),
+		IPv6Enabled:           p.state.allowedV6,
+		InterfaceAddressCount: len(p.state.addresses),
+		DNSServerCount:        len(p.state.dnsServers),
 	}, nil
 }
 
 // Destroy erases the private key and clears all owned profile fields. It is
 // idempotent and blocks until an active rendering callback has returned.
-func (p *Profile) Destroy() {
-	if p == nil {
+func (p profile) Destroy() {
+	if p.state == nil {
 		return
 	}
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	if p.destroyed {
+	p.state.mu.Lock()
+	defer p.state.mu.Unlock()
+	if p.state.destroyed {
 		return
 	}
-	p.privateKey.Destroy()
-	p.privateKey = nil
-	clear(p.publicKey[:])
-	p.addresses = nil
-	p.dnsServers = nil
-	p.endpoint = endpoint{}
-	p.destroyed = true
+	p.state.privateKey.Destroy()
+	p.state.privateKey = nil
+	clear(p.state.publicKey[:])
+	clear(p.state.addresses)
+	clear(p.state.dnsServers)
+	p.state.addresses = nil
+	p.state.dnsServers = nil
+	p.state.endpoint = endpoint{}
+	p.state.destroyed = true
 }
 
-func (p *Profile) endpointSnapshot() (endpoint, error) {
-	if p == nil {
+func (p profile) endpointSnapshot() (endpoint, error) {
+	if p.state == nil {
 		return endpoint{}, invalidProfile()
 	}
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	if p.destroyed {
+	p.state.mu.Lock()
+	defer p.state.mu.Unlock()
+	if p.state.destroyed {
 		return endpoint{}, invalidProfile()
 	}
-	return p.endpoint, nil
+	return p.state.endpoint, nil
 }
 
 // WithResolvedConfig constructs the guest's ephemeral WireGuard configuration
 // only for the duration of fn. The key is encoded into a byte buffer, never a
 // Go string; the buffer is cleared immediately after the callback. Callbacks
 // are trusted, bounded adapters and must honor ctx.
-func (p *Profile) WithResolvedConfig(ctx context.Context, resolved ResolvedEndpoint, fn func(context.Context, io.Reader) error) error {
+func (p profile) withResolvedConfig(ctx context.Context, resolved resolvedEndpoint, fn func(context.Context, io.Reader) error) error {
 	if ctx == nil || fn == nil {
 		return ErrCallbackRequired
 	}
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	if p == nil || !resolved.valid() {
+	if p.state == nil || !resolved.valid() {
 		return invalidProfile()
 	}
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	if p.destroyed || p.endpoint.port != resolved.port {
+	p.state.mu.Lock()
+	defer p.state.mu.Unlock()
+	if p.state.destroyed || p.state.endpoint.port != resolved.port {
 		return invalidProfile()
 	}
 
-	buffer := bytes.NewBuffer(make([]byte, 0, 1024))
+	backing := make([]byte, MaximumProfileBytes)
+	buffer := bytes.NewBuffer(backing[:0])
 	defer func() {
-		clear(buffer.Bytes())
+		clear(backing)
 		runtime.KeepAlive(buffer)
+		runtime.KeepAlive(backing)
 	}()
 	_, _ = buffer.WriteString("[Interface]\nPrivateKey = ")
-	err := p.privateKey.WithReader(func(reader io.Reader) error {
+	err := p.state.privateKey.WithReader(func(reader io.Reader) error {
 		var raw [32]byte
 		defer clear(raw[:])
 		if _, err := io.ReadFull(reader, raw[:]); err != nil {
@@ -534,16 +647,16 @@ func (p *Profile) WithResolvedConfig(ctx context.Context, resolved ResolvedEndpo
 		return invalidProfile()
 	}
 	_, _ = buffer.WriteString("\nAddress = ")
-	writePrefixes(buffer, p.addresses)
+	writePrefixes(buffer, p.state.addresses)
 	_, _ = buffer.WriteString("\nDNS = ")
-	writeAddresses(buffer, p.dnsServers)
+	writeAddresses(buffer, p.state.dnsServers)
 	_, _ = buffer.WriteString("\n\n[Peer]\nPublicKey = ")
 	var publicEncoded [44]byte
-	base64.StdEncoding.Encode(publicEncoded[:], p.publicKey[:])
+	base64.StdEncoding.Encode(publicEncoded[:], p.state.publicKey[:])
 	_, _ = buffer.Write(publicEncoded[:])
 	clear(publicEncoded[:])
 	_, _ = buffer.WriteString("\nAllowedIPs = 0.0.0.0/0")
-	if p.allowedV6 {
+	if p.state.allowedV6 {
 		_, _ = buffer.WriteString(", ::/0")
 	}
 	_, _ = buffer.WriteString("\nEndpoint = ")
@@ -593,48 +706,38 @@ func (r *contextReader) Read(destination []byte) (int, error) {
 	return r.reader.Read(destination)
 }
 
-func (*Profile) String() string   { return redactedProfile }
-func (*Profile) GoString() string { return redactedProfile }
-func (*Profile) Format(formatter fmt.State, _ rune) {
+func (profile) privateVPNProfile() {}
+func (profile) String() string     { return redactedProfile }
+func (profile) GoString() string   { return redactedProfile }
+func (profile) Format(formatter fmt.State, _ rune) {
 	_, _ = formatter.Write([]byte(redactedProfile))
 }
-func (*Profile) MarshalJSON() ([]byte, error) { return nil, secret.ErrSerialization }
-func (*Profile) MarshalText() ([]byte, error) { return nil, secret.ErrSerialization }
-func (*Profile) MarshalBinary() ([]byte, error) {
+func (profile) MarshalJSON() ([]byte, error) { return nil, secret.ErrSerialization }
+func (profile) MarshalText() ([]byte, error) { return nil, secret.ErrSerialization }
+func (profile) MarshalBinary() ([]byte, error) {
 	return nil, secret.ErrSerialization
 }
-func (*Profile) GobEncode() ([]byte, error) { return nil, secret.ErrSerialization }
-func (*Profile) MarshalXML(*xml.Encoder, xml.StartElement) error {
+func (profile) GobEncode() ([]byte, error) { return nil, secret.ErrSerialization }
+func (profile) MarshalXML(*xml.Encoder, xml.StartElement) error {
 	return secret.ErrSerialization
 }
 
-// ResolvedEndpoint is an internal network-policy input. Its fields are private,
-// its formatting is redacted, and serialization is rejected so it cannot enter
-// CLI records or logs accidentally.
-type ResolvedEndpoint struct {
+type resolvedEndpoint struct {
 	address netip.Addr
 	port    uint16
 }
 
-func (e ResolvedEndpoint) Address() netip.Addr { return e.address }
-func (e ResolvedEndpoint) Port() uint16        { return e.port }
-func (e ResolvedEndpoint) valid() bool         { return safeEndpointAddress(e.address) && e.port != 0 }
-func (ResolvedEndpoint) String() string        { return "[REDACTED VPN ENDPOINT]" }
-func (ResolvedEndpoint) GoString() string      { return "[REDACTED VPN ENDPOINT]" }
-func (ResolvedEndpoint) MarshalJSON() ([]byte, error) {
-	return nil, secret.ErrSerialization
-}
-func (ResolvedEndpoint) MarshalText() ([]byte, error) { return nil, secret.ErrSerialization }
+func (e resolvedEndpoint) valid() bool { return publicEndpointAddress(e.address) && e.port != 0 }
 
-func sortEndpoints(endpoints []ResolvedEndpoint) {
+func sortEndpoints(endpoints []resolvedEndpoint) {
 	sort.Slice(endpoints, func(left, right int) bool {
 		return endpoints[left].address.Compare(endpoints[right].address) < 0
 	})
 }
 
 var (
-	_ fmt.Formatter  = (*Profile)(nil)
-	_ json.Marshaler = (*Profile)(nil)
-	_ xml.Marshaler  = (*Profile)(nil)
-	_ json.Marshaler = ResolvedEndpoint{}
+	_ Profile        = profile{}
+	_ fmt.Formatter  = profile{}
+	_ json.Marshaler = profile{}
+	_ xml.Marshaler  = profile{}
 )

@@ -17,6 +17,7 @@ The parser accepts only the required WireGuard fields and rejects:
 - invalid keys or addresses
 - unsafe DNS values
 - duplicate fields
+- IPv4-mapped IPv6 addresses and zoned addresses
 
 The endpoint hostname is resolved on the trusted host before creating the guest.
 The ephemeral guest copy uses an IP address to avoid pre-tunnel DNS.
@@ -40,6 +41,13 @@ addresses are valid, while hostnames, loopback, link-local, multicast and
 unspecified addresses are rejected. At most eight interface and eight DNS
 addresses are accepted.
 
+Tunnel interface and DNS address policy is distinct from endpoint policy:
+RFC1918 and ULA values are permitted inside the tunnel, but CGNAT,
+documentation, benchmarking, transition, link-local, loopback, multicast and
+other special-use ranges are rejected. IPv4-mapped IPv6 input is rejected
+before any normalization, including when it embeds an otherwise public IPv4
+address.
+
 `AllowedIPs` is exactly `0.0.0.0/0`, optionally followed by `::/0`; partial,
 additional and duplicate routes are rejected. Any IPv6 interface or DNS address
 requires `::/0`. Endpoint ports are numeric and nonzero. Literal endpoints must
@@ -54,7 +62,7 @@ The normal import path first uses the CLI's bounded sensitive-input adapter,
 then parses the resulting `secret.Bytes` inside the daemon. The private key is
 decoded into a protected `secret.Bytes` mapping without a string conversion.
 The daemon-lifetime memory store has no persistence or restore adapter and
-admits at most eight names. Atomic
+admits at most eight names per owner and 64 total. Atomic
 replacement destroys the old generation; remove and daemon shutdown are
 idempotent and destroy all owned keys.
 
@@ -65,16 +73,25 @@ never exposes keys, endpoints, addresses, DNS values, source paths or times.
 The state becomes `current` only after trusted-host endpoint resolution succeeds.
 A stale, unsafe, empty, oversized or failed result sets `rotation_required` and
 returns `VPN_ENDPOINT_UNRESOLVED` with remediation to generate a current Proton
-profile. Caller cancellation leaves the previous state unchanged.
+profile. Every resolution attempt invalidates the prior plan before DNS starts.
+Caller cancellation therefore leaves that generation in `resolution_required`;
+an unsafe or failed answer requires rotation.
 
-Trusted-host resolution has a hard ten-second ceiling, accepts no more than 16
-answers and requires every answer to be a public unicast address. Results are
-deduplicated and sorted. Wrapped resolver errors and returned addresses are not
-logged. The selected result is rendered into a bounded ephemeral guest config
-inside a context-aware callback; the endpoint hostname is replaced by the IP,
-the encoded private key is never represented as a Go string, and the callback
-buffer is cleared on return. This explicit destruction reduces exposure but is
-not a perfect-erasure claim.
+Trusted-host resolution uses the configured hostname as an absolute DNS name,
+has a hard ten-second ceiling, accepts no more than 16 answers and requires
+every answer to pass the explicit reviewed public-endpoint range policy. Results
+are deduplicated and sorted. Wrapped resolver errors and returned addresses are
+not logged. Resolution occurs outside the store lock; production `net.Resolver`
+honors the context ceiling, while a test adapter that violates it can block only
+its own caller and cannot block import, remove, close or daemon shutdown.
+
+The result is sealed into an opaque plan bound to the exact owner, profile name,
+generation, resolution epoch, endpoint set and port. The same current plan must
+be consumed for host firewall endpoints and guest configuration; cross-owner,
+cross-name, stale and substituted handles fail closed. The endpoint hostname is
+replaced by the selected IP, the encoded private key is never represented as a
+Go string, and the callback buffer is cleared on return. This explicit
+destruction reduces exposure but is not a perfect-erasure claim.
 
 ## Host namespace topology
 

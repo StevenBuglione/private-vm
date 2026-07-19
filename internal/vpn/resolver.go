@@ -35,9 +35,11 @@ func NewEndpointResolverWithLookup(lookup NetIPLookup) *EndpointResolver {
 	return &EndpointResolver{lookup: lookup, timeout: endpointResolveTimeout}
 }
 
-// Resolve returns a bounded, sorted, deduplicated set of public endpoint
-// addresses. Error details never contain the hostname or resolver output.
-func (r *EndpointResolver) Resolve(ctx context.Context, profile *Profile) ([]ResolvedEndpoint, error) {
+// resolve returns a bounded, sorted, deduplicated set of public endpoint
+// addresses. It is package-private so only a store can bind the result into an
+// opaque generation/epoch plan. Error details never contain the hostname or
+// resolver output.
+func (r *EndpointResolver) resolve(ctx context.Context, profile Profile) ([]resolvedEndpoint, error) {
 	if ctx == nil || r == nil || r.lookup == nil {
 		return nil, endpointUnresolved()
 	}
@@ -49,7 +51,7 @@ func (r *EndpointResolver) Resolve(ctx context.Context, profile *Profile) ([]Res
 		return nil, err
 	}
 	if peerEndpoint.literal.IsValid() {
-		return []ResolvedEndpoint{{address: peerEndpoint.literal, port: peerEndpoint.port}}, nil
+		return []resolvedEndpoint{{address: peerEndpoint.literal, port: peerEndpoint.port}}, nil
 	}
 	timeout := r.timeout
 	if timeout <= 0 || timeout > endpointResolveTimeout {
@@ -65,17 +67,16 @@ func (r *EndpointResolver) Resolve(ctx context.Context, profile *Profile) ([]Res
 		return nil, endpointUnresolved()
 	}
 	seen := make(map[netip.Addr]struct{}, len(addresses))
-	resolved := make([]ResolvedEndpoint, 0, len(addresses))
+	resolved := make([]resolvedEndpoint, 0, len(addresses))
 	for _, address := range addresses {
-		address = address.Unmap()
-		if !safeEndpointAddress(address) {
+		if address.Is4In6() || !publicEndpointAddress(address) {
 			return nil, endpointUnresolved()
 		}
 		if _, duplicate := seen[address]; duplicate {
 			continue
 		}
 		seen[address] = struct{}{}
-		resolved = append(resolved, ResolvedEndpoint{address: address, port: peerEndpoint.port})
+		resolved = append(resolved, resolvedEndpoint{address: address, port: peerEndpoint.port})
 	}
 	if len(resolved) == 0 {
 		return nil, endpointUnresolved()

@@ -55,6 +55,15 @@ rechecked on 2026-07-19.
 - Port-forwarding considerations:
   https://protonvpn.com/support/port-forwarding
 
+## Address policy
+
+- IANA IPv4 Special-Purpose Address Registry:
+  https://www.iana.org/assignments/iana-ipv4-special-registry/
+- IANA IPv6 Special-Purpose Address Registry:
+  https://www.iana.org/assignments/iana-ipv6-special-registry/
+- IANA IPv6 Global Unicast Address Space:
+  https://www.iana.org/assignments/ipv6-unicast-address-assignments/
+
 ## Scanning and storage
 
 - ClamAV scanning:
