@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "name": "private-vm",
+  "architecture": "amd64",
+  "platform": "linux",
+  "maintainer": "private-vm maintainers <security@private-vm.dev>",
+  "vendor": "private-vm",
+  "homepage": "https://github.com/StevenBuglione/private-vm",
+  "license": "Apache-2.0",
+  "description": "Disposable role-isolated NixOS virtual machine orchestrator",
+  "contents": [
+    { "source": "bin/private-vm", "destination": "/usr/bin/private-vm", "mode": 493 },
+    { "source": "bin/private-vmd", "destination": "/usr/libexec/private-vmd", "mode": 493 },
+    { "source": "share/private-vm/config.toml", "destination": "/etc/private-vm/config.toml", "mode": 384, "type": "config|noreplace" },
+    { "source": "lib/systemd/system/private-vmd.service", "destination": "/usr/lib/systemd/system/private-vmd.service", "mode": 292 },
+    { "source": "lib/tmpfiles.d/private-vm.conf", "destination": "/usr/lib/tmpfiles.d/private-vm.conf", "mode": 292 },
+    { "source": "lib/sysusers.d/private-vm.conf", "destination": "/usr/lib/sysusers.d/private-vm.conf", "mode": 292 },
+    { "source": "lib/udev/rules.d/90-private-vm.rules", "destination": "/usr/lib/udev/rules.d/90-private-vm.rules", "mode": 292 },
+    { "source": "share/polkit-1/actions/org.private-vm.policy", "destination": "/usr/share/polkit-1/actions/org.private-vm.policy", "mode": 292 },
+    { "source": "share/private-vm/usbguard/private-vm.conf.example", "destination": "/usr/share/private-vm/usbguard/private-vm.conf.example", "mode": 292 },
+    { "source": "share/bash-completion/completions/private-vm", "destination": "/usr/share/bash-completion/completions/private-vm", "mode": 292 },
+    { "source": "share/zsh/site-functions/_private-vm", "destination": "/usr/share/zsh/site-functions/_private-vm", "mode": 292 },
+    { "source": "share/fish/vendor_completions.d/private-vm.fish", "destination": "/usr/share/fish/vendor_completions.d/private-vm.fish", "mode": 292 },
+    { "source": "share/man/man1/private-vm.1", "destination": "/usr/share/man/man1/private-vm.1", "mode": 292 },
+    { "source": "share/man/man8/private-vmd.8", "destination": "/usr/share/man/man8/private-vmd.8", "mode": 292 },
+    { "source": "share/doc/private-vm/LICENSE", "destination": "/usr/share/doc/private-vm/LICENSE", "mode": 292 },
+    { "source": "share/doc/private-vm/README.md", "destination": "/usr/share/doc/private-vm/README.md", "mode": 292 }
+  ],
+  "formats": {
+    "deb": {
+      "section": "utils",
+      "priority": "optional",
+      "dependencies": [
+        "systemd", "qemu-system-x86", "qemu-utils", "ovmf", "virt-viewer",
+        "cryptsetup", "nftables", "iproute2", "usbguard", "polkitd",
+        "util-linux", "e2fsprogs", "zstd"
+      ]
+    },
+    "rpm": {
+      "group": "Applications/System",
+      "dependencies": [
+        "systemd", "qemu-kvm", "qemu-img", "edk2-ovmf", "virt-viewer",
+        "cryptsetup", "nftables", "iproute", "usbguard", "polkit",
+        "util-linux", "e2fsprogs", "zstd"
+      ]
+    }
+  },
+  "preserved_on_upgrade_or_remove": [
+    "/etc/private-vm/config.toml",
+    "/var/lib/private-vm",
+    "/var/lib/private-vm/images"
+  ]
+}
