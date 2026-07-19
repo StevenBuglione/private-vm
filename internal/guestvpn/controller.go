@@ -38,7 +38,7 @@ type LossResponder interface {
 
 // OnlineService is a single fixed local application whose process may start
 // only after the kill switch and tunnel are configured. The production
-// downloader uses it for the loopback-only qBittorrent unit.
+// downloader uses it for the loopback-only qBittorrent child.
 type OnlineService interface {
 	Start(context.Context) error
 	Stop(context.Context) error

@@ -272,16 +272,18 @@ and it adds state and inbound exposure.
 The downloader image boots with a default-drop `inet` table. It contains
 separate IPv4 and IPv6 runtime templates whose only underlay egress is UDP to a
 typed, validated Proton endpoint; NET-003 renders and applies one complete
-transaction after profile validation. qBittorrent runs as a hardened system
-service with no install target. Only guestd's serialized VPN controller starts
-the fixed system unit, after the kill switch and `proton0` are configured and
-the guest-owned quarantine is mounted. Failed startup or initial verification
-stops the unit in an independent bounded cleanup context. The profile and logs
-are volatile, the Web API binds to `127.0.0.1`, and the immutable image contains
-no reusable API credential. The generated password is absent from argv,
-environment, the immutable image and journald. The fixed unit is also
-`PartOf=private-vm-guestd.service`, so a guestd stop or restart propagates a
-process stop instead of leaving qBittorrent outside its lifecycle owner.
+transaction after profile validation. Only guestd's serialized VPN controller
+starts the package-pinned qBittorrent child, after the kill switch and `proton0`
+are configured and the guest-owned quarantine is mounted. The child shares
+guestd's hardened mount namespace, inherits its systemd sandbox, drops to the
+fixed private user and is owned through pidfd plus bounded TERM/KILL cleanup.
+Failed startup or initial verification stops and reaps the child in an
+independent bounded cleanup context. The profile and logs are volatile, the Web
+API binds to `127.0.0.1`, and the immutable image contains no reusable API
+credential. The generated password is absent from argv, environment, the
+immutable image and journald. A guestd stop or restart triggers parent-death and
+serialized process cleanup instead of leaving qBittorrent outside its lifecycle
+owner. See ADR 0018.
 
 Workstation guestd composes the same fixed Linux WireGuard, systemd-resolved
 and controlled-probe adapters with workstation policy and no torrent binding

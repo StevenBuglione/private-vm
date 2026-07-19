@@ -189,7 +189,7 @@ func (cleanup *downloaderCleanup) Close(ctx context.Context) error {
 	if cleanup.server != nil {
 		vpnErr = cleanup.server.StopVPN(ctx)
 		if vpnErr != nil && cleanup.client != nil {
-			// A failed first unit stop retains ownership. Retry the fixed unit,
+			// A failed first child stop retains ownership. Retry the fixed process,
 			// then let the VPN owner finish tunnel -> kill-switch teardown.
 			if retryErr := cleanup.client.Stop(ctx); retryErr == nil {
 				vpnErr = cleanup.server.StopVPN(ctx)
@@ -238,7 +238,7 @@ func composeDownloaderService() (*guest.DownloaderVPNServer, *downloaderCleanup,
 	if err != nil || available <= 6<<30 {
 		return fail(compositionError("the downloader quarantine capacity check failed"))
 	}
-	client, err := torrent.NewLocalQBittorrentService("/run/current-system/sw/bin/systemctl", uid, gid)
+	client, err := torrent.NewLocalQBittorrentService("/etc/private-vm/qbittorrent", uid, gid)
 	if err != nil {
 		return fail(compositionError("the downloader qBittorrent configuration failed"))
 	}

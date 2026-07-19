@@ -142,10 +142,11 @@ The downloader guest composition creates the fixed virtio quarantine owner,
 an authenticated local qBittorrent owner and the torrent controller before it
 registers the downloader service. The qBittorrent owner generates one per-boot
 credential, writes only its derived verifier beneath `/run`, starts one fixed
-systemd unit after guest VPN configuration, authenticates on loopback and
-shares the protected SID with the binding probe and torrent adapter. Cleanup is
-ordered qBittorrent API/controller, local unit, tunnel, kill switch, quarantine
-sync/unmount and device close; a failed dependent step is retained for retry.
+package-pinned child in guestd's quarantine mount namespace after guest VPN
+configuration, authenticates on loopback and shares the protected SID with the
+binding probe and torrent adapter. Cleanup is ordered qBittorrent
+API/controller, pidfd-owned child, tunnel, kill switch, quarantine sync/unmount
+and device close; a failed dependent step is retained for retry.
 
 The workstation service is decorated by the same typed guest network owner,
 using workstation policy and no torrent application. The protobuf methods are

@@ -562,8 +562,10 @@ packets and QEMU absence remain explicit acceptance tests.
 
 The production-composition tests additionally prove that the per-boot
 qBittorrent plaintext is absent from its volatile configuration, authenticated
-requests carry only the bounded loopback SID, cancellation stops a partially
-started fixed unit, and the binding probe observes `proton0`. The quarantine
+requests carry only the bounded loopback SID, and the binding probe observes
+`proton0`. Fixed-child tests cover start failure, canceled start, bounded
+TERM/KILL cleanup, pidfd/process-group ownership, secret-free argv/environment
+and idempotent stop in the same mount namespace as guestd. The quarantine
 owner tests cover blank/ext4/unknown signatures, mount preparation,
 cancellation cleanup, sync/unmount, absence audit, retry after failed unmount
 and idempotent close without invoking a real block device or mount syscall.
