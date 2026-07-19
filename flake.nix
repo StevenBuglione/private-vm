@@ -248,6 +248,106 @@
           '';
         };
 
+      downloaderDesktopTestFor =
+        system:
+        let
+          pkgs = pkgsFor system;
+        in
+        pkgs.testers.runNixOSTest {
+          name = "private-vm-downloader-desktop";
+          requiredFeatures.kvm = false;
+          node.specialArgs = guestArgsFor system "downloader" null;
+          nodes.machine = { lib, ... }: {
+            imports = [
+              ./nix/guests/image-base.nix
+              ./nix/guests/downloader.nix
+            ];
+            users.users.root.hashedPasswordFile = lib.mkForce null;
+            virtualisation.memorySize = 2048;
+            virtualisation.cores = 2;
+            virtualisation.vlans = [ ];
+            virtualisation.qemu.options = tcgQEMUOptionsFor system;
+          };
+          testScript = ''
+            import json
+
+            machine.wait_for_unit("graphical.target")
+            machine.wait_for_unit("display-manager.service")
+            machine.wait_for_x()
+            machine.wait_until_succeeds("loginctl list-sessions --no-legend | grep -E '[[:space:]]private[[:space:]]'")
+            machine.wait_until_succeeds("test -S /run/user/$(id -u private)/bus")
+            machine.succeed("test -x /run/current-system/sw/bin/startxfce4")
+            machine.succeed("test -x /run/current-system/sw/bin/wg")
+            machine.succeed("test -x /run/current-system/sw/bin/nft")
+            machine.succeed("test -e /run/current-system/sw/share/applications/private-vm-qbittorrent.desktop")
+            machine.succeed("test ! -e /run/current-system/sw/bin/qbittorrent")
+            machine.succeed("grep -Fx 'Session\\Interface=proton0' /etc/private-vm/qbittorrent/qBittorrent.conf")
+            machine.succeed("grep -Fx 'Session\\InterfaceName=proton0' /etc/private-vm/qbittorrent/qBittorrent.conf")
+            machine.succeed("grep -Fx 'PortForwardingEnabled=false' /etc/private-vm/qbittorrent/qBittorrent.conf")
+            machine.succeed("grep -Fx 'FileLogger\\Enabled=false' /etc/private-vm/qbittorrent/qBittorrent.conf")
+            machine.succeed("grep -Fx 'WebUI\\Enabled=true' /etc/private-vm/qbittorrent/qBittorrent.conf")
+            machine.succeed("grep -Fx 'WebUI\\LocalHostAuth=true' /etc/private-vm/qbittorrent/qBittorrent.conf")
+            machine.succeed("! grep -Eiq '(private.?key|password|magnet:|endpoint)' /etc/private-vm/qbittorrent/qBittorrent.conf")
+            machine.succeed("! grep -RIE '(PrivateKey|PresharedKey|magnet:|Endpoint[[:space:]]*=)' /etc/private-vm")
+            version = json.loads(machine.succeed("private-vm-guestd --version"))
+            expected_capabilities = [
+              "guest-events",
+              "guest-shutdown",
+              "guest-status",
+              "quarantine-seal",
+              "torrent-download",
+              "torrent-metadata",
+              "vpn-verification",
+              "wireguard-config",
+            ]
+            assert version["guestRole"] == "downloader", version
+            assert version["capabilities"] == expected_capabilities, version
+            machine.succeed("for command in evince file-roller firefox git gvfsd jq keepassxc libreoffice mousepad nm-applet parole pavucontrol ristretto thunar tumblerd udisksctl xfce4-screenshooter xfce4-taskmanager xfce4-terminal; do ! command -v $command >/dev/null || exit 1; done")
+            machine.succeed("nft list table inet private_vm_downloader | grep -F 'policy drop'")
+            machine.succeed("test $(stat -c '%U:%G:%a' /run/private-vm-vpn) = root:root:711")
+
+            machine.succeed("install -d -o private -g users -m 0700 /mnt/quarantine")
+            machine.succeed("mount -t tmpfs -o nodev,nosuid,noexec,size=64M private-vm-quarantine /mnt/quarantine")
+            machine.succeed("chown private:users /mnt/quarantine")
+            machine.succeed("ip link add proton0 type dummy")
+            machine.succeed("ip link set proton0 up")
+
+            user_systemctl = "runuser -u private -- env XDG_RUNTIME_DIR=/run/user/$(id -u private) systemctl --user"
+            machine.fail(f"{user_systemctl} start private-vm-qbittorrent.service")
+            machine.succeed("! pgrep -u private -x qbittorrent")
+            machine.succeed("systemctl show --user --machine=private@ private-vm-qbittorrent.service -p AssertResult | grep -Fx AssertResult=no")
+
+            machine.succeed("install -o root -g root -m 0444 /dev/null /run/private-vm-vpn/ready")
+            start_status, start_output = machine.execute(f"{user_systemctl} start private-vm-qbittorrent.service")
+            if start_status != 0:
+              log.error(start_output)
+              log.error(machine.succeed("journalctl --no-pager -n 100 _UID=$(id -u private)"))
+            assert start_status == 0, "VPN-gated qBittorrent did not start"
+            machine.wait_until_succeeds(f"{user_systemctl} is-active --quiet private-vm-qbittorrent.service")
+            listeners = machine.succeed("ss -H -ltn")
+            for listener in listeners.splitlines():
+              address = listener.split()[3]
+              assert address.startswith("127.0.0.1:") or address.startswith("[::1]:"), listener
+            machine.succeed("grep -Fx 'Session\\Interface=proton0' /run/user/$(id -u private)/private-vm-qbittorrent/qBittorrent/config/qBittorrent.conf")
+            machine.succeed("test ! -d /run/user/$(id -u private)/private-vm-qbittorrent/qBittorrent/data/logs")
+
+            machine.succeed(f"{user_systemctl} stop private-vm-qbittorrent.service")
+            machine.wait_until_succeeds(f"! {user_systemctl} is-active --quiet private-vm-qbittorrent.service")
+            machine.succeed("! pgrep -u private -x qbittorrent")
+            machine.succeed("rm /run/private-vm-vpn/ready")
+            machine.fail(f"{user_systemctl} start private-vm-qbittorrent.service")
+            machine.succeed("! pgrep -u private -x qbittorrent")
+
+            machine.succeed("cp /etc/private-vm/nftables/downloader-vpn-ipv4.nft.in /run/downloader-vpn-ipv4.nft")
+            machine.succeed("sed -i -e 's/__PVM_ENDPOINT_IPV4__/192.0.2.1/g' -e 's/__PVM_ENDPOINT_PORT__/51820/g' /run/downloader-vpn-ipv4.nft")
+            machine.succeed("nft --check --file /run/downloader-vpn-ipv4.nft")
+            machine.succeed("cp /etc/private-vm/nftables/downloader-vpn-ipv6.nft.in /run/downloader-vpn-ipv6.nft")
+            machine.succeed("sed -i -e 's/__PVM_ENDPOINT_IPV6__/2001:db8::1/g' -e 's/__PVM_ENDPOINT_PORT__/51820/g' /run/downloader-vpn-ipv6.nft")
+            machine.succeed("nft --check --file /run/downloader-vpn-ipv6.nft")
+            machine.succeed("umount /mnt/quarantine")
+          '';
+        };
+
       workstationBundlesCheckFor =
         system:
         let
@@ -289,11 +389,11 @@
           scannerPath = (guest system "scanner" null ./nix/guests/scanner.nix).config.system.path;
         in
         pkgs.runCommand "private-vm-desktop-role-isolation" { } ''
-          for command in firefox file-roller gvfsd libreoffice mousepad nm-applet parole pavucontrol ristretto thunar tumblerd udisksctl xfce4-screenshooter xfce4-taskmanager xfce4-terminal; do
+          for command in evince file-roller firefox git gvfsd jq keepassxc libreoffice mousepad nm-applet parole pavucontrol qbittorrent ristretto thunar tumblerd udisksctl xfce4-screenshooter xfce4-taskmanager xfce4-terminal; do
             test ! -e "${downloaderPath}/bin/$command"
           done
-          test -x "${downloaderPath}/bin/qbittorrent"
           test -x "${downloaderPath}/bin/wg"
+          test -e "${downloaderPath}/share/applications/private-vm-qbittorrent.desktop"
 
           for command in evince file-roller firefox gvfsd mousepad nm-applet parole pavucontrol qbittorrent ristretto tumblerd udisksctl xfce4-screenshooter xfce4-taskmanager; do
             test ! -e "${scannerPath}/bin/$command"
@@ -548,6 +648,7 @@
         baseChecks
         // nixpkgs.lib.optionalAttrs (system == "x86_64-linux") {
           desktop-role-isolation = desktopRoleIsolationCheckFor system;
+          downloader-desktop = downloaderDesktopTestFor system;
           guest-common = commonGuestTestFor system;
           workstation-bundles = workstationBundlesCheckFor system;
           workstation-desktop = workstationDesktopTestFor system;

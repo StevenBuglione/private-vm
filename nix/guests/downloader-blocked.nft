@@ -1,0 +1,18 @@
+chain input {
+  type filter hook input priority -150; policy drop;
+
+  iifname "lo" accept
+  ct state invalid drop
+  ct state { established, related } accept
+}
+
+chain output {
+  type filter hook output priority -150; policy drop;
+
+  oifname "lo" accept
+  ct state invalid drop
+}
+
+chain forward {
+  type filter hook forward priority -150; policy drop;
+}

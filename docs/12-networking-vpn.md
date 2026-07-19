@@ -103,6 +103,16 @@ Required settings:
 Port forwarding is not part of v1. Download functionality does not require it,
 and it adds state and inbound exposure.
 
+The downloader image boots with a default-drop `inet` table. It contains
+separate IPv4 and IPv6 runtime templates whose only underlay egress is UDP to a
+typed, validated Proton endpoint; NET-003 renders and applies one complete
+transaction after profile validation. qBittorrent runs as a hardened user
+service only when both the root-owned `/run/private-vm-vpn/ready` marker and the
+quarantine mount exist. Its profile and logs are volatile, its Web API requires
+local authentication and binds to `127.0.0.1`, and the immutable image contains
+no reusable API credential. TOR-002 provisions the per-boot credential before
+guestd uses the API.
+
 ## Leak tests
 
 Before role readiness:

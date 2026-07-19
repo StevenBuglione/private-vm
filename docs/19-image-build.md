@@ -29,6 +29,7 @@ packages.x86_64-linux.image-exporter
 nixosModules.default
 checks.x86_64-linux.default
 checks.x86_64-linux.desktop-role-isolation
+checks.x86_64-linux.downloader-desktop
 checks.x86_64-linux.guest-common
 checks.x86_64-linux.workstation-bundles
 checks.x86_64-linux.workstation-desktop
@@ -144,3 +145,14 @@ The `desktop-role-isolation` check builds the downloader and scanner system
 paths, proves their role-required tools are installed, and rejects workstation
 viewers, preview helpers, NetworkManager applet, and other implicit XFCE
 applications from those roles.
+
+The `downloader-desktop` test boots the downloader under TCG and proves its
+exact compiled role/capability set, XFCE and WireGuard tools, absence of
+personal-work applications and embedded VPN/torrent credentials, and an
+initial default-drop nftables policy. It mounts a disposable test quarantine,
+creates a dummy `proton0`, and verifies that qBittorrent cannot start before a
+root-owned volatile VPN-ready marker exists. After readiness it verifies the
+service and loopback-only listeners, the immutable `proton0` binding, volatile
+logging/profile paths, bounded stop, fail-closed restart, and syntax of both
+typed endpoint firewall templates. NET-003 remains responsible for rendering
+those templates and continuously withdrawing readiness on tunnel failure.
