@@ -33,12 +33,6 @@ func (function documentProbeFunc) ProbeDocument(ctx context.Context, input io.Re
 	return function(ctx, input)
 }
 
-type mediaProbeFunc func(context.Context, io.ReadSeeker) (MediaEvidence, ToolEvidence, error)
-
-func (function mediaProbeFunc) ProbeMedia(ctx context.Context, input io.ReadSeeker) (MediaEvidence, ToolEvidence, error) {
-	return function(ctx, input)
-}
-
 func TestReconstructPDFVerifiesNewOutputRescanAndCleanup(t *testing.T) {
 	input, entry := reconstructionInput(t, []byte("%PDF-original"), "application/pdf")
 	defer input.Close()

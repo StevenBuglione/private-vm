@@ -114,7 +114,7 @@ func InspectTAR(ctx context.Context, reader io.Reader, archiveBytes uint64, dept
 			return ArchivePlan{}, scanError("ARCHIVE_LINK_REJECTED", "A TAR archive contains a symbolic or hard link.", "Reject archives containing links under the safe policy.", nil)
 		}
 		directory := header.Typeflag == tar.TypeDir
-		if header.Typeflag != tar.TypeReg && header.Typeflag != tar.TypeRegA && !directory {
+		if header.Typeflag != tar.TypeReg && !directory {
 			return ArchivePlan{}, scanError("ARCHIVE_SPECIAL_FILE_REJECTED", "A TAR archive contains a non-regular entry.", "Reject archives containing devices, sockets or FIFOs.", nil)
 		}
 		entry, err := addArchiveEntry(&plan, seen, header.Name, directory, uint64(header.Size), 0, limits)

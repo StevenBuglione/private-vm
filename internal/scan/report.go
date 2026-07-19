@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"crypto/hmac"
 	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"io"
@@ -366,5 +365,3 @@ func strictlySortedTools(values []ToolEvidence) bool {
 	}
 	return true
 }
-
-func reportDigest(value []byte) string { return hex.EncodeToString(value) }
