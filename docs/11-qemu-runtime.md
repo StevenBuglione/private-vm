@@ -179,6 +179,16 @@ audio, and quarantine devices. Scanner scan specs require `-nic none` and one
 read-only quarantine disk. Workstation and downloader specs require a TAP and
 cannot receive devices outside their role matrix.
 
+For the composed workstation/downloader path, launch order is CID reservation,
+capability creation, exact endpoint-scoped network allocation, private QMP and
+SPICE directory creation, verified image-lease activation, typed argument
+validation, QEMU start, authenticated guest handshake, guest kill-switch/VPN
+configuration, guest proof, host policy proof and continuous loss monitoring.
+The runtime cleanup owner reverses that ownership and audits the QEMU/network
+owner, image lease, CID and private socket directories. Scanner and exporter
+specification support in `internal/qemu` does not by itself make those host
+workflows runnable.
+
 ## CPU and memory
 
 Defaults:

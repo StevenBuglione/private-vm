@@ -210,6 +210,25 @@ overflow-safe host capacity probes, zram-only swap policy, exact loop-to-file
 ownership, the private no-backup marker, rollback at each allocation boundary,
 and repeated cleanup.
 
+Focused production-composition tests additionally prove volatile plan/image/
+storage/runtime ownership, reverse cleanup, partial-runtime timeout ownership,
+scanner/exporter fail-closed behavior, downloader seal-before-absence audit,
+idempotent private socket-directory cleanup, bounded 16-KiB guest torrent
+framing, single first-frame context and oversize/send-failure rejection. Run
+the affected source gate without starting a VM or mutating host networking:
+
+```bash
+GOMAXPROCS=2 go test -p=1 \
+  ./cmd/private-vmd ./internal/orchestrator ./internal/guest ./internal/daemon
+```
+
+This focused gate does not prove live network namespace counters, mock-peer
+packets, a real Proton handshake, cached official role images, KVM launch, or
+the scanner/exporter host workflows. Workstation and downloader acceptance also
+requires the role-specific guest VPN RPC implementation to consume the typed
+underlay and fixed probe targets; a host build paired with an older guestd must
+fail the authenticated readiness gate and is not release evidence.
+
 The bounded fuzz smoke is reproducible with:
 
 ```bash

@@ -149,6 +149,15 @@ revalidation. Overlay, tmpfs and LUKS handles expose idempotent cleanup plus exp
 absence audits and are registered through the session actor's atomic allocation
 boundary.
 
+The production storage stack first reserves the plan's guest RAM and bounded
+root/scratch write budget from one daemon-owned capacity pool. It selects tmpfs
+only when the immutable host evidence preserves the required host reserve;
+otherwise it creates the random-key LUKS2 outer filesystem. The fresh root
+overlay and, for downloader only, an opaque raw quarantine file live inside
+that outer filesystem. Failure at any later step returns the one partially
+constructed owner or proves reverse cleanup before returning; no guest or
+quarantine filesystem is interpreted by the host.
+
 ## Quarantine disk
 
 Use a raw sparse disk or QCOW2 without a backing image. The guest creates a

@@ -66,6 +66,11 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	hostServices, err := composeProductionHost(context.Background(), cfg)
+	if err != nil {
+		return err
+	}
+	defer hostServices.Close()
 	pkcheck, err := exec.LookPath("pkcheck")
 	if err != nil {
 		return errors.New("pkcheck is required for destructive USB authorization")
@@ -74,7 +79,11 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("resolve pkcheck: %w", err)
 	}
-	service := &daemon.Service{Sessions: manager, Config: cfg, Polkit: daemon.PKCheck{Binary: pkcheck}}
+	service := &daemon.Service{
+		Sessions: manager, Config: cfg, Polkit: daemon.PKCheck{Binary: pkcheck},
+		Profiles: hostServices.profiles, VPNResolver: hostServices.resolver,
+		Roles: hostServices.roles, Torrents: hostServices.roles,
+	}
 	server, err := daemon.NewServer(daemon.ServerOptions{
 		SocketPath: filepath.Join(runtimeConfig.Directory(), "control.sock"),
 		OwnerUID:   0,

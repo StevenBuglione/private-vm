@@ -74,6 +74,14 @@ input files because their reads cannot honor a local deadline.
 ### `cmd/private-vmd`
 
 Starts the privileged server, recovery scan, authorization, and orchestrator.
+The production composition root resolves every external executable to a direct
+absolute path, verifies the installed QEMU version with bounded output, opens
+the immutable image cache, takes the fail-closed capacity snapshot, and creates
+one shared VPN store, endpoint resolver, network owner, image-use registry,
+CID allocator, QEMU launcher, storage stack and host-role owner. The same
+`HostRoles` value implements the daemon's workstation/downloader lifecycle and
+narrow torrent relay; the service never receives a generic QEMU, guest RPC or
+command-execution handle. The VPN store is closed on every daemon exit path.
 
 ### `cmd/private-vm-guestd`
 
@@ -205,6 +213,17 @@ owner and returns only after it either proves absence or leaves a retryable
 `CLEANUP_INCOMPLETE` record. `StopRole` verifies workstation output state before
 publishing `STOPPING`; `UNEXPORTED`, `CHANGED`, and unreachable state require an
 explicit destructive discard request.
+
+The production host owner retains the validated selector and resolved resource
+plan only in its daemon-memory state born through the session actor's
+`session-plan` allocation. It re-verifies exactly one role/bundle image from an
+immutable digest cache, registers storage and runtime cleanup owners before
+publishing their phases, and exposes only workspace state or the downloader's
+typed torrent methods. A partial storage or runtime allocation is returned with
+its cleanup/audit contract so timeout or cancellation cannot drop ownership.
+Scanner and exporter requests remain typed fail-closed at this boundary until
+their separate orchestrators are composed; they are never routed through a
+workstation or downloader device model.
 
 ## Volatile secret contract
 
