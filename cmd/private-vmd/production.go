@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/StevenBuglione/private-vm/internal/config"
+	"github.com/StevenBuglione/private-vm/internal/daemon"
 	"github.com/StevenBuglione/private-vm/internal/guest"
 	"github.com/StevenBuglione/private-vm/internal/guestvpn"
 	"github.com/StevenBuglione/private-vm/internal/image"
@@ -27,6 +28,7 @@ type productionHostServices struct {
 	profiles *vpn.MemoryStore
 	resolver *vpn.EndpointResolver
 	roles    *orchestrator.HostRoles
+	scanners *daemon.GuestScannerRelay
 }
 
 func (services *productionHostServices) Close() {
@@ -115,14 +117,26 @@ func composeProductionHost(ctx context.Context, cfg config.Config) (*productionH
 		profiles.Close()
 		return nil, err
 	}
-	roles, err := orchestrator.NewHostRoles(
-		orchestrator.OfficialCacheSelector{Cache: cache, QEMUVersion: qemuVersion}, storageStack, runtimeStack,
+	selector := orchestrator.OfficialCacheSelector{Cache: cache, QEMUVersion: qemuVersion}
+	roles, err := orchestrator.NewHostRoles(selector, storageStack, runtimeStack)
+	if err != nil {
+		profiles.Close()
+		return nil, err
+	}
+	scannerRuntime, err := orchestrator.NewProductionScannerRuntime(
+		roles, selector, storageStack, runtimeStack, orchestrator.FailClosedScannerPromotion{},
+		orchestrator.ScannerRuntimePlan{VCPUs: 4, MemoryBytes: 8 << 30, RootBytes: 32 << 30},
 	)
 	if err != nil {
 		profiles.Close()
 		return nil, err
 	}
-	return &productionHostServices{profiles: profiles, resolver: resolver, roles: roles}, nil
+	scanners, err := daemon.NewGuestScannerRelay(scannerRuntimeDaemonAdapter{runtime: scannerRuntime})
+	if err != nil {
+		profiles.Close()
+		return nil, err
+	}
+	return &productionHostServices{profiles: profiles, resolver: resolver, roles: roles, scanners: scanners}, nil
 }
 
 func productionProbeTargets(configuration config.VPN) (guestvpn.ProbeTargets, error) {

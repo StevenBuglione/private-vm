@@ -192,6 +192,13 @@ resources clean in offline-runtime → update-runtime → storage order. Injecte
 operation failure, cancellation, timeout and cleanup-audit failure prove either
 `DESTROYED` convergence or an explicit retryable `DESTROYING` record.
 
+The production scanner-runtime unit gate additionally proves the sealed
+quarantine lease blocks downloader storage cleanup, the same scanner root
+storage is reused across both boots, the update boot completes the full typed
+VPN and host-egress sequence before its scanner client is available, and QEMU
+renders update as NIC/no-quarantine then scan as no-NIC/read-only-quarantine.
+Failure, cancellation and timeout return the same idempotent cleanup owner.
+
 ### Session, QEMU and ephemeral-storage evidence
 
 Batch 1 runtime tests exhaust every allowed lifecycle transition and each
@@ -375,6 +382,8 @@ and 16 GiB maintainer-host budget:
   actual database installation while explicitly excluding the official main,
   daily and bytecode databases, so it cannot rely on Internet availability or
   a real credential.
+  It also proves no FreshClam service/timer is present and the fixed guestd-owned
+  definitions oneshot is disabled and inactive before authenticated RPC use.
 - `scanner-offline` uses explicit QEMU `-nic none`, verifies zero non-loopback
   interfaces, attaches one read-only ext4 fixture, verifies the block read-only
   bit and `ro,nodev,nosuid,noexec` mount flags, then proves writing fails.

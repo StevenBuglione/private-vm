@@ -34,6 +34,16 @@ type HostStorage interface {
 	Audit(context.Context) error
 }
 
+// HostQuarantineLease is an exclusive, opaque block-image lease. The scanner
+// may pass Path only to the typed QEMU data-disk renderer; it must never open or
+// mount the filesystem on the host. Release is idempotent and Audit succeeds
+// only after ownership has returned to the sealed downloader storage owner.
+type HostQuarantineLease interface {
+	Path() string
+	Release(context.Context) error
+	Audit(context.Context) error
+}
+
 type HostStorageAllocator interface {
 	Allocate(context.Context, session.Snapshot, session.LaunchPlan, image.RuntimeImage) (HostStorage, error)
 }
@@ -362,6 +372,46 @@ func (roles *HostRoles) SealAndDestroy(ctx context.Context, snapshot session.Sna
 		return nil, errors.Join(torrent.ErrCleanupIncomplete, err)
 	}
 	return status, nil
+}
+
+// AcquireSealedQuarantine transfers an exclusive use lease only after the
+// downloader QEMU/network owner has proved complete absence. The downloader's
+// storage cleanup fails closed while this lease is held, so a concurrent source
+// cleanup cannot invalidate the scanner's read-only block attachment.
+func (roles *HostRoles) AcquireSealedQuarantine(ctx context.Context, snapshot session.Snapshot) (HostQuarantineLease, error) {
+	if roles == nil || ctx == nil || snapshot.Role != session.RoleDownloader ||
+		snapshot.Phase != session.PhaseActive || snapshot.WorkflowState != "QUARANTINE_SEALED" {
+		return nil, ErrHostStorageUnavailable
+	}
+	state, err := roles.state(snapshot)
+	if err != nil {
+		return nil, ErrHostStorageUnavailable
+	}
+	roles.mu.Lock()
+	storageResource := state.storage
+	runtimeResource := state.runtime
+	roles.mu.Unlock()
+	if storageResource == nil || runtimeResource == nil || runtimeResource.Audit(ctx) != nil {
+		return nil, ErrHostRuntimeUnavailable
+	}
+	owner, ok := storageResource.(interface {
+		acquireQuarantine() (HostQuarantineLease, error)
+	})
+	if !ok {
+		return nil, ErrHostStorageUnavailable
+	}
+	lease, err := owner.acquireQuarantine()
+	if err != nil || lease == nil || lease.Path() == "" {
+		return nil, errors.Join(ErrHostStorageUnavailable, err)
+	}
+	roles.mu.Lock()
+	unchanged := roles.states[snapshot.ID] == state && state.storage == storageResource && state.runtime == runtimeResource
+	roles.mu.Unlock()
+	if !unchanged {
+		_ = lease.Release(context.Background())
+		return nil, ErrHostStorageUnavailable
+	}
+	return lease, nil
 }
 
 func (roles *HostRoles) torrent(snapshot session.Snapshot) (TorrentRelay, error) {

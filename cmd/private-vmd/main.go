@@ -82,7 +82,7 @@ func run() error {
 	service := &daemon.Service{
 		Sessions: manager, Config: cfg, Polkit: daemon.PKCheck{Binary: pkcheck},
 		Profiles: hostServices.profiles, VPNResolver: hostServices.resolver,
-		Roles: hostServices.roles, Torrents: hostServices.roles,
+		Roles: hostServices.roles, Torrents: hostServices.roles, Scanners: hostServices.scanners,
 	}
 	server, err := daemon.NewServer(daemon.ServerOptions{
 		SocketPath: filepath.Join(runtimeConfig.Directory(), "control.sock"),
