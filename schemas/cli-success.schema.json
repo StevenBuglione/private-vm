@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://private-vm.dev/schema/cli-success-v1.json",
+  "title": "private-vm CLI success envelope",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": { "const": 1 },
+    "ok": { "const": true },
+    "code": {
+      "type": "string",
+      "pattern": "^[A-Z][A-Z0-9_]{2,63}$"
+    },
+    "data": { "type": "object" }
+  },
+  "required": ["schema_version", "ok", "code", "data"],
+  "oneOf": [
+    {
+      "properties": {
+        "code": { "const": "VERSION_REPORTED" },
+        "data": { "$ref": "#/$defs/version" }
+      }
+    },
+    {
+      "properties": {
+        "code": { "const": "DOCTOR_REPORT" },
+        "data": { "$ref": "#/$defs/doctor" }
+      }
+    },
+    {
+      "properties": {
+        "code": { "const": "ACKNOWLEDGED" },
+        "data": { "$ref": "#/$defs/acknowledgement" }
+      }
+    }
+  ],
+  "$defs": {
+    "version": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "version": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "commit": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "date": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "go_version": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "os": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "arch": { "type": "string", "minLength": 1, "maxLength": 64 }
+      },
+      "required": ["version", "commit", "date", "go_version", "os", "arch"]
+    },
+    "diagnostic": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "code": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]{2,63}$" },
+        "severity": { "enum": ["info", "warning", "blocking"] },
+        "summary": { "type": "string", "minLength": 1, "maxLength": 512 },
+        "remediation": { "type": "string", "minLength": 1, "maxLength": 1024 },
+        "overridable": { "type": "boolean" }
+      },
+      "required": ["code", "severity", "summary", "overridable"]
+    },
+    "doctor": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "runnable": { "type": "boolean" },
+        "diagnostics": {
+          "type": "array",
+          "maxItems": 512,
+          "items": { "$ref": "#/$defs/diagnostic" }
+        }
+      },
+      "required": ["runnable", "diagnostics"]
+    },
+    "acknowledgement": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "message": { "type": "string", "minLength": 1, "maxLength": 512 }
+      },
+      "required": ["message"]
+    }
+  }
+}

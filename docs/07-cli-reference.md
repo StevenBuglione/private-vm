@@ -16,6 +16,33 @@
 
 Debug logging must still redact sensitive values.
 
+`--help` and shell-completion scripts are intentionally human/tooling text, not
+machine records. Combining `--json` with `--help`, invoking the root with only
+`--json`, or passing `--json` to `completion` fails with `CLI_USAGE` (exit 2)
+instead of silently emitting non-JSON output.
+
+`private-vm --version` is the root shorthand for `private-vm version`. Both
+forms print the same build information and honor `--json`.
+
+## Sensitive input
+
+Commands accept credentials and magnet values only from an explicitly selected
+terminal, process standard input, or file source. Terminal reads serialize
+access to `/dev/tty`, disable echo, and restore the original terminal state on
+success, error, timeout, or cancellation. Standard-input and file reads are
+byte-bounded and never add the value, source path, or underlying read error to
+the rendered error record. The hard implementation ceilings are 1 MiB for a value
+transferred into locked secret memory and 64 MiB for a stream; individual
+commands use smaller limits where their protocol permits.
+
+On Linux, sensitive files are opened with parent and final-component symlink
+resolution disabled. They must be regular local files; FUSE, NFS, SMB and 9P
+sources fail closed. Because POSIX regular-file open/read syscalls cannot be
+portably interrupted, a deadline-bearing file request fails before opening its
+path; future file-transfer workflows must provide their own owned worker and
+cleanup boundary. Credential imports additionally require effective-user
+ownership and prohibit group, world, and executable permission bits.
+
 ## Exit codes
 
 | Code | Meaning |
@@ -45,6 +72,16 @@ Debug logging must still redact sensitive values.
 
 Creates user configuration directories, checks daemon installation, and guides
 image/VPN/USB setup. It does not import secrets without an explicit subcommand.
+
+### `private-vm version`
+
+```bash
+private-vm version [--json]
+private-vm --version [--json]
+```
+
+Prints the application version, source commit, build date, Go version, operating
+system and architecture. It performs no daemon connection or host mutation.
 
 ### `private-vm doctor`
 
@@ -179,6 +216,22 @@ private-vm policy show NAME
 private-vm policy validate FILE
 ```
 
+### Run aliases
+
+```text
+private-vm run workstation [--bundle basic|office|development]
+                           [--audio] [--memory SIZE] [--cpus N]
+private-vm run torrent [--policy safe|quarantine]
+private-vm run scanner --session ID
+```
+
+These are convenience aliases for the corresponding planned workflows. Each
+alias calls the same configuration, preflight, planning, authorization and
+orchestration paths as the expanded commands; an alias cannot bypass a check.
+`run workstation` and `desktop start` normalize identical bundle, audio, memory
+and CPU options into the same workstation intent and dispatch the same stable
+command ID, `workstation.start`. Their defaults and validation are identical.
+
 ### System
 
 ```text
@@ -186,7 +239,12 @@ private-vm system status
 private-vm system install --dry-run
 private-vm system install --accept
 private-vm system uninstall --dry-run
+private-vm system diagnostics [--export FILE]
 ```
+
+`system diagnostics` displays a redacted diagnostic-bundle manifest. With
+`--export`, the user must review that manifest before the bounded bundle is
+written. It never includes active session content or secret values.
 
 ### Completion
 
@@ -196,20 +254,71 @@ private-vm completion zsh
 private-vm completion fish
 ```
 
+Completion output is a bounded shell script. It does not accept `--json`.
+
 ## Stable machine output
 
-JSON errors use:
+`--json` emits newline-terminated JSON records. Success and event records go to
+standard output; errors go to standard error. Every record has
+`schema_version = 1`, a stable uppercase `code`, and a literal `ok` value.
+Unknown top-level fields are invalid. Command-specific `data` objects are
+produced by typed implementations; their fields are not an extension mechanism
+for callers.
+
+Success records use:
 
 ```json
 {
-  "ok": false,
-  "code": "VPN_DIRECT_EGRESS_SUCCEEDED",
-  "exit_code": 13,
-  "message": "Direct IPv4 egress was reachable outside proton0.",
-  "remediation": "Do not continue. Inspect the host namespace and guest nftables policy.",
-  "session_id": "optional"
+  "schema_version": 1,
+  "ok": true,
+  "code": "VERSION_REPORTED",
+  "data": {
+    "version": "0.1.0-dev",
+    "commit": "0123456789abcdef0123456789abcdef01234567",
+    "date": "2026-07-18T12:00:00Z",
+    "go_version": "go1.26.5",
+    "os": "linux",
+    "arch": "amd64"
+  }
 }
 ```
 
+Error records use:
+
+```json
+{
+  "schema_version": 1,
+  "ok": false,
+  "code": "CONFIG_INVALID",
+  "exit_code": 11,
+  "message": "Configuration validation failed.",
+  "remediation": "Correct the reported field without placing secrets in TOML."
+}
+```
+
+Event records use a monotonically increasing sequence within a session or
+command stream. `data` is the direct typed event payload selected for the stable
+event code; it is not another envelope or an untyped caller extension:
+
+```json
+{
+  "schema_version": 1,
+  "ok": true,
+  "code": "IMAGE_PULL_PROGRESS",
+  "sequence": 7,
+  "session_id": "pvm-11111111111111111111111111111111",
+  "data": {
+    "current": 64,
+    "total": 128,
+    "unit": "MiB"
+  }
+}
+```
+
+`session_id` is optional on errors and events because some failures occur before
+a session exists. Successes intentionally omit it; a session-producing command
+places the identifier in its typed `data` object. The checked-in schemas and
+examples are canonical. No envelope or payload may contain keys, magnets,
+filenames, file hashes, endpoints, public IPs, or raw external-command output.
 Human output may change cosmetically; codes and schema versions follow semantic
 versioning.

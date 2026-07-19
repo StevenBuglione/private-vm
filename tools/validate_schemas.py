@@ -19,4 +19,10 @@ for path in sorted((ROOT / "schemas").glob("*.json")):
         raise SystemExit(f"{path}: missing {sorted(missing)}")
     if value["type"] != "object":
         raise SystemExit(f"{path}: root type must be object")
+    if path.name.startswith("cli-"):
+        if value.get("additionalProperties") is not False:
+            raise SystemExit(f"{path}: CLI envelope must reject unknown top-level fields")
+        required_fields = set(value.get("required", []))
+        if "schema_version" not in required_fields:
+            raise SystemExit(f"{path}: CLI envelope must require schema_version")
     print(f"ok: {path.relative_to(ROOT)}")

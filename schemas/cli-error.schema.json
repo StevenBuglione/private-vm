@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://private-vm.dev/schema/cli-error-v1.json",
+  "title": "private-vm CLI error envelope",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "ok": {
+      "const": false
+    },
+    "code": {
+      "type": "string",
+      "pattern": "^[A-Z][A-Z0-9_]{2,63}$"
+    },
+    "exit_code": {
+      "enum": [
+        2,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        70
+      ]
+    },
+    "message": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "remediation": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1024
+    },
+    "session_id": {
+      "type": "string",
+      "pattern": "^pvm-[a-f0-9]{32}$"
+    }
+  },
+  "required": [
+    "schema_version",
+    "ok",
+    "code",
+    "exit_code",
+    "message",
+    "remediation"
+  ]
+}

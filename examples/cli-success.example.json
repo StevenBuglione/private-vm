@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "ok": true,
+  "code": "VERSION_REPORTED",
+  "data": {
+    "version": "0.1.0-dev",
+    "commit": "0123456789abcdef0123456789abcdef01234567",
+    "date": "2026-07-18T12:00:00Z",
+    "go_version": "go1.26.5",
+    "os": "linux",
+    "arch": "amd64"
+  }
+}
