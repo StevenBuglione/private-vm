@@ -198,7 +198,9 @@ func (backend *linuxQuarantineBackend) PrepareDirectories(ctx context.Context) e
 		if !ok || stat.Nlink < 2 || (stat.Uid != 0 && stat.Uid != uint32(backend.uid)) {
 			return errors.New("quarantine directory identity invalid")
 		}
-		if err := os.Chown(path, backend.uid, backend.gid); err != nil || os.Chmod(path, 0o700) != nil {
+		// Set the final mode while root still owns the new directory, then use
+		// only CAP_CHOWN for the one-way handoff to the unprivileged process.
+		if err := os.Chmod(path, 0o700); err != nil || os.Chown(path, backend.uid, backend.gid) != nil {
 			return errors.New("quarantine directory permissions failed")
 		}
 	}

@@ -29,6 +29,12 @@ a distinct process group, sets a parent-death signal, fixes the working
 directory and supplies an allowlisted, secret-free environment and argument
 list. Standard output and error are discarded.
 
+Guestd's downloader capability bound contains only the shared network/mount
+capabilities plus `CHOWN`, `SETUID` and `SETGID`: `CHOWN` creates the volatile
+private-owned quarantine/config trees, and the set-ID pair performs the fixed
+child credential drop. The child receives no capabilities after that drop and
+inherits no-new-privileges.
+
 The executable is an immutable Nix-store-backed link outside the global command
 path. The manager opens a pidfd before accepting ownership. Stop uses bounded
 TERM/KILL escalation and reaps the child; partial starts and canceled operations

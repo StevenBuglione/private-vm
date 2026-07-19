@@ -68,8 +68,11 @@ in
     "AF_NETLINK"
   ];
   systemd.services.private-vm-guestd.serviceConfig.CapabilityBoundingSet = lib.mkForce [
+    "CAP_CHOWN"
     "CAP_IPC_LOCK"
     "CAP_NET_ADMIN"
+    "CAP_SETGID"
+    "CAP_SETUID"
     "CAP_SYS_ADMIN"
   ];
   systemd.services.private-vm-guestd.serviceConfig.DeviceAllow = lib.mkForce [
