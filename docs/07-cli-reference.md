@@ -38,9 +38,9 @@ terminal, process standard input, or file source. Terminal reads serialize
 access to `/dev/tty`, disable echo, and restore the original terminal state on
 success, error, timeout, or cancellation. Standard-input and file reads are
 byte-bounded and never add the value, source path, or underlying read error to
-the rendered error record. The hard implementation ceilings are 1 MiB for a value
-transferred into locked secret memory and 64 MiB for a stream; individual
-commands use smaller limits where their protocol permits.
+the rendered error record. The hard implementation ceilings are 1 MiB for a
+value transferred into protected volatile secret storage and 64 MiB for a
+stream; individual commands use smaller limits where their protocol permits.
 
 On Linux, sensitive files are opened with parent and final-component symlink
 resolution disabled. They must be regular local files; FUSE, NFS, SMB and 9P

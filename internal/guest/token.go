@@ -3,8 +3,8 @@ package guest
 import (
 	"context"
 	"crypto/rand"
-	"crypto/subtle"
 	"encoding/base64"
+	"encoding/xml"
 	"errors"
 	"fmt"
 	"io"
@@ -32,6 +32,8 @@ const (
 type Token struct {
 	value *secret.Bytes
 }
+
+var ErrTokenSerialization = errors.New("guest capabilities cannot be serialized")
 
 func NewToken() (*Token, error) {
 	value := make([]byte, TokenSize)
@@ -102,16 +104,25 @@ func (t *Token) Destroy() {
 	}
 }
 
-func (t *Token) String() string   { return "[REDACTED]" }
-func (t *Token) GoString() string { return "[REDACTED]" }
-func (t *Token) Format(state fmt.State, _ rune) {
+func (t Token) String() string   { return "[REDACTED]" }
+func (t Token) GoString() string { return "[REDACTED]" }
+func (t Token) Format(state fmt.State, _ rune) {
 	_, _ = state.Write([]byte("[REDACTED]"))
 }
-func (t *Token) MarshalJSON() ([]byte, error) {
-	return nil, errors.New("guest capabilities cannot be serialized")
+func (t Token) MarshalJSON() ([]byte, error) {
+	return nil, ErrTokenSerialization
 }
-func (t *Token) MarshalText() ([]byte, error) {
-	return nil, errors.New("guest capabilities cannot be serialized")
+func (t Token) MarshalText() ([]byte, error) {
+	return nil, ErrTokenSerialization
+}
+func (t Token) MarshalBinary() ([]byte, error) {
+	return nil, ErrTokenSerialization
+}
+func (t Token) GobEncode() ([]byte, error) {
+	return nil, ErrTokenSerialization
+}
+func (t Token) MarshalXML(*xml.Encoder, xml.StartElement) error {
+	return ErrTokenSerialization
 }
 
 func (t *Token) UnaryClientInterceptor() grpc.UnaryClientInterceptor {
@@ -157,14 +168,32 @@ func (t *Token) outgoingContext(ctx context.Context) (context.Context, error) {
 		return nil, errors.New("guest capability is unavailable")
 	}
 	var encoded string
-	err := t.value.With(func(value []byte) error {
-		encoded = base64.RawURLEncoding.EncodeToString(value)
-		return nil
+	err := t.value.WithReader(func(reader io.Reader) error {
+		var encodeErr error
+		encoded, encodeErr = encodeTokenReader(reader)
+		return encodeErr
 	})
 	if err != nil {
 		return nil, fmt.Errorf("use guest capability: %w", err)
 	}
 	return metadata.AppendToOutgoingContext(ctx, TokenMetadataKey, encoded), nil
+}
+
+func encodeTokenReader(reader io.Reader) (string, error) {
+	var raw [TokenSize]byte
+	defer func() {
+		clear(raw[:])
+		runtime.KeepAlive(raw)
+	}()
+	if _, err := io.ReadFull(reader, raw[:]); err != nil {
+		return "", errors.New("guest capability has an invalid length")
+	}
+	var extra [1]byte
+	count, err := io.ReadFull(reader, extra[:])
+	if count != 0 || !errors.Is(err, io.EOF) {
+		return "", errors.New("guest capability has an invalid length")
+	}
+	return base64.RawURLEncoding.EncodeToString(raw[:]), nil
 }
 
 func (t *Token) authenticate(ctx context.Context) error {
@@ -181,11 +210,7 @@ func (t *Token) authenticate(ctx context.Context) error {
 		clear(presented)
 		return guestRPCError(codes.Unauthenticated, "GUEST_AUTHENTICATION_FAILED", "Guest authentication failed.", "Destroy the session and start a fresh verified guest.", false)
 	}
-	matched := false
-	err = t.value.With(func(expected []byte) error {
-		matched = subtle.ConstantTimeCompare(expected, presented) == 1
-		return nil
-	})
+	matched, err := t.value.Equal(presented)
 	clear(presented)
 	runtime.KeepAlive(presented)
 	if err != nil || !matched {

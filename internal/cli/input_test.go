@@ -29,13 +29,13 @@ func TestSensitiveInputFromStdin(t *testing.T) {
 	if value.String() != "[REDACTED]" {
 		t.Fatal("sensitive value did not redact its string form")
 	}
-	if err := value.With(func(actual []byte) error {
-		if string(actual) != "magnet:?xt=example" {
-			t.Fatalf("unexpected value: %q", actual)
-		}
-		return nil
-	}); err != nil {
+	actual, err := readProtectedValue(value)
+	if err != nil {
 		t.Fatal(err)
+	}
+	defer clear(actual)
+	if string(actual) != "magnet:?xt=example" {
+		t.Fatal("unexpected protected value")
 	}
 }
 
@@ -126,14 +126,31 @@ func TestSensitiveInputFilePreservesBytesAndRequiresOwnerOnlyMode(t *testing.T) 
 		t.Fatal(err)
 	}
 	defer value.Destroy()
-	if err := value.With(func(actual []byte) error {
-		if !bytes.Equal(actual, content) {
-			t.Fatal("file value was modified")
-		}
-		return nil
-	}); err != nil {
+	actual, err := readProtectedValue(value)
+	if err != nil {
 		t.Fatal(err)
 	}
+	defer clear(actual)
+	if !bytes.Equal(actual, content) {
+		t.Fatal("file value was modified")
+	}
+}
+
+type protectedReader interface {
+	WithReader(func(io.Reader) error) error
+}
+
+func readProtectedValue(value protectedReader) ([]byte, error) {
+	var result []byte
+	err := value.WithReader(func(reader io.Reader) error {
+		read, readErr := io.ReadAll(reader)
+		if readErr != nil {
+			return readErr
+		}
+		result = read
+		return nil
+	})
+	return result, err
 }
 
 func TestSensitiveInputFileRejectsSymlinkUnsafeModeAndNonRegular(t *testing.T) {

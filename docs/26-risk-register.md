@@ -10,7 +10,7 @@
 | R-006 | Proton profile stale | medium | medium | `vpn test`, clear rotate workflow |
 | R-007 | VPN leak due routing | medium | high | independent host+guest enforcement, active tests |
 | R-008 | Host disk swap leaks memory | medium | high | strict preflight, zram only |
-| R-009 | Go secret copies | medium | medium | short lifetime, memfd, document limitation |
+| R-009 | Secret copies or unlocked pages outside the owned mapping | medium | medium | short lifetime; sealed/dump-excluded memfd; best-effort mlock; read-only inherited FDs; no mutable backing view; constant-time comparison; explicit overwrite; document unavoidable Go/gRPC/kernel/hardware copies and make no perfect-erasure claim |
 | R-010 | USB composite attack | low/medium | high | USBGuard exact interface set and identity |
 | R-011 | USB filesystem exploit | medium | high | exporter guest only; host never mounts |
 | R-012 | Cleanup leaves recoverable ciphertext | low | high | volatile random key, startup deletion |

@@ -73,6 +73,23 @@ parser, migration or filesystem cause.
 These meanings are safe for logs and automation. Human error records add a
 bounded remediation but never serialize a wrapped cause or raw command output.
 
+## Volatile-secret package errors
+
+These stable sentinels are safe internal classifications. They never include a
+secret value, descriptor path or wrapped syscall output. A CLI or RPC boundary
+maps them to the owning workflow's documented error code rather than emitting
+the Go error text directly.
+
+| Sentinel | Safe meaning |
+|---|---|
+| `ErrEmpty` | No secret bytes were supplied. |
+| `ErrTooLarge` | Secret input exceeded the hard 16 MiB package ceiling. |
+| `ErrUnavailable` | Protected storage or an initialized handle is unavailable. |
+| `ErrDestroyed` | The shared secret state was already destroyed. |
+| `ErrNotMemfd` | This platform/backing cannot provide inherited-FD delivery. |
+| `ErrCallback` | A bounded secret-reader callback was not supplied. |
+| `ErrSerialization` | A supported serialization path was rejected. |
+
 ## Mandatory blocking diagnostic codes
 
 ### Host

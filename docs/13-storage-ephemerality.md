@@ -90,13 +90,22 @@ larger of 4 GiB or 20% total RAM as host reserve before selecting this mode.
 ## Key handling
 
 - generated from kernel CSPRNG
-- held in mutable byte slice and memfd
-- memory locked where permitted
-- passed to `cryptsetup` by inherited FD
+- held in a core-dump-excluded, sealed memfd mapping on supported Linux hosts
+- memory locked on a best-effort basis; lock failure does not imply protection
+- passed to each `cryptsetup` invocation through a fresh read-only inherited FD
+  with an independent offset at zero
 - not stored in environment or argv
 - destroyed after device close
-- current buffer overwritten
-- Go zeroing limitations documented
+- current owned mapping overwritten before unmap and close
+- JSON, text, binary, gob and XML serialization rejected
+- Go, library, kernel and hardware copies outside the owned mapping cannot be
+  proven erased; the project makes no perfect-erasure claim
+
+On Linux, memfd setup, mapping, dump exclusion and sealing fail closed when the
+kernel implements memfd. An `ENOSYS` compatibility fallback cannot provide an
+inherited descriptor, so workflows that require FD delivery remain blocked.
+Non-Linux heap storage exists only so the package can compile and be tested; it
+is not an accepted production storage path.
 
 ## Root overlays
 

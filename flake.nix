@@ -469,6 +469,7 @@
             default = sourceCheck "private-vm-source-check" ''
               go test ./...
               go vet ./...
+              GOOS=darwin GOARCH=amd64 go test -exec=true ./internal/secret
               python3 tools/validate_schemas.py
               python3 tools/validate_examples.py
             '';
