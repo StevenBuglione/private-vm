@@ -550,6 +550,7 @@ mode = "safe"
 
 [limits]
 max_input_bytes = 1048576
+max_single_file_bytes = 1048576
 max_files = 32
 max_archive_depth = 3
 max_expansion_ratio = 100.0

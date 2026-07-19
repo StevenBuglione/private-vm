@@ -49,7 +49,7 @@ func TestComposeGuestServerConfigWiresOnlyScannerCompiledRole(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	identity.Role = session.RoleWorkstation
+	identity.Role = session.RoleDownloader
 	config, scannerService, err = composeGuestServerConfig(identity, token)
 	if err != nil {
 		t.Fatal(err)
