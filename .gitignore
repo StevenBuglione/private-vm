@@ -10,6 +10,7 @@
 *.iso
 *.sock
 coverage.out
+__pycache__/
 .DS_Store
 
 # User-supplied credentials must never enter the repository.  Product fixtures
