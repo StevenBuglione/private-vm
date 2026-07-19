@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"os"
@@ -274,6 +275,106 @@ func TestScannerBootModeAcceptsOnlyExactQEMUStringEncoding(t *testing.T) {
 	}
 }
 
+func TestProductionScannerToolchainRequiresExactManifestIDsAndCommands(t *testing.T) {
+	document := productionScannerToolchainDocumentFixture()
+	toolchain, err := loadScannerToolchain(writeScannerToolchainDocument(t, document))
+	if err != nil {
+		t.Fatal(err)
+	}
+	evidence, err := toolchain.evidence("clamav", "file", "poppler-utils", "ghostscript", "libreoffice", "ffmpeg")
+	if err != nil || len(evidence) != len(productionScannerTools) {
+		t.Fatalf("manifest evidence = %#v, %v", evidence, err)
+	}
+	for index, tool := range evidence {
+		if tool.Name != productionScannerTools[index].id || tool.Version != "version-"+productionScannerTools[index].id {
+			t.Fatalf("manifest evidence[%d] = %#v", index, tool)
+		}
+	}
+
+	for _, required := range productionScannerTools {
+		t.Run("missing-"+required.id, func(t *testing.T) {
+			document := productionScannerToolchainDocumentFixture()
+			for index, tool := range document.Tools {
+				if tool.ID == required.id {
+					document.Tools = append(document.Tools[:index], document.Tools[index+1:]...)
+					break
+				}
+			}
+			if _, err := loadScannerToolchain(writeScannerToolchainDocument(t, document)); scan.ErrorCode(err) != "SCANNER_TOOLCHAIN_UNAVAILABLE" {
+				t.Fatalf("loadScannerToolchain() error = %v", err)
+			}
+		})
+	}
+
+	tests := []struct {
+		name   string
+		mutate func(*scannerToolchainDocument)
+	}{
+		{name: "duplicate-id", mutate: func(document *scannerToolchainDocument) {
+			duplicate := document.Tools[0]
+			duplicate.Version = "different"
+			document.Tools = append(document.Tools, duplicate)
+		}},
+		{name: "missing-command", mutate: func(document *scannerToolchainDocument) { document.Tools[0].Commands = []string{"clamscan"} }},
+		{name: "duplicate-command", mutate: func(document *scannerToolchainDocument) {
+			document.Tools[0].Commands = append(document.Tools[0].Commands, "clamd")
+		}},
+		{name: "malformed-package", mutate: func(document *scannerToolchainDocument) { document.Tools[0].Package = "bad/package" }},
+		{name: "malformed-purpose", mutate: func(document *scannerToolchainDocument) { document.Tools[0].Purpose = "secret\nvalue" }},
+		{name: "wrong-architecture", mutate: func(document *scannerToolchainDocument) { document.Architecture = "other" }},
+		{name: "malformed-source", mutate: func(document *scannerToolchainDocument) { document.SourceCommit = "main" }},
+		{name: "malformed-lock", mutate: func(document *scannerToolchainDocument) { document.FlakeLockSHA256 = "short" }},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			document := productionScannerToolchainDocumentFixture()
+			test.mutate(&document)
+			if _, err := loadScannerToolchain(writeScannerToolchainDocument(t, document)); scan.ErrorCode(err) != "SCANNER_TOOLCHAIN_UNAVAILABLE" {
+				t.Fatalf("loadScannerToolchain() error = %v", err)
+			}
+		})
+	}
+}
+
+func TestProductionReconstructionReportsExactManifestIDsForInvokedTools(t *testing.T) {
+	toolchain := productionScannerToolchainFixture()
+	tests := []struct {
+		name           string
+		transformation string
+		observed       []scan.ToolEvidence
+		want           []scan.ToolEvidence
+	}{
+		{
+			name: "pdf", transformation: "pdf-raster-rebuild-v1",
+			observed: []scan.ToolEvidence{{Name: "poppler-pdfinfo", Version: "version-poppler-utils"}, {Name: "ghostscript-pdfimage24", Version: "version-ghostscript"}, {Name: "poppler-pdfinfo", Version: "version-poppler-utils"}},
+			want:     []scan.ToolEvidence{{Name: "poppler-utils", Version: "version-poppler-utils"}, {Name: "ghostscript", Version: "version-ghostscript"}},
+		},
+		{
+			name: "office", transformation: "office-render-pdf-raster-rebuild-v1",
+			observed: []scan.ToolEvidence{{Name: "libreoffice-headless-pdf", Version: "version-libreoffice"}, {Name: "poppler-pdfinfo", Version: "version-poppler-utils"}, {Name: "ghostscript-pdfimage24", Version: "version-ghostscript"}, {Name: "poppler-pdfinfo", Version: "version-poppler-utils"}},
+			want:     []scan.ToolEvidence{{Name: "libreoffice", Version: "version-libreoffice"}, {Name: "poppler-utils", Version: "version-poppler-utils"}, {Name: "ghostscript", Version: "version-ghostscript"}},
+		},
+		{
+			name: "media", transformation: "media-full-decode-h264-aac-v1",
+			observed: []scan.ToolEvidence{{Name: "ffprobe-json", Version: "version-ffmpeg"}, {Name: "ffmpeg-h264-aac", Version: "version-ffmpeg"}, {Name: "ffprobe-json", Version: "version-ffmpeg"}},
+			want:     []scan.ToolEvidence{{Name: "ffmpeg", Version: "version-ffmpeg"}},
+		},
+		{name: "image", transformation: "image-decode-strip-reencode-png-v1", observed: []scan.ToolEvidence{{Name: "go-image-png", Version: "go1.26"}}, want: []scan.ToolEvidence{{Name: "go-image-png", Version: "go1.26"}}},
+		{name: "text", transformation: "text-utf8-line-normalize-v1", observed: []scan.ToolEvidence{{Name: "private-vm-text-normalizer", Version: "1"}}, want: []scan.ToolEvidence{{Name: "private-vm-text-normalizer", Version: "1"}}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			got, err := toolchain.reconstructionEvidence(test.transformation, test.observed)
+			if err != nil || !slices.Equal(got, test.want) {
+				t.Fatalf("reconstructionEvidence() = %#v, %v; want %#v", got, err, test.want)
+			}
+		})
+	}
+	if _, err := toolchain.reconstructionEvidence("pdf-raster-rebuild-v1", []scan.ToolEvidence{{Name: "caller-alias", Version: "version-poppler-utils"}}); scan.ErrorCode(err) != "SCANNER_TOOLCHAIN_UNAVAILABLE" {
+		t.Fatalf("mismatched operation evidence error = %v", err)
+	}
+}
+
 func stringPointer(value string) *string { return &value }
 
 type productionCleanScanner struct{}
@@ -314,7 +415,8 @@ func TestProductionReconstructionApprovesOneTextOutputAndCleansIt(t *testing.T) 
 		sandbox: scan.ExtractionSandbox{
 			ParentPath: parent, Tmpfs: true, PrivateMountNamespace: true, WorkerUID: os.Geteuid(), WorkerGID: os.Getegid(),
 		},
-		classifier: classifier, scanner: productionCleanScanner{}, outputs: make(map[string]*scan.ReconstructedOutput),
+		classifier: classifier, scanner: productionCleanScanner{}, toolchain: productionScannerToolchainFixture(),
+		outputs: make(map[string]*scan.ReconstructedOutput),
 	}
 	result, err := adapter.Reconstruct(t.Context(), inventory, summary, selected)
 	if err != nil {
@@ -375,7 +477,8 @@ func TestProductionArchiveTraversalBecomesBlockingCompleteFinding(t *testing.T) 
 	}
 	adapter := &productionScannerReconstruction{
 		root: quarantine, sandbox: scan.ExtractionSandbox{ParentPath: parent, Tmpfs: true, PrivateMountNamespace: true, WorkerUID: os.Geteuid(), WorkerGID: os.Getegid()},
-		classifier: scan.ConservativeMIMEClassifier{}, scanner: productionCleanScanner{}, outputs: make(map[string]*scan.ReconstructedOutput),
+		classifier: scan.ConservativeMIMEClassifier{}, scanner: productionCleanScanner{}, toolchain: productionScannerToolchainFixture(),
+		outputs: make(map[string]*scan.ReconstructedOutput),
 	}
 	result, err := adapter.Reconstruct(t.Context(), inventory, summary, selected)
 	if err != nil {
@@ -620,4 +723,40 @@ func productionTmpfs(t *testing.T) string {
 	}
 	t.Cleanup(func() { _ = os.RemoveAll(directory) })
 	return directory
+}
+
+func productionScannerToolchainFixture() productionScannerToolchain {
+	versions := make(map[string]string, len(productionScannerTools))
+	for _, tool := range productionScannerTools {
+		versions[tool.id] = "version-" + tool.id
+	}
+	return productionScannerToolchain{versions: versions}
+}
+
+func productionScannerToolchainDocumentFixture() scannerToolchainDocument {
+	document := scannerToolchainDocument{
+		SchemaVersion: 1, Project: "private-vm", Role: "scanner", Architecture: scannerManifestArchitecture(),
+		SourceCommit: strings.Repeat("a", 40), FlakeLockSHA256: strings.Repeat("b", 64),
+		ArchiveExecutionContract: "guestd-bounded-unprivileged-private-namespace",
+	}
+	for _, required := range productionScannerTools {
+		document.Tools = append(document.Tools, scannerToolchainTool{
+			ID: required.id, Package: required.id, Version: "version-" + required.id,
+			Commands: slices.Clone(required.commands), Purpose: "verified production scanner operation",
+		})
+	}
+	return document
+}
+
+func writeScannerToolchainDocument(t *testing.T, document scannerToolchainDocument) string {
+	t.Helper()
+	encoded, err := json.Marshal(document)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(t.TempDir(), "scanner-toolchain.json")
+	if err := os.WriteFile(path, encoded, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return path
 }

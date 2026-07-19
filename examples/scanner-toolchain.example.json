@@ -13,6 +13,41 @@
       "version": "1.4.3",
       "commands": ["clamd", "clamdscan", "clamscan", "freshclam"],
       "purpose": "official-definition update and malware-signature evidence"
+    },
+    {
+      "id": "file",
+      "package": "file",
+      "version": "5.46",
+      "commands": ["file"],
+      "purpose": "libmagic-backed content identification"
+    },
+    {
+      "id": "poppler-utils",
+      "package": "poppler-utils",
+      "version": "25.06.0",
+      "commands": ["pdfinfo", "pdftoppm", "pdftotext"],
+      "purpose": "PDF inventory and rasterization"
+    },
+    {
+      "id": "ghostscript",
+      "package": "ghostscript-headless",
+      "version": "10.05.1",
+      "commands": ["gs"],
+      "purpose": "document rasterization fallback under guestd-enforced limits"
+    },
+    {
+      "id": "libreoffice",
+      "package": "libreoffice-fresh",
+      "version": "25.2.4.3",
+      "commands": ["libreoffice"],
+      "purpose": "headless Office document rendering"
+    },
+    {
+      "id": "ffmpeg",
+      "package": "ffmpeg-headless",
+      "version": "7.1.1",
+      "commands": ["ffmpeg", "ffprobe"],
+      "purpose": "full media decode, probe and metadata-free re-encode"
     }
   ]
 }

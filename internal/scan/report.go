@@ -194,6 +194,37 @@ func (report ScanReport) Validate() error {
 			return reportInvalid("A scanner tool identity is incomplete.")
 		}
 	}
+	toolNames := make(map[string]struct{}, len(report.Tools))
+	for _, tool := range report.Tools {
+		toolNames[tool.Name] = struct{}{}
+	}
+	for _, required := range []string{"clamav", "file"} {
+		if _, present := toolNames[required]; !present {
+			return reportInvalid("The scanner report omits required manifest-backed tool evidence.")
+		}
+	}
+	for _, output := range report.SanitizedOutputs {
+		var required []string
+		switch output.Transformation {
+		case "pdf-raster-rebuild-v1":
+			required = []string{"ghostscript", "poppler-utils"}
+		case "office-render-pdf-raster-rebuild-v1":
+			required = []string{"ghostscript", "libreoffice", "poppler-utils"}
+		case "media-full-decode-aac-v1", "media-full-decode-h264-aac-v1":
+			required = []string{"ffmpeg"}
+		case "image-decode-strip-reencode-png-v1":
+			required = []string{"go-image-png"}
+		case "text-utf8-line-normalize-v1":
+			required = []string{"private-vm-text-normalizer"}
+		default:
+			return reportInvalid("A sanitized output names an unsupported reconstruction contract.")
+		}
+		for _, name := range required {
+			if _, present := toolNames[name]; !present {
+				return reportInvalid("A sanitized output omits its required tool evidence.")
+			}
+		}
+	}
 	allPhases := report.Phases.DefinitionsVerified && report.Phases.OfflineVerified && report.Phases.InventoryComplete &&
 		report.Phases.MalwareScanComplete && report.Phases.ArchiveInspectionComplete && report.Phases.ReconstructionComplete && report.Phases.OutputRescanComplete
 	switch report.Result {
@@ -357,9 +388,7 @@ func strictlySortedOutputs(values []ReportSanitizedOutput) bool {
 
 func strictlySortedTools(values []ToolEvidence) bool {
 	for index := 1; index < len(values); index++ {
-		left := values[index-1].Name + "\x00" + values[index-1].Version
-		right := values[index].Name + "\x00" + values[index].Version
-		if left >= right {
+		if values[index-1].Name >= values[index].Name {
 			return false
 		}
 	}

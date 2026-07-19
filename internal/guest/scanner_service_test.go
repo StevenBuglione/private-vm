@@ -157,6 +157,14 @@ func TestScannerRPCUpdateRebootOfflineScanReconstructReportAndExport(t *testing.
 	if report.Result != "approved" || len(report.Inputs) != 1 || len(report.SanitizedOutputs) != 1 || report.Inputs[0].ClamAVVerdict != "CLAMAV_CLEAN" {
 		t.Fatalf("scan report = %#v", report)
 	}
+	wantTools := []scan.ToolEvidence{
+		{Name: "clamav", Version: "1.4.3-test"},
+		{Name: "file", Version: "5.46-test"},
+		{Name: "private-vm-text-normalizer", Version: "1"},
+	}
+	if !slices.Equal(report.Tools, wantTools) {
+		t.Fatalf("authenticated report tools = %#v, want %#v", report.Tools, wantTools)
+	}
 
 	exportStream, err := offlineClient.ExportApprovedFile(t.Context(), &privatevmv1.ExportApprovedFileRequest{
 		Context: scannerRequest("").GetContext(), OutputId: report.SanitizedOutputs[0].OutputID,
@@ -336,6 +344,24 @@ func TestValidateScanSummaryRejectsAmbiguousNonBlockingVerdict(t *testing.T) {
 	}
 }
 
+func TestScannerServiceToolCompositionRejectsMissingDuplicateAndMalformedEvidence(t *testing.T) {
+	for _, test := range []struct {
+		name  string
+		tools []scan.ToolEvidence
+	}{
+		{name: "missing"},
+		{name: "duplicate", tools: []scan.ToolEvidence{{Name: "file", Version: "1"}, {Name: "file", Version: "1"}}},
+		{name: "conflicting-version", tools: []scan.ToolEvidence{{Name: "file", Version: "1"}, {Name: "file", Version: "2"}}},
+		{name: "malformed", tools: []scan.ToolEvidence{{Name: "file\nsecret", Version: "1"}}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if _, err := validateConfiguredScannerTools(test.tools); err == nil {
+				t.Fatal("invalid scanner tool evidence unexpectedly passed")
+			}
+		})
+	}
+}
+
 type scannerTestAdapters struct {
 	definitions    ScannerDefinitionAdapter
 	isolation      ScannerIsolationAdapter
@@ -362,7 +388,8 @@ func newScannerServiceForTest(t *testing.T, token *Token, adapters scannerTestAd
 			}
 			return selectedPolicy, nil
 		}),
-		Now: adapters.now,
+		Tools: []scan.ToolEvidence{{Name: "clamav", Version: "1.4.3-test"}, {Name: "file", Version: "5.46-test"}},
+		Now:   adapters.now,
 	}, token)
 	if err != nil {
 		t.Fatal(err)
@@ -503,9 +530,9 @@ func newFakeScannerReconstruction(source []byte) *fakeScannerReconstruction {
 			Outputs: []scan.ReportSanitizedOutput{{
 				OutputID: "scan-out-0123456789abcdef0123456789abcdef", LogicalName: "document-sanitized.txt",
 				SourceSHA256: hex.EncodeToString(sourceDigest[:]), SizeBytes: uint64(len(output)), SHA256: hex.EncodeToString(digest[:]),
-				DetectedMIME: "text/plain", Transformation: "utf8-validated", RescanVerdict: "CLAMAV_CLEAN",
+				DetectedMIME: "text/plain", Transformation: "text-utf8-line-normalize-v1", RescanVerdict: "CLAMAV_CLEAN",
 			}},
-			Tools:                     []scan.ToolEvidence{{Name: "fake-reconstructor", Version: "1.0"}},
+			Tools:                     []scan.ToolEvidence{{Name: "private-vm-text-normalizer", Version: "1"}},
 			ArchiveInspectionComplete: true, ReconstructionComplete: true, OutputRescanComplete: true,
 		},
 	}

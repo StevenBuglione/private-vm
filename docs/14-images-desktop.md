@@ -190,6 +190,10 @@ containment, PDF/Office/image/media reconstruction and metadata inspection.
 It is a closed schema-versioned record validated by
 `schemas/scanner-toolchain.schema.json`; both scanner phase records are
 validated by `schemas/scanner-phase.schema.json`.
+The production reader requires exactly one `clamav`, `file`, `poppler-utils`,
+`ghostscript`, `libreoffice` and `ffmpeg` record and verifies that each contains
+the command names guestd can invoke. Other installed inspection entries do not
+become report evidence unless the production path actually executes them.
 Those same direct tool identities appear in the embedded SPDX 2.3 document at
 `/etc/private-vm/scanner-sbom.spdx.json` and the separate `sbom-scanner` flake
 output. This toolchain SBOM is immutable image identity evidence; release
