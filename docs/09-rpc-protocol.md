@@ -244,6 +244,13 @@ identifiers, source-session identity and runtime details are not present in the
 host response messages. Approval selects only `workstation` or `usb`; it cannot
 name a host path or device.
 
+For workstation approval the daemon creates the destination internally; the
+request cannot supply an existing session. `HostScannerStatus` field 13,
+`destination_session_id`, is present only after the single approved output has
+streamed into that fresh workstation, scanner/relay/receiver SHA-256 and size
+match, and scanner stop/cleanup complete. USB and non-approval responses leave
+the field empty.
+
 No arbitrary command execution method is permitted.
 
 The host workstation surface is active-workstation-only and serialized with
@@ -379,7 +386,10 @@ The host scanner adapter relays those calls only through an authenticated VSOCK
 client that has passed `Hello`. It verifies the volatile report MAC before
 publishing an aggregate result. A rejected scanner may be powered off while the
 verified report remains in daemon memory; cleanup removes that cache. A missing
-promotion relay or destination hash proof blocks `ApproveScanner`.
+promotion relay, a report containing other than one sanitized output,
+invalid/trailing/bounds-violating framing, or any sender/relay/destination hash
+mismatch blocks `ApproveScanner` and destroys the unadvertised destination
+workstation.
 
 The advertised v1 capability map is exact and sorted:
 

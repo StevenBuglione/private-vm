@@ -178,12 +178,14 @@ export command and is not reconstructed from persistent CLI state. `--last`
 is accepted only when exactly one current verified receipt exists; otherwise
 the caller must use one explicit output ID.
 
-Scanner-to-workstation promotion has a sealed typed host hook that accepts only
-an orchestrator-owned approved reconstructed stream. The scanner host workflow
-does not yet implement that marker on this integration slice, so `scan approve
---open-in workstation` remains fail closed until the authenticated report and a
-fresh workstation are composed; an ordinary trusted-file import cannot bypass
-that boundary.
+Scanner-to-workstation promotion uses a sealed typed host hook that accepts
+only the sole output in a complete authenticated approved report. The daemon
+creates and starts a fresh unadvertised workstation through the normal role
+path, relays bounded frames without a host path, requires scanner/relay/receiver
+SHA-256 equality, cleans the scanner, and only then returns the destination
+session ID and launches the user-owned Unix viewer. Any pre-success failure
+cleans the fresh workstation. Reports with zero or multiple sanitized outputs
+fail closed in v1; ordinary trusted-file import cannot bypass this boundary.
 
 ### Torrent
 
@@ -236,7 +238,9 @@ read-only, report-authentication or cleanup gates.
 
 Scanner machine output uses `SCANNER_STATUS`. It contains the scanner session
 ID, workflow state, decision, aggregate input/finding/output counts, total
-sanitized bytes, stable code and remediation. It never contains the source
+sanitized bytes, stable code and remediation. Successful `--open-in
+workstation` output additionally contains `destination_session_id`; all other
+scanner results omit it. It never contains the source
 session ID, report JSON, logical names, hashes, finding identifiers, paths or
 guest/runtime details. `approve` returns success only after the selected
 destination relay and integrity verification complete; `reject` never invokes a

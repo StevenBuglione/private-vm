@@ -20,10 +20,12 @@ var (
 
 // WorkspaceImport is a pull-based, single-file input. Receive remains owned by
 // the authenticated daemon stream; the host runtime has no host path or generic
-// guest client and cannot enumerate the caller's filesystem.
+// guest client and cannot enumerate the caller's filesystem. Close, when set,
+// cancels the upstream stream after the synchronous import returns.
 type WorkspaceImport struct {
 	Begin   *privatevmv1.TransferBegin
 	Receive func() (*privatevmv1.TransferFrame, error)
+	Close   func()
 }
 
 // WorkspaceExport is a push-based, single-output sink. OutputID is the opaque
@@ -93,13 +95,16 @@ func (roles *HostRoles) PromoteApprovedWorkspace(ctx context.Context, snapshot s
 	if source == nil {
 		return nil, ErrWorkstationUnavailable
 	}
+	relay, err := roles.workstation(snapshot)
+	if err != nil {
+		return nil, err
+	}
 	request, err := source.approvedWorkspaceImport(ctx)
 	if err != nil {
 		return nil, err
 	}
-	relay, err := roles.workstation(snapshot)
-	if err != nil {
-		return nil, err
+	if request.Close != nil {
+		defer request.Close()
 	}
 	return relay.Import(ctx, request)
 }

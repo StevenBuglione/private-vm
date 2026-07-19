@@ -196,6 +196,9 @@ message HostScannerStatus {
   uint32 blocking_finding_count = 10;
   string code = 11;
   string remediation = 12;
+  // Set only by a successful workstation promotion. This opaque session ID
+  // lets the unprivileged CLI connect the existing user-owned Unix viewer.
+  string destination_session_id = 13;
 }
 
 message HostScannerReportSummary {

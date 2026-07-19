@@ -156,6 +156,7 @@ func (TorrentStatusPayload) machinePayload() {}
 type ScannerStatusPayload struct {
 	SchemaVersion        uint32 `json:"schema_version"`
 	SessionID            string `json:"session_id"`
+	DestinationSessionID string `json:"destination_session_id,omitempty"`
 	WorkflowState        string `json:"workflow_state"`
 	ReportComplete       bool   `json:"report_complete"`
 	Decision             string `json:"decision"`
@@ -376,6 +377,8 @@ func validSuccess(success SuccessEnvelope) bool {
 	case ScannerStatusPayload:
 		return success.Code == CodeScannerStatus && data.SchemaVersion == 1 &&
 			validOptionalSessionID(data.SessionID) && data.SessionID != "" &&
+			validOptionalSessionID(data.DestinationSessionID) &&
+			(data.DestinationSessionID == "" || data.Decision == "approved" && data.WorkflowState == "SCAN_VM_STOPPED") &&
 			validCode(Code(data.WorkflowState)) && oneOf(data.Decision, "pending", "approved", "rejected") &&
 			data.BlockingFindingCount <= data.FindingCount && validCode(Code(data.Code)) &&
 			validRequiredString(data.Remediation, 512)
@@ -498,9 +501,13 @@ func humanSuccess(code Code, data MachinePayload) string {
 			value.FileCount, value.SelectedCount, value.PayloadPaused, safeLine(value.Remediation),
 		)
 	case ScannerStatusPayload:
+		destination := ""
+		if value.DestinationSessionID != "" {
+			destination = " destination_session=" + safeLine(value.DestinationSessionID)
+		}
 		return fmt.Sprintf(
-			"%s session=%s state=%s decision=%s report_complete=%t inputs=%d findings=%d blocking=%d outputs=%d output_bytes=%d\nremediation: %s\n",
-			safeLine(value.Code), safeLine(value.SessionID), safeLine(value.WorkflowState), safeLine(value.Decision),
+			"%s session=%s%s state=%s decision=%s report_complete=%t inputs=%d findings=%d blocking=%d outputs=%d output_bytes=%d\nremediation: %s\n",
+			safeLine(value.Code), safeLine(value.SessionID), destination, safeLine(value.WorkflowState), safeLine(value.Decision),
 			value.ReportComplete, value.InputCount, value.FindingCount, value.BlockingFindingCount,
 			value.SanitizedOutputCount, value.SanitizedOutputBytes, safeLine(value.Remediation),
 		)

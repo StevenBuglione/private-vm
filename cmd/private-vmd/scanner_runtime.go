@@ -52,8 +52,8 @@ func (adapter scannerRuntimeDaemonAdapter) VerifyReport(ctx context.Context, sca
 	return adapter.runtime.VerifyReport(ctx, scanner, envelope)
 }
 
-func (adapter scannerRuntimeDaemonAdapter) Promote(ctx context.Context, scanner session.Snapshot, evidence daemon.ScannerReportEvidence, destination daemon.ScannerDestination) error {
-	return adapter.runtime.Promote(ctx, scanner, evidence.Report, string(destination))
+func (adapter scannerRuntimeDaemonAdapter) Promote(ctx context.Context, scanner session.Snapshot, evidence daemon.ScannerReportEvidence, destination daemon.ScannerDestination, target session.Snapshot) error {
+	return adapter.runtime.Promote(ctx, scanner, evidence.Report, string(destination), target)
 }
 
 func (adapter scannerRuntimeDaemonAdapter) StopOffline(ctx context.Context, scanner session.Snapshot) error {

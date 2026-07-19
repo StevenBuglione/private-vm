@@ -205,6 +205,15 @@ the scoped VPN context gate, bounded one-output text reconstruction and
 idempotent volatile cleanup. A malicious ZIP traversal fixture becomes a
 blocking finding rather than an extracted path or promotion.
 
+The WS-002 production promotion gate proves that only the sole output in a
+complete approved report is requested, scanner framing is bounded and rejects
+trailing data, the relay assigns a destination transfer ID without exposing a
+host path, and scanner sender, daemon relay and workstation receipt hashes are
+equal. Daemon transport tests prove creation uses a separate active workstation
+session and failure, cancellation or timeout converges that destination to
+`DESTROYED`. CLI tests prove only successful workstation approval returns the
+destination ID and invokes the user-owned viewer; USB approval omits both.
+
 ### Session, QEMU and ephemeral-storage evidence
 
 Batch 1 runtime tests exhaust every allowed lifecycle transition and each

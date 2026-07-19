@@ -256,6 +256,12 @@ opaque output ID. The daemon retains its export digest until a separate receiver
 digest matches and the guest re-verifies the current output. The scanner
 promotion hook is sealed to the orchestrator package so only a scanner owner
 that authenticated a complete approved report can implement it.
+`WorkstationScannerPromotion` implements that hook by binding the report's sole
+sanitized output to `ScannerGuestService.ExportApprovedFile`, remapping only its
+opaque transfer ID, and feeding the bounded stream into the existing
+`WorkstationRelay.Import`. `Service.ApproveScanner` creates the workstation
+through its own session actor and owns cleanup until the scanner has stopped;
+no host path or generic RPC surface crosses either abstraction.
 
 ## Volatile secret contract
 

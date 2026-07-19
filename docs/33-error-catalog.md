@@ -426,9 +426,13 @@ scanner/report/sanitized-output codes to exit 18. `SCANNER_STATE_INVALID` blocks
 an unsealed source, an out-of-order decision or a non-active scanner.
 `SCANNER_DESTINATION_INVALID` blocks any target other than a fresh workstation
 or the enrolled-USB workflow. `SCAN_PROMOTION_VERIFIED` is emitted only after
-the destination relay and integrity proof succeed; it is not a malware-safety
-claim. Cancellation and timeout remain the canonical `REQUEST_CANCELED` and
-`REQUEST_TIMEOUT`; an absence-audit failure remains `CLEANUP_INCOMPLETE`/exit 24.
+the report-selected reconstructed stream has matching scanner, daemon-relay and
+destination SHA-256 evidence and scanner cleanup completes. Failed workstation
+promotion destroys the unadvertised destination before returning; successful
+workstation output includes only its opaque destination session ID. It is not a
+malware-safety claim. Cancellation and timeout remain the canonical
+`REQUEST_CANCELED` and `REQUEST_TIMEOUT`; an absence-audit failure remains
+`CLEANUP_INCOMPLETE`/exit 24.
 
 ### USB
 

@@ -43,6 +43,6 @@ Remaining system acceptance before these issues may be treated as fully closed:
 - compose the host scanner runtime with image-pinned storage/QEMU/QMP/VSOCK
   providers and the guest image's retained-overlay receipt,
   freshclam/libmagic/clamd/archive and reconstruction adapters;
-- prove the authenticated scanner promotion relay into a fresh workstation and
-  exporter end to end;
+- exercise the implemented authenticated scanner-to-fresh-workstation relay and
+  the exporter path end to end in booted guests;
 - verify cleanup through scanner/QEMU death and daemon recovery.

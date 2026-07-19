@@ -1499,6 +1499,9 @@ type HostScannerStatus struct {
 	BlockingFindingCount uint32                 `protobuf:"varint,10,opt,name=blocking_finding_count,json=blockingFindingCount,proto3" json:"blocking_finding_count,omitempty"`
 	Code                 string                 `protobuf:"bytes,11,opt,name=code,proto3" json:"code,omitempty"`
 	Remediation          string                 `protobuf:"bytes,12,opt,name=remediation,proto3" json:"remediation,omitempty"`
+	// Set only by a successful workstation promotion. This opaque session ID
+	// lets the unprivileged CLI connect the existing user-owned Unix viewer.
+	DestinationSessionId string `protobuf:"bytes,13,opt,name=destination_session_id,json=destinationSessionId,proto3" json:"destination_session_id,omitempty"`
 	unknownFields        protoimpl.UnknownFields
 	sizeCache            protoimpl.SizeCache
 }
@@ -1613,6 +1616,13 @@ func (x *HostScannerStatus) GetCode() string {
 func (x *HostScannerStatus) GetRemediation() string {
 	if x != nil {
 		return x.Remediation
+	}
+	return ""
+}
+
+func (x *HostScannerStatus) GetDestinationSessionId() string {
+	if x != nil {
+		return x.DestinationSessionId
 	}
 	return ""
 }
@@ -2601,7 +2611,7 @@ const file_privatevm_v1_daemon_proto_rawDesc = "" +
 	"\acontext\x18\x01 \x01(\v2\x1c.privatevm.v1.RequestContextR\acontext\"\xa0\x01\n" +
 	"\x1aHostScannerApprovalRequest\x126\n" +
 	"\acontext\x18\x01 \x01(\v2\x1c.privatevm.v1.RequestContextR\acontext\x12J\n" +
-	"\vdestination\x18\x02 \x01(\x0e2(.privatevm.v1.ScannerApprovalDestinationR\vdestination\"\x87\x04\n" +
+	"\vdestination\x18\x02 \x01(\x0e2(.privatevm.v1.ScannerApprovalDestinationR\vdestination\"\xbd\x04\n" +
 	"\x11HostScannerStatus\x12%\n" +
 	"\x0eschema_version\x18\x01 \x01(\rR\rschemaVersion\x12,\n" +
 	"\x12scanner_session_id\x18\x02 \x01(\tR\x10scannerSessionId\x12%\n" +
@@ -2615,7 +2625,8 @@ const file_privatevm_v1_daemon_proto_rawDesc = "" +
 	"\x16blocking_finding_count\x18\n" +
 	" \x01(\rR\x14blockingFindingCount\x12\x12\n" +
 	"\x04code\x18\v \x01(\tR\x04code\x12 \n" +
-	"\vremediation\x18\f \x01(\tR\vremediation\"\xc1\x03\n" +
+	"\vremediation\x18\f \x01(\tR\vremediation\x124\n" +
+	"\x16destination_session_id\x18\r \x01(\tR\x14destinationSessionId\"\xc1\x03\n" +
 	"\x18HostScannerReportSummary\x12%\n" +
 	"\x0eschema_version\x18\x01 \x01(\rR\rschemaVersion\x12,\n" +
 	"\x12scanner_session_id\x18\x02 \x01(\tR\x10scannerSessionId\x12\x1a\n" +

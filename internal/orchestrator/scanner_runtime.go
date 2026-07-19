@@ -74,7 +74,7 @@ type ScannerVMStarter interface {
 // stream only an output ID authenticated by report through the active scanner
 // client and must complete the destination hash proof before returning.
 type ScannerPromotionRelay interface {
-	Promote(context.Context, session.Snapshot, scan.ScanReport, string, privatevmv1.ScannerGuestServiceClient) error
+	Promote(context.Context, session.Snapshot, scan.ScanReport, string, session.Snapshot, privatevmv1.ScannerGuestServiceClient) error
 }
 
 // FailClosedScannerPromotion keeps scanner approval unavailable until the
@@ -82,7 +82,7 @@ type ScannerPromotionRelay interface {
 // production while rejection and cleanup remain fully operational.
 type FailClosedScannerPromotion struct{}
 
-func (FailClosedScannerPromotion) Promote(context.Context, session.Snapshot, scan.ScanReport, string, privatevmv1.ScannerGuestServiceClient) error {
+func (FailClosedScannerPromotion) Promote(context.Context, session.Snapshot, scan.ScanReport, string, session.Snapshot, privatevmv1.ScannerGuestServiceClient) error {
 	return ErrScannerPromotionPending
 }
 
@@ -354,7 +354,7 @@ func (runtime *ProductionScannerRuntime) VerifyReport(_ context.Context, scanner
 	return vm.VerifyReport(envelope)
 }
 
-func (runtime *ProductionScannerRuntime) Promote(ctx context.Context, scanner session.Snapshot, report scan.ScanReport, destination string) error {
+func (runtime *ProductionScannerRuntime) Promote(ctx context.Context, scanner session.Snapshot, report scan.ScanReport, destination string, target session.Snapshot) error {
 	if destination != "workstation" && destination != "usb" {
 		return ErrScannerRuntimeUnavailable
 	}
@@ -362,7 +362,7 @@ func (runtime *ProductionScannerRuntime) Promote(ctx context.Context, scanner se
 	if err != nil {
 		return err
 	}
-	return runtime.Promotion.Promote(ctx, scanner, report, destination, client)
+	return runtime.Promotion.Promote(ctx, scanner, report, destination, target, client)
 }
 
 func (runtime *ProductionScannerRuntime) state(scanner session.Snapshot) (*scannerRuntimeState, error) {

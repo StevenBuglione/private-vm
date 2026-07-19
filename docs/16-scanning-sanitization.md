@@ -201,6 +201,14 @@ documented workstation or USB relay verifies its integrity. Rejection stops the
 scanner without invoking promotion. Both paths finish through the scanner
 session's idempotent cleanup owner.
 
+The v1 workstation path permits exactly one sanitized report output. The daemon
+creates a fresh destination, requests only that opaque output ID over the
+authenticated scanner service, bounds every frame, and compares the report and
+scanner sender digest with an independent relay digest and the workstation
+receiver receipt. It keeps the destination session ID unadvertised until this
+succeeds and the scanner cleanup audit finishes. Failure at any point destroys
+the destination; the host never creates a path or mounts either filesystem.
+
 The immutable scanner image embeds its direct parser/reconstruction package
 versions in `/etc/private-vm/scanner-toolchain.json` and repeats those identities
 in `/etc/private-vm/scanner-sbom.spdx.json`. A missing, empty or mismatched entry

@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"context"
+	"errors"
 	"testing"
 
 	privatevmv1 "github.com/StevenBuglione/private-vm/gen/privatevm/v1"
@@ -13,6 +14,7 @@ import (
 )
 
 const cliScannerID = "pvm-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+const cliPromotedWorkstationID = "pvm-cccccccccccccccccccccccccccccccc"
 
 type cliScannerDaemon struct {
 	privatevmv1.UnimplementedPrivateVMDaemonServiceServer
@@ -42,7 +44,52 @@ func (*cliScannerDaemon) GetScannerReport(context.Context, *privatevmv1.HostScan
 
 func (daemon *cliScannerDaemon) ApproveScanner(_ context.Context, request *privatevmv1.HostScannerApprovalRequest) (*privatevmv1.HostScannerStatus, error) {
 	daemon.destination = request.GetDestination()
-	return scannerCLIStatus("SCAN_VM_STOPPED", true, true, false), nil
+	status := scannerCLIStatus("SCAN_VM_STOPPED", true, true, false)
+	if request.GetDestination() == privatevmv1.ScannerApprovalDestination_SCANNER_APPROVAL_DESTINATION_WORKSTATION {
+		status.DestinationSessionId = cliPromotedWorkstationID
+	}
+	return status, nil
+}
+
+func TestProductionScannerInvokerLaunchesViewerOnlyAfterVerifiedWorkstationPromotion(t *testing.T) {
+	daemon := &cliScannerDaemon{}
+	socket, stop := startSessionInvokerDaemon(t, daemon)
+	defer stop()
+	var viewed string
+	invoker := &ProductionInvoker{
+		socketPath: socket,
+		requestID:  func() (string, error) { return "request-scanner-viewer-1234", nil },
+		viewer: func(_ context.Context, sessionID string) error {
+			viewed = sessionID
+			return nil
+		},
+	}
+
+	approved, err := invoker.Invoke(t.Context(), CommandScannerApprove, ScanApprovalIntent{SessionID: cliScannerID, OpenIn: "workstation"})
+	if err != nil || daemon.destination != privatevmv1.ScannerApprovalDestination_SCANNER_APPROVAL_DESTINATION_WORKSTATION || viewed != cliPromotedWorkstationID {
+		t.Fatalf("approved=%+v destination=%s viewed=%q err=%v", approved, daemon.destination, viewed, err)
+	}
+	payload := approved.Data.(ScannerStatusPayload)
+	if payload.DestinationSessionID != cliPromotedWorkstationID {
+		t.Fatalf("destination session=%q", payload.DestinationSessionID)
+	}
+}
+
+func TestProductionScannerInvokerReportsViewerFailureAfterVerifiedPromotion(t *testing.T) {
+	daemon := &cliScannerDaemon{}
+	socket, stop := startSessionInvokerDaemon(t, daemon)
+	defer stop()
+	invoker := &ProductionInvoker{
+		socketPath: socket,
+		requestID:  func() (string, error) { return "request-scanner-viewer-fail", nil },
+		viewer:     func(context.Context, string) error { return errors.New("injected viewer failure") },
+	}
+
+	_, err := invoker.Invoke(t.Context(), CommandScannerApprove, ScanApprovalIntent{SessionID: cliScannerID, OpenIn: "workstation"})
+	application := apperror.From(err)
+	if application.Code != "DISPLAY_VIEWER_FAILED" || application.ExitCode != exitcode.Runtime {
+		t.Fatalf("viewer error=%+v", application)
+	}
 }
 
 func (*cliScannerDaemon) RejectScanner(context.Context, *privatevmv1.HostScannerControlRequest) (*privatevmv1.HostScannerStatus, error) {

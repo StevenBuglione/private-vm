@@ -67,7 +67,8 @@ Mitigations:
 - resource and path limits
 - noexec/nodev/nosuid
 - reconstruction before promotion
-- scanner destroyed before workstation starts
+- fresh workstation is unadvertised and not connected to a viewer until the
+  authenticated one-way relay completes and the scanner is destroyed
 - executable promotion blocked
 
 ### A3: malicious USB device

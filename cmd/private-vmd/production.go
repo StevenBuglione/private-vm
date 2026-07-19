@@ -123,8 +123,13 @@ func composeProductionHost(ctx context.Context, cfg config.Config) (*productionH
 		profiles.Close()
 		return nil, err
 	}
+	promotion, err := orchestrator.NewWorkstationScannerPromotion(roles)
+	if err != nil {
+		profiles.Close()
+		return nil, err
+	}
 	scannerRuntime, err := orchestrator.NewProductionScannerRuntime(
-		roles, selector, storageStack, runtimeStack, orchestrator.FailClosedScannerPromotion{},
+		roles, selector, storageStack, runtimeStack, promotion,
 		orchestrator.ScannerRuntimePlan{VCPUs: 4, MemoryBytes: 8 << 30, RootBytes: 32 << 30},
 	)
 	if err != nil {
