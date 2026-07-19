@@ -141,6 +141,21 @@ not use a production capability or any VPN credential. NixOS test
 instrumentation may add its own control channel; that channel is not present in
 the canonical image derivations.
 
+The exporter boot gate is run with:
+
+```bash
+nix build .#checks.x86_64-linux.exporter
+```
+
+It uses TCG and an explicit empty VLAN list. The test requires loopback to be the
+only interface, rejects every TCP/UDP listener and desktop/network-management
+component, confirms the LUKS2/ext4/partitioning/USB-inspection/checksum tools and
+their embedded package/version/store-path inventory, and compares both embedded
+image identity and `private-vm-guestd --version` against the exact exporter
+capability set. The harness adds no writable quarantine disk and rejects any
+USB-backed block device. It does not attach, inspect, format or write a USB
+device.
+
 The workstation desktop gate is run with:
 
 ```bash

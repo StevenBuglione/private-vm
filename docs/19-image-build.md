@@ -31,6 +31,7 @@ nixosModules.default
 checks.x86_64-linux.default
 checks.x86_64-linux.desktop-role-isolation
 checks.x86_64-linux.downloader-desktop
+checks.x86_64-linux.exporter
 checks.x86_64-linux.guest-common
 checks.x86_64-linux.scanner-image-contract
 checks.x86_64-linux.scanner-update
@@ -116,6 +117,7 @@ nix build .#checks.x86_64-linux.workstation-desktop
 nix build .#checks.x86_64-linux.scanner-image-contract
 nix build .#checks.x86_64-linux.scanner-update
 nix build .#checks.x86_64-linux.scanner-offline
+nix build .#checks.x86_64-linux.exporter
 ```
 
 ## Image tests
@@ -177,3 +179,17 @@ Both boot tests compare the scanner role and exact sorted RPC capability list.
 
 Run the two scanner VM gates serially. Each is configured for 2 GiB of guest RAM;
 do not run them together on a 16 GiB development host.
+
+The `exporter` check boots the exporter configuration under TCG with no test
+VLAN or emulated NIC. It proves that loopback is the only network interface,
+there are no TCP/UDP listeners, guestd is reachable only on VSOCK, and the
+embedded and compiled identities expose exactly the common plus exporter
+capabilities. It also verifies the multi-user target, locked login boundary,
+absence of a normal user, display stack, NetworkManager and UDisks, and presence
+of the pinned cryptsetup, ext4, partitioning, USB/udev inspection and checksum
+tools. It checks the exact package/version/store-path inventory embedded at
+`/etc/private-vm/exporter-tools.json` against
+`schemas/exporter-tool-inventory.schema.json`; the later release workflow uses
+the whole image closure to produce the SPDX SBOM. The harness explicitly
+requests no additional writable disk and proves no USB-backed block device is
+attached. This test neither attaches nor modifies a physical USB device.

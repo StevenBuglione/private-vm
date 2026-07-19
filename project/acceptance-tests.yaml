@@ -54,6 +54,18 @@
       ]
     },
     {
+      "id": "EXPORTER",
+      "tests": [
+        {
+          "id": "EXPORTER-001",
+          "name": "Headless exporter image isolation",
+          "given": "exporter image built from the locked NixOS definition with exporter-compiled guestd",
+          "when": "the image configuration boots under TCG with no test VLAN, writable data disk or USB device",
+          "then": "loopback is the only interface, no TCP/UDP listener or graphical/network-management stack exists, no quarantine or USB block device is attached, required LUKS2/ext4/partitioning/USB inspection tools and their image package inventory exist, and only common plus exporter capabilities are advertised"
+        }
+      ]
+    },
+    {
       "id": "DISPLAY",
       "tests": [
         {

@@ -167,13 +167,29 @@ and UDisks disabled.
 ## Exporter image
 
 - no desktop
-- no login
+- no unlocked login or normal user
 - no network manager
 - guestd
 - cryptsetup
 - ext4 tools
 - USB storage/filesystem drivers
+- udev and USB identity inspection tools
 - checksum tools
+
+The exporter defaults to `multi-user.target`, omits compatibility filesystem
+formatters and UDisks, and is boot-tested with no emulated NIC. Its role-specific
+guestd advertises the common service plus only the exact exporter capability
+set; workstation, downloader and scanner services are not registered. USB
+attachment and the narrowly scoped device access needed for a confirmed export
+are runtime responsibilities and are not exercised by the image test.
+
+`/etc/private-vm/exporter-tools.json`, validated by
+`schemas/exporter-tool-inventory.schema.json`, records the exact Nix package
+names, versions and store paths for the exporter formatting, filesystem,
+USB/udev and checksum tool closure. The boot test verifies those paths and
+commands. This inventory is image-local evidence for the later closure-based
+SPDX generation; it is not itself an SBOM and does not replace the published
+release SBOM.
 
 ## Image identity and published manifest
 

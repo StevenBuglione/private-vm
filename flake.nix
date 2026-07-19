@@ -395,6 +395,109 @@
           '';
         };
 
+      exporterTestFor =
+        system:
+        let
+          pkgs = pkgsFor system;
+        in
+        pkgs.testers.runNixOSTest {
+          name = "private-vm-exporter";
+          requiredFeatures.kvm = false;
+          node.specialArgs = guestArgsFor system "exporter" null;
+          nodes.machine = { lib, ... }: {
+            imports = [
+              ./nix/guests/image-base.nix
+              ./nix/guests/exporter.nix
+            ];
+            users.users.root.hashedPasswordFile = lib.mkForce null;
+            virtualisation.memorySize = 1024;
+            virtualisation.cores = 2;
+            virtualisation.graphics = false;
+            # The NixOS VM module otherwise supplies a default SLiRP NIC
+            # independently of test VLANs. Disable both sources explicitly.
+            virtualisation.vlans = [ ];
+            # The exporter image test has only its harness root disk: never add
+            # a writable quarantine or scratch device to this role.
+            virtualisation.emptyDiskImages = [ ];
+            virtualisation.qemu.networkingOptions = lib.mkForce [ "-nic none" ];
+            virtualisation.qemu.options = tcgQEMUOptionsFor system ++ [ "-vga none" ];
+          };
+          testScript = ''
+            import json
+
+            machine.wait_for_unit("multi-user.target")
+            machine.wait_for_unit("private-vm-guestd.service")
+            machine.succeed("systemctl is-active private-vm-guestd.service")
+            machine.succeed("readlink /etc/systemd/system/default.target | grep -E '(^|/)multi-user.target$'")
+
+            machine.succeed("grep -Eq '^root:![^:]*:' /etc/shadow")
+            machine.succeed("test ! -e /run/current-system/sw/bin/sudo")
+            machine.fail("getent passwd private")
+            machine.succeed("test -z \"$(awk -F: '$3 >= 1000 && $3 < 65534 && $7 !~ /(nologin|false)$/ { print $1 }' /etc/passwd)\"")
+
+            for command in [
+                "X", "Xorg", "Xwayland", "gdm", "gnome-shell", "kwin_wayland",
+                "lightdm", "remote-viewer", "sddm", "spice-vdagent", "startx",
+                "startxfce4", "thunar", "wayfire", "weston", "xfce4-session",
+            ]:
+                machine.fail(f"command -v {command}")
+            machine.fail("systemctl is-enabled display-manager.service")
+            machine.fail("systemctl is-enabled NetworkManager.service")
+            machine.fail("systemctl is-enabled udisks2.service")
+            machine.succeed("test ! -e /run/current-system/sw/share/xsessions")
+
+            for command in [
+                "blkid", "cryptsetup", "e2fsck", "findmnt", "lsblk", "lsusb",
+                "mkfs.ext4", "mount", "resize2fs", "sfdisk", "sha256sum",
+                "udevadm", "umount", "wipefs",
+            ]:
+                machine.succeed(f"command -v {command}")
+            for command in ["mkfs.exfat", "mkfs.fat", "mkfs.vfat"]:
+                machine.fail(f"command -v {command}")
+            for command in ["devmon", "udiskie", "udisksctl"]:
+                machine.fail(f"command -v {command}")
+
+            tool_inventory = json.loads(machine.succeed("cat /etc/private-vm/exporter-tools.json"))
+            assert tool_inventory["schema_version"] == 1, tool_inventory
+            expected_tool_packages = [
+                "coreutils", "cryptsetup", "e2fsprogs", "systemd", "usbutils",
+                "util-linux",
+            ]
+            assert [package["name"] for package in tool_inventory["packages"]] == expected_tool_packages, tool_inventory
+            for package in tool_inventory["packages"]:
+                assert package["version"], package
+                assert package["store_path"].startswith("/nix/store/"), package
+                machine.succeed(f"test -d {package['store_path']}")
+
+            interfaces = machine.succeed("find /sys/class/net -mindepth 1 -maxdepth 1 -printf '%f\\n'").split()
+            assert interfaces == ["lo"], f"unexpected exporter interfaces: {interfaces}"
+            listeners = machine.succeed("ss -H -lntu")
+            assert listeners.strip() == "", f"unexpected TCP/UDP listeners: {listeners}"
+            machine.succeed("ss -H -l -A vsock | grep -E '(^|:)4050([[:space:]]|$)'")
+            disks = machine.succeed("lsblk -dn -o TYPE,SERIAL | awk '$1 == \"disk\" { print $2 }'").split()
+            assert disks == ["root"], f"unexpected exporter disks: {disks}"
+            machine.succeed("for block in /sys/class/block/*; do ! udevadm info --query=property --path=$block | grep -q '^ID_BUS=usb$' || exit 1; done")
+
+            expected_capabilities = [
+                "guest-events",
+                "guest-shutdown",
+                "guest-status",
+                "usb-finalize",
+                "usb-inspect",
+                "usb-prepare",
+                "usb-verify",
+                "usb-write",
+            ]
+            identity = json.loads(machine.succeed("cat /etc/private-vm/image.json"))
+            assert identity["role"] == "exporter", identity
+            assert identity["bundle"] is None, identity
+            assert identity["capabilities"] == expected_capabilities, identity
+            version = json.loads(machine.succeed("private-vm-guestd --version"))
+            assert version["guestRole"] == "exporter", version
+            assert version["capabilities"] == expected_capabilities, version
+          '';
+        };
+
       workstationBundlesCheckFor =
         system:
         let
@@ -924,6 +1027,7 @@
         // nixpkgs.lib.optionalAttrs (system == "x86_64-linux") {
           desktop-role-isolation = desktopRoleIsolationCheckFor system;
           downloader-desktop = downloaderDesktopTestFor system;
+          exporter = exporterTestFor system;
           guest-common = commonGuestTestFor system;
           scanner-image-contract = scannerImageContractCheckFor system;
           scanner-update = scannerUpdateTestFor system;

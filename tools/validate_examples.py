@@ -16,6 +16,11 @@ pairs = [
     ("schemas/config.schema.json", "examples/config.example.toml", "toml"),
     ("schemas/policy.schema.json", "examples/policy.safe.toml", "toml"),
     ("schemas/policy.schema.json", "examples/policy.quarantine.toml", "toml"),
+    (
+        "schemas/exporter-tool-inventory.schema.json",
+        "examples/exporter-tool-inventory.example.json",
+        "json",
+    ),
     ("schemas/guest-image-identity.schema.json", "examples/guest-image-identity.example.json", "json"),
     ("schemas/image-manifest.schema.json", "examples/image-manifest.example.json", "json"),
     ("schemas/scan-report.schema.json", "examples/scan-report.example.json", "json"),
@@ -36,6 +41,12 @@ config_schema = json.loads((ROOT / "schemas/config.schema.json").read_text(encod
 config = tomllib.loads((ROOT / "examples/config.example.toml").read_text(encoding="utf-8"))
 policy_schema = json.loads((ROOT / "schemas/policy.schema.json").read_text(encoding="utf-8"))
 safe_policy = tomllib.loads((ROOT / "examples/policy.safe.toml").read_text(encoding="utf-8"))
+exporter_tool_schema = json.loads(
+    (ROOT / "schemas/exporter-tool-inventory.schema.json").read_text(encoding="utf-8")
+)
+exporter_tool_inventory = json.loads(
+    (ROOT / "examples/exporter-tool-inventory.example.json").read_text(encoding="utf-8")
+)
 
 negative_cases = []
 unsigned = deepcopy(config)
@@ -65,6 +76,16 @@ negative_cases.append(("weakened safe policy", policy_schema, weakened))
 raw = deepcopy(safe_policy)
 raw["name"] = raw["mode"] = "raw"
 negative_cases.append(("raw policy", policy_schema, raw))
+duplicate_exporter_tool = deepcopy(exporter_tool_inventory)
+duplicate_exporter_tool["packages"][-1]["name"] = "coreutils"
+negative_cases.append(
+    ("duplicate/missing exporter tool", exporter_tool_schema, duplicate_exporter_tool)
+)
+unknown_exporter_tool_field = deepcopy(exporter_tool_inventory)
+unknown_exporter_tool_field["packages"][0]["credential"] = "forbidden"
+negative_cases.append(
+    ("unknown exporter tool field", exporter_tool_schema, unknown_exporter_tool_field)
+)
 
 for label, schema, value in negative_cases:
     if Draft202012Validator(schema).is_valid(value):

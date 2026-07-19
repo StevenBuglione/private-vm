@@ -1,17 +1,72 @@
-{ pkgs, ... }:
+{
+  guestBundle,
+  guestRole,
+  lib,
+  pkgs,
+  ...
+}:
+let
+  # Keep the security-sensitive exporter tool closure explicit. The release
+  # SBOM generator consumes the complete image closure; this embedded inventory
+  # gives the image test a deterministic package/version cross-check without
+  # pretending to be the release SPDX document.
+  exporterToolPackages = with pkgs; [
+    coreutils
+    cryptsetup
+    e2fsprogs
+    systemd
+    usbutils
+    util-linux
+  ];
+  exporterToolInventory = {
+    schema_version = 1;
+    packages = map (package: {
+      name = lib.getName package;
+      version = lib.getVersion package;
+      store_path = builtins.toString package;
+    }) exporterToolPackages;
+  };
+in
 {
   networking.hostName = "exporter";
 
-  environment.systemPackages = with pkgs; [
-    cryptsetup
-    e2fsprogs
-    dosfstools
+  assertions = [
+    {
+      assertion = guestRole == "exporter";
+      message = "the exporter image requires the exporter-compiled guestd";
+    }
+    {
+      assertion = guestBundle == null;
+      message = "the exporter image does not accept a desktop bundle";
+    }
   ];
 
-  networking.interfaces = { };
-  networking.firewall.enable = true;
-  networking.firewall.allowedTCPPorts = [ ];
-  networking.firewall.allowedUDPPorts = [ ];
+  environment.systemPackages = exporterToolPackages;
 
-  # No desktop, NIC, USB automount, or interactive login.
+  environment.etc."private-vm/exporter-tools.json" = {
+    mode = "0444";
+    text = builtins.toJSON exporterToolInventory;
+  };
+
+  # A physical transfer device is attached only by the typed exporter launch
+  # model. Keep the storage drivers available without adding an automounter or
+  # broadening the guestd service's device policy in the base image.
+  boot.initrd.availableKernelModules = [
+    "sd_mod"
+    "uas"
+    "usb_storage"
+    "xhci_pci"
+  ];
+
+  # The production QEMU model supplies no NIC. These image-level settings keep
+  # the role free of desktop and network-management services even if a future
+  # module attempts to add role-neutral conveniences.
+  systemd.defaultUnit = lib.mkForce "multi-user.target";
+  services.xserver.enable = lib.mkForce false;
+  services.udisks2.enable = lib.mkForce false;
+  networking.networkmanager.enable = lib.mkForce false;
+  networking.modemmanager.enable = lib.mkForce false;
+
+  # Root remains locked by image-base.nix. There is no normal user, desktop,
+  # network manager, USB automounter, or compatibility filesystem formatter.
 }

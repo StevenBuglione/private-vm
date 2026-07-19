@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "packages": [
+    {
+      "name": "coreutils",
+      "version": "9.10",
+      "store_path": "/nix/store/00000000000000000000000000000000-coreutils-9.10"
+    },
+    {
+      "name": "cryptsetup",
+      "version": "2.8.4",
+      "store_path": "/nix/store/11111111111111111111111111111111-cryptsetup-2.8.4"
+    },
+    {
+      "name": "e2fsprogs",
+      "version": "1.47.3",
+      "store_path": "/nix/store/22222222222222222222222222222222-e2fsprogs-1.47.3"
+    },
+    {
+      "name": "systemd",
+      "version": "259",
+      "store_path": "/nix/store/33333333333333333333333333333333-systemd-259"
+    },
+    {
+      "name": "usbutils",
+      "version": "019",
+      "store_path": "/nix/store/44444444444444444444444444444444-usbutils-019"
+    },
+    {
+      "name": "util-linux",
+      "version": "2.42",
+      "store_path": "/nix/store/55555555555555555555555555555555-util-linux-2.42"
+    }
+  ]
+}
