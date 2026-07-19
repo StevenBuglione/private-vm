@@ -10,7 +10,7 @@ were exercised by these low-memory tests.
 | `SCAN-002` | descriptor-relative inventory and identity-pinned reopen | hashes and MIME disagreement record; symlink, hardlink, FIFO, special file, replacement, cancellation and count/byte/path limit reject |
 | `SCAN-003` | bounded clamd Unix `INSTREAM` protocol | clean/malware/encrypted/skipped/limit/error/timeout verdicts parse strictly; changed sizes, oversized responses and incomplete streams reject; readers close |
 | `SCAN-004` | ZIP/TAR preflight, extraction and reinventory | absolute/traversal, symlink/hardlink, special, encrypted, nested and high-ratio fixtures reject; unprivileged tmpfs extraction cleans idempotently and will not delete a substituted path |
-| `SCAN-005` | reconstruction orchestration and volatile outputs | PDF and Office raster path, PNG/JPEG re-encode, media/text policy, output bounds, MIME/hash, structure verification, mandatory rescan, failure/cancellation cleanup and active/unsupported rejection |
+| `SCAN-005` | reconstruction orchestration and volatile outputs | PDF all-page size/count evidence and Office raster path, PNG/JPEG re-encode, media/text policy, output bounds, MIME/hash, structure verification, mandatory rescan, failure/cancellation cleanup and active/unsupported rejection |
 | `SCAN-006` | strict canonical report plus volatile HMAC | complete approval verifies; tampering, wrong/destroyed key, incomplete phases, blocking verdicts, unrescanned output and noncanonical JSON reject |
 
 The scanner guest RPC integration adds a single serialized phase owner over

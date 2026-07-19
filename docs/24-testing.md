@@ -552,7 +552,11 @@ python3 tools/validate_examples.py
 It generates ZIP/TAR fixtures in memory and proves traversal, absolute path,
 symlink, hardlink, FIFO, encrypted archive, nesting, expansion-ratio and output
 replacement failures. A local `net.Pipe` implements the ClamAV protocol fixture;
-no daemon, definitions download or hostile public corpus is required. Real
+the PDF probe fixture proves fixed stdin-only all-page arguments, maximum
+dimensions across heterogeneous pages, and rejection of missing, duplicate,
+out-of-range, inconsistent, over-limit and oversized-output evidence while
+preserving cancellation and timeout codes. No daemon, definitions download or
+hostile public corpus is required. Real
 freshclam, offline boot/device enforcement and pinned PDF/Office/media tools
 remain separate scanner-image and KVM acceptance gates.
 

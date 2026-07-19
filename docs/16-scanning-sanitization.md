@@ -281,7 +281,11 @@ reconstructed and rescanned leaf outputs may enter an approved report.
 
 Reconstruction accepts the validated `safe` policy only. External tools receive
 content on stdin and return content on stdout with fixed filename-free
-arguments. PDF output is raster-only and page-count checked, Office first
+arguments. The PDF probe requests the complete bounded page range and requires
+exactly one size record for every declared page; missing, duplicate,
+out-of-range, inconsistent, oversized-count, or invalid-dimension evidence
+rejects. Its maximum width and height are calculated across all pages, not from
+the first page. PDF output is raster-only and page-count checked, Office first
 renders to PDF and then uses the same raster path, PNG/JPEG is fully decoded and
 re-encoded as PNG, and media is fully decoded/re-encoded with metadata,
 attachments and chapters omitted. Every output has a new volatile file object,

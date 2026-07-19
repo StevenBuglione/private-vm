@@ -18,7 +18,11 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-const maximumProbeOutputBytes = 256 << 10
+const (
+	maximumProbeOutputBytes    = 256 << 10
+	maximumPDFProbeOutputBytes = 1 << 20
+	maximumPDFProbePages       = 10000
+)
 
 // CommandMIMEClassifier invokes the pinned file(1) build with the bounded
 // prefix on stdin. No hostile path or logical name crosses the process API.
@@ -63,8 +67,8 @@ func NewCommandDocumentProbe(executable, version string) (CommandDocumentProbe, 
 }
 
 var (
-	pdfPagesPattern = regexp.MustCompile(`(?m)^Pages:\s+([0-9]+)\s*$`)
-	pdfSizePattern  = regexp.MustCompile(`(?m)^Page size:\s+([0-9]+(?:\.[0-9]+)?) x ([0-9]+(?:\.[0-9]+)?) pts`)
+	pdfPagesPattern       = regexp.MustCompile(`(?m)^Pages:\s+([0-9]+)\s*$`)
+	pdfIndexedSizePattern = regexp.MustCompile(`(?m)^Page\s+([0-9]+)\s+size:\s+([0-9]+(?:\.[0-9]+)?) x ([0-9]+(?:\.[0-9]+)?) pts(?:\s|$)`)
 )
 
 func (probe CommandDocumentProbe) ProbeDocument(ctx context.Context, input io.ReadSeeker) (DocumentEvidence, ToolEvidence, error) {
@@ -74,25 +78,83 @@ func (probe CommandDocumentProbe) ProbeDocument(ctx context.Context, input io.Re
 	if _, err := input.Seek(0, io.SeekStart); err != nil {
 		return DocumentEvidence{}, ToolEvidence{}, scanError("SANITIZER_FAILED", "The document could not be rewound for its bounded probe.", "Reject the document and destroy the scanner.", err)
 	}
-	output, err := runBoundedCommand(ctx, probe.executable, []string{"-"}, input, maximumProbeOutputBytes, nil)
+	// Asking for the complete supported page range makes pdfinfo emit one
+	// indexed size record for every page. A document
+	// above the hard ceiling still reports its larger total and is rejected.
+	// Content remains on stdin; no hostile pathname enters argv.
+	output, err := runBoundedCommand(ctx, probe.executable, []string{"-f", "1", "-l", strconv.Itoa(maximumPDFProbePages), "-"}, input, maximumPDFProbeOutputBytes, nil)
 	if err != nil {
+		if ctx.Err() != nil {
+			return DocumentEvidence{}, ToolEvidence{}, contextScanError(ctx.Err())
+		}
 		return DocumentEvidence{}, ToolEvidence{}, scanError("SANITIZER_FAILED", "The bounded PDF probe did not complete.", "Reject the document and destroy the scanner.", err)
 	}
 	defer clear(output)
-	pagesMatch := pdfPagesPattern.FindSubmatch(output)
-	sizeMatch := pdfSizePattern.FindSubmatch(output)
-	if len(pagesMatch) != 2 || len(sizeMatch) != 3 {
-		return DocumentEvidence{}, ToolEvidence{}, scanError("SANITIZER_FAILED", "The PDF probe returned incomplete structure evidence.", "Reject the document and destroy the scanner.", nil)
+	evidence, err := parsePDFDocumentEvidence(output)
+	if err != nil {
+		return DocumentEvidence{}, ToolEvidence{}, err
 	}
-	pages, pagesErr := strconv.ParseUint(string(pagesMatch[1]), 10, 32)
-	width, widthErr := strconv.ParseFloat(string(sizeMatch[1]), 64)
-	height, heightErr := strconv.ParseFloat(string(sizeMatch[2]), 64)
-	if pagesErr != nil || widthErr != nil || heightErr != nil || pages == 0 || width <= 0 || height <= 0 || width > math.MaxUint32 || height > math.MaxUint32 {
-		return DocumentEvidence{}, ToolEvidence{}, scanError("SANITIZER_FAILED", "The PDF probe returned invalid structure evidence.", "Reject the document and destroy the scanner.", nil)
+	return evidence, probe.tool, nil
+}
+
+func parsePDFDocumentEvidence(output []byte) (DocumentEvidence, error) {
+	pageCounts := pdfPagesPattern.FindAllSubmatch(output, -1)
+	if len(pageCounts) != 1 || len(pageCounts[0]) != 2 {
+		return DocumentEvidence{}, incompletePDFEvidenceError()
 	}
-	return DocumentEvidence{
-		Pages: uint32(pages), MaximumWidth: uint32(math.Ceil(width)), MaximumHeight: uint32(math.Ceil(height)), Complete: true,
-	}, probe.tool, nil
+	pageCount, err := strconv.ParseUint(string(pageCounts[0][1]), 10, 32)
+	if err != nil || pageCount == 0 || pageCount > maximumPDFProbePages {
+		return DocumentEvidence{}, invalidPDFEvidenceError()
+	}
+
+	indexedSizes := pdfIndexedSizePattern.FindAllSubmatch(output, -1)
+	if uint64(len(indexedSizes)) != pageCount {
+		return DocumentEvidence{}, incompletePDFEvidenceError()
+	}
+
+	seen := make([]bool, int(pageCount))
+	evidence := DocumentEvidence{Pages: uint32(pageCount), Complete: true}
+	for _, match := range indexedSizes {
+		if len(match) != 4 {
+			return DocumentEvidence{}, incompletePDFEvidenceError()
+		}
+		page, pageErr := strconv.ParseUint(string(match[1]), 10, 32)
+		width, height, dimensionsOK := parsePDFDimensions(match[2], match[3])
+		if pageErr != nil || page == 0 || page > pageCount || seen[page-1] || !dimensionsOK {
+			return DocumentEvidence{}, invalidPDFEvidenceError()
+		}
+		seen[page-1] = true
+		if width > evidence.MaximumWidth {
+			evidence.MaximumWidth = width
+		}
+		if height > evidence.MaximumHeight {
+			evidence.MaximumHeight = height
+		}
+	}
+	for _, present := range seen {
+		if !present {
+			return DocumentEvidence{}, incompletePDFEvidenceError()
+		}
+	}
+	return evidence, nil
+}
+
+func parsePDFDimensions(widthBytes, heightBytes []byte) (uint32, uint32, bool) {
+	width, widthErr := strconv.ParseFloat(string(widthBytes), 64)
+	height, heightErr := strconv.ParseFloat(string(heightBytes), 64)
+	if widthErr != nil || heightErr != nil || width <= 0 || height <= 0 || math.IsNaN(width) || math.IsNaN(height) ||
+		math.IsInf(width, 0) || math.IsInf(height, 0) || width > math.MaxUint32 || height > math.MaxUint32 {
+		return 0, 0, false
+	}
+	return uint32(math.Ceil(width)), uint32(math.Ceil(height)), true
+}
+
+func incompletePDFEvidenceError() error {
+	return scanError("SANITIZER_FAILED", "The PDF probe returned incomplete all-page structure evidence.", "Reject the document and destroy the scanner.", nil)
+}
+
+func invalidPDFEvidenceError() error {
+	return scanError("SANITIZER_FAILED", "The PDF probe returned invalid all-page structure evidence.", "Reject the document and destroy the scanner.", nil)
 }
 
 type CommandMediaProbe struct {
