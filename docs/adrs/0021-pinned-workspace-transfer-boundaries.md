@@ -41,4 +41,3 @@ replacement, and receipt failure remove the staged or newly published import.
 - Guestd owns and closes the pinned descriptors when its role server stops.
 - No host mount, guest pathname, generic filesystem API, or arbitrary guest RPC
   is added.
-
