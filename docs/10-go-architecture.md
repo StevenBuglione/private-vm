@@ -224,12 +224,23 @@ dotfile-manager links, but they are not daemon-created paths and their opened
 targets must pass effective-user/root ownership, mode, type and filesystem
 checks.
 
+The volatile session store pins the runtime-root device and inode, serializes
+dirfd-relative operations, and revalidates exact owner, group, type and mode on
+every create/save/load/list/remove operation. Journal replacement is atomic and
+strictly bounded to 1 MiB. Unknown or duplicate JSON fields, malformed event
+chains, unsafe hardlinks, symlinks, root replacement and undocumented directory
+entries all fail closed. Linux `openat2` support is mandatory for this boundary.
+
 ## Concurrency
 
-- one orchestrator goroutine owns workflow state
-- commands enter through a serialized transition channel
-- event subscribers are read-only
-- cleanup uses `sync.Once`
+- one session actor owns lifecycle state, typed role-workflow state, resource
+  allocation/registration, event publication and cleanup
+- commands enter through a bounded serialized channel
+- event subscribers receive atomic replay-and-follow views and cannot mutate
+  session state
+- concurrent cleanup callers coalesce on one attempt; failure permits a later
+  retry from the first incomplete reverse-order step
+- allocation and cleanup registration are one actor command
 - every subprocess has context cancellation and a wait owner
 - no detached goroutines
 - no channel send without bounded cancellation path

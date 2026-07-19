@@ -2,9 +2,9 @@ syntax = "proto3";
 
 package privatevm.v1;
 
-option go_package = "github.com/StevenBuglione/private-vm/gen/privatevm/v1;privatevmv1";
-
 import "privatevm/v1/common.proto";
+
+option go_package = "github.com/StevenBuglione/private-vm/gen/privatevm/v1;privatevmv1";
 
 service PrivateVMDaemonService {
   rpc GetVersion(Empty) returns (VersionResponse);
@@ -70,10 +70,19 @@ message CreateSessionRequest {
   ResourceRequest resources = 5;
 }
 
-message GetSessionRequest { RequestContext context = 1; }
-message ListSessionsRequest { RequestContext context = 1; }
-message ListSessionsResponse { repeated Session sessions = 1; }
-message StartRoleRequest { RequestContext context = 1; }
+message GetSessionRequest {
+  RequestContext context = 1;
+  uint64 after_sequence = 2;
+}
+message ListSessionsRequest {
+  RequestContext context = 1;
+}
+message ListSessionsResponse {
+  repeated Session sessions = 1;
+}
+message StartRoleRequest {
+  RequestContext context = 1;
+}
 
 message StopRoleRequest {
   RequestContext context = 1;
@@ -86,7 +95,9 @@ message AbortSessionRequest {
   string reason_code = 2;
 }
 
-message CleanupSessionRequest { RequestContext context = 1; }
+message CleanupSessionRequest {
+  RequestContext context = 1;
+}
 
 message Session {
   string id = 1;
@@ -105,6 +116,7 @@ message SessionEvent {
   Progress progress = 4;
   Diagnostic diagnostic = 5;
   int64 unix_nanos = 6;
+  string safe_message = 7;
 }
 
 message ExportWorkspaceRequest {

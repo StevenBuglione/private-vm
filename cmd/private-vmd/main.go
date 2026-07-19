@@ -62,7 +62,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	manager, err := session.NewManager(store, 4)
+	manager, err := session.NewManager(store, session.DefaultMaxSessionsPerOwner)
 	if err != nil {
 		return err
 	}
@@ -96,14 +96,56 @@ func run() error {
 	case err := <-done:
 		return err
 	case <-ctx.Done():
-		shutdownContext, cancel := context.WithTimeout(
-			context.Background(),
+		return shutdownServices(
 			time.Duration(runtimeConfig.CleanupTimeoutSeconds())*time.Second,
+			server.Shutdown,
+			done,
+			manager.Shutdown,
 		)
-		defer cancel()
-		if err := server.Shutdown(shutdownContext); err != nil {
-			return fmt.Errorf("bounded daemon shutdown: %w", err)
-		}
-		return <-done
 	}
+}
+
+func shutdownServices(
+	timeout time.Duration,
+	serverShutdown func(context.Context) error,
+	serverDone <-chan error,
+	managerShutdown func(context.Context) error,
+) error {
+	if timeout <= 0 || serverShutdown == nil || serverDone == nil || managerShutdown == nil {
+		return errors.New("daemon shutdown configuration is invalid")
+	}
+
+	serverContext, cancelServer := context.WithTimeout(context.Background(), timeout)
+	serverErr := serverShutdown(serverContext)
+	cancelServer()
+
+	// A server implementation must normally finish Serve when Shutdown returns,
+	// but bound this observation independently so a broken server cannot prevent
+	// session cleanup from being admitted.
+	serveWaitContext, cancelServeWait := context.WithTimeout(context.Background(), timeout)
+	var serveErr error
+	select {
+	case serveErr = <-serverDone:
+	case <-serveWaitContext.Done():
+		serveErr = serveWaitContext.Err()
+	}
+	cancelServeWait()
+
+	// Session cleanup gets its own full budget. It must run even when graceful
+	// server shutdown or the Serve result failed.
+	managerContext, cancelManager := context.WithTimeout(context.Background(), timeout)
+	managerErr := managerShutdown(managerContext)
+	cancelManager()
+
+	var shutdownErrors []error
+	if serverErr != nil {
+		shutdownErrors = append(shutdownErrors, fmt.Errorf("bounded daemon shutdown: %w", serverErr))
+	}
+	if serveErr != nil {
+		shutdownErrors = append(shutdownErrors, fmt.Errorf("daemon serve termination: %w", serveErr))
+	}
+	if managerErr != nil {
+		shutdownErrors = append(shutdownErrors, fmt.Errorf("bounded session cleanup: %w", managerErr))
+	}
+	return errors.Join(shutdownErrors...)
 }

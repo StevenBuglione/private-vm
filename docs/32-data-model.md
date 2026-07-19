@@ -15,9 +15,42 @@ resources          vCPU, RAM, root and scratch limits
 policy             immutable policy snapshot
 created_at         monotonic/wall timestamp pair
 runtime_path       derived path under /run/private-vm
+next_sequence      next monotonic event sequence owned by the session actor
 ```
 
 No user-provided value becomes part of a host path.
+
+The daemon is the only session mutator. RPC handlers submit typed commands to
+the per-session actor; callers cannot write a phase, event or resource record
+directly. `DESTROYING` and `DESTROYED` are cleanup-owned lifecycle states.
+
+## Session event
+
+```text
+schema_version     1
+session_id         daemon-generated identifier
+sequence           contiguous uint64 starting at 1
+lifecycle_state    top-level session lifecycle
+workflow_state     role-specific typed workflow state when applicable
+code               stable non-sensitive event code
+safe_message       fixed catalog text derived from code
+occurred_at        daemon timestamp
+```
+
+The volatile journal retains at most 4,096 events and reserves terminal space
+for cleanup. It never truncates older events. A full journal blocks further
+non-terminal mutation with `EVENT_LIMIT_REACHED` so replay cannot contain a
+hidden gap. Event subscribers provide an `after_sequence` cursor and receive a
+bounded replay followed by live events from the same actor.
+
+An allocator and its cleanup registration are one actor command. Cancellation
+between allocation and registration triggers bounded rollback. Cleanup runs in
+reverse allocation order, stops at the first failure, and resumes safely on a
+later request. This live cleanup registry is internal actor state rather than a
+public RPC or durable session field. The separate startup-recovery record added
+by `D-004` may contain only closed, daemon-derived resource identities needed to
+revalidate an orphan; it must not serialize callbacks, raw command arguments or
+sensitive values.
 
 ## Image identity
 
