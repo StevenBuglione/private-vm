@@ -17,6 +17,21 @@ pairs = [
     ("schemas/policy.schema.json", "examples/policy.safe.toml", "toml"),
     ("schemas/policy.schema.json", "examples/policy.quarantine.toml", "toml"),
     (
+        "schemas/scanner-toolchain.schema.json",
+        "examples/scanner-toolchain.example.json",
+        "json",
+    ),
+    (
+        "schemas/scanner-phase.schema.json",
+        "examples/scanner-phase.update.example.json",
+        "json",
+    ),
+    (
+        "schemas/scanner-phase.schema.json",
+        "examples/scanner-phase.offline.example.json",
+        "json",
+    ),
+    (
         "schemas/exporter-tool-inventory.schema.json",
         "examples/exporter-tool-inventory.example.json",
         "json",
@@ -43,6 +58,21 @@ config_schema = json.loads((ROOT / "schemas/config.schema.json").read_text(encod
 config = tomllib.loads((ROOT / "examples/config.example.toml").read_text(encoding="utf-8"))
 policy_schema = json.loads((ROOT / "schemas/policy.schema.json").read_text(encoding="utf-8"))
 safe_policy = tomllib.loads((ROOT / "examples/policy.safe.toml").read_text(encoding="utf-8"))
+scanner_toolchain_schema = json.loads(
+    (ROOT / "schemas/scanner-toolchain.schema.json").read_text(encoding="utf-8")
+)
+scanner_toolchain = json.loads(
+    (ROOT / "examples/scanner-toolchain.example.json").read_text(encoding="utf-8")
+)
+scanner_phase_schema = json.loads(
+    (ROOT / "schemas/scanner-phase.schema.json").read_text(encoding="utf-8")
+)
+scanner_update_phase = json.loads(
+    (ROOT / "examples/scanner-phase.update.example.json").read_text(encoding="utf-8")
+)
+scanner_offline_phase = json.loads(
+    (ROOT / "examples/scanner-phase.offline.example.json").read_text(encoding="utf-8")
+)
 exporter_tool_schema = json.loads(
     (ROOT / "schemas/exporter-tool-inventory.schema.json").read_text(encoding="utf-8")
 )
@@ -96,6 +126,38 @@ negative_cases.append(("weakened safe policy", policy_schema, weakened))
 raw = deepcopy(safe_policy)
 raw["name"] = raw["mode"] = "raw"
 negative_cases.append(("raw policy", policy_schema, raw))
+oversized_single_file = deepcopy(safe_policy)
+oversized_single_file["limits"]["max_single_file_bytes"] = 4294967297
+negative_cases.append(("oversized scanner file", policy_schema, oversized_single_file))
+oversized_expansion = deepcopy(safe_policy)
+oversized_expansion["limits"]["max_expanded_bytes"] = 4294967297
+negative_cases.append(("oversized scanner expansion", policy_schema, oversized_expansion))
+oversized_scan_timeout = deepcopy(safe_policy)
+oversized_scan_timeout["limits"]["scan_timeout_seconds"] = 301
+negative_cases.append(("oversized scanner timeout", policy_schema, oversized_scan_timeout))
+empty_scanner_toolchain = deepcopy(scanner_toolchain)
+empty_scanner_toolchain["tools"] = []
+negative_cases.append(
+    ("empty scanner toolchain", scanner_toolchain_schema, empty_scanner_toolchain)
+)
+unknown_scanner_tool_field = deepcopy(scanner_toolchain)
+unknown_scanner_tool_field["tools"][0]["credential"] = "forbidden"
+negative_cases.append(
+    ("unknown scanner tool field", scanner_toolchain_schema, unknown_scanner_tool_field)
+)
+update_with_quarantine_options = deepcopy(scanner_update_phase)
+update_with_quarantine_options["quarantine_mount_options"] = ["nodev", "noexec", "nosuid", "ro"]
+negative_cases.append(
+    ("scanner update quarantine options", scanner_phase_schema, update_with_quarantine_options)
+)
+offline_with_network = deepcopy(scanner_offline_phase)
+offline_with_network["network_device_policy"] = "proton-only"
+negative_cases.append(("networked offline scanner", scanner_phase_schema, offline_with_network))
+offline_with_reordered_mounts = deepcopy(scanner_offline_phase)
+offline_with_reordered_mounts["quarantine_mount_options"] = ["ro", "nodev", "noexec", "nosuid"]
+negative_cases.append(
+    ("scanner mount option drift", scanner_phase_schema, offline_with_reordered_mounts)
+)
 duplicate_exporter_tool = deepcopy(exporter_tool_inventory)
 duplicate_exporter_tool["packages"][-1]["name"] = "coreutils"
 negative_cases.append(

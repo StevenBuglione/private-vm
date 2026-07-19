@@ -172,8 +172,10 @@ viewers, preview helpers, NetworkManager applet, and other implicit XFCE
 applications from those roles.
 
 The `downloader-desktop` test boots the downloader under TCG and proves its
-exact compiled role/capability set, XFCE and WireGuard tools, absence of
-personal-work applications and embedded VPN/torrent credentials, and an
+embedded identity, exact compiled role/capability set, authenticated guestd
+readiness over AF_VSOCK with the synthetic `fw_cfg` capability, XFCE and
+WireGuard tools, absence of personal-work applications and embedded VPN/torrent
+credentials, and an
 initial default-drop nftables policy. It mounts a disposable test quarantine,
 creates a dummy `proton0`, and verifies that qBittorrent cannot start before a
 root-owned volatile VPN-ready marker exists. After readiness it verifies the
@@ -181,17 +183,33 @@ service and loopback-only listeners, the immutable `proton0` binding, volatile
 logging/profile paths, bounded stop, fail-closed restart, and syntax of both
 typed endpoint firewall templates. NET-003 remains responsible for rendering
 those templates and continuously withdrawing readiness on tunnel failure.
+TOR-002 remains responsible for replacing the first-boot profile copy with a
+per-boot authenticated qBittorrent Web API credential and testing a real
+authenticated API operation; the image gate does not claim that behavior.
 
 The scanner has three focused gates. `scanner-image-contract` checks both boot
 configurations, every required executable, fail-closed ClamAV limits, absence of
 workstation/downloader tools, and one-to-one package/version coverage between
-the embedded tool inventory and SPDX document. `scanner-update` boots the online
+the embedded tool inventory and SPDX document. It validates both phase records
+and the toolchain record against their closed JSON schemas and proves that a
+different source revision under the same flake lock produces a different SPDX
+document namespace. `scanner-update` boots the online
 phase without quarantine and performs a deterministic FreshClam database update
 from a non-secret local test database, rather than treating `--version` as an
 update proof. `scanner-offline` passes explicit `-nic none`, attaches a generated
 quarantine filesystem through a read-only QEMU block backend, verifies that only
 loopback exists, mounts it `ro,nodev,nosuid,noexec`, and proves a write fails.
-Both boot tests compare the scanner role and exact sorted RPC capability list.
+Both boot tests compare the embedded image/build identity, scanner role and
+exact sorted RPC capability list, then prove authenticated guestd readiness over
+AF_VSOCK with the synthetic `fw_cfg` capability. They also repeat the common
+locked-account, no SSH/sudo, volatile journal/tmpfs and no TCP/UDP-listener
+invariants. The update gate's local FreshClam fixture is not evidence of the
+production Proton kill switch; SCAN-001 and the NET tasks own that control.
+
+These Nix gates do not grant guestd broad workflow privileges. TOR, SCAN and USB
+tasks must introduce narrowly scoped role workers for network, parser and block
+device operations and test their exact privilege boundaries before the
+corresponding workflow can be called complete.
 
 Run the two scanner VM gates serially. Each is configured for 2 GiB of guest RAM;
 do not run them together on a 16 GiB development host.

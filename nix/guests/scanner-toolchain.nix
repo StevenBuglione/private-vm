@@ -180,9 +180,17 @@ let
     ];
     comment = "Pinned Nix store package ${tool.package}; ${tool.purpose}.";
   };
+  documentIdentity = builtins.hashString "sha256" (
+    builtins.toJSON {
+      architecture = guestArchitecture;
+      flake_lock_sha256 = guestFlakeLockSHA256;
+      source_commit = guestSourceCommit;
+      tools = map toolRecord tools;
+    }
+  );
 in
 {
-  inherit tools;
+  inherit documentIdentity tools;
   packages = map (tool: tool.package) tools;
   requiredCommands = lib.concatMap (tool: tool.commands) tools;
 
@@ -202,7 +210,7 @@ in
     dataLicense = "CC0-1.0";
     SPDXID = "SPDXRef-DOCUMENT";
     name = "private-vm-scanner-image-toolchain";
-    documentNamespace = "https://private-vm.dev/spdx/scanner/${guestArchitecture}/${guestFlakeLockSHA256}";
+    documentNamespace = "https://private-vm.dev/spdx/scanner/${guestArchitecture}/${guestFlakeLockSHA256}/${documentIdentity}";
     creationInfo = {
       created = guestSBOMCreated;
       creators = [ "Tool: private-vm Nix image definition" ];

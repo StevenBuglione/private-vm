@@ -108,10 +108,17 @@ separate IPv4 and IPv6 runtime templates whose only underlay egress is UDP to a
 typed, validated Proton endpoint; NET-003 renders and applies one complete
 transaction after profile validation. qBittorrent runs as a hardened user
 service only when both the root-owned `/run/private-vm-vpn/ready` marker and the
-quarantine mount exist. Its profile and logs are volatile, its Web API requires
-local authentication and binds to `127.0.0.1`, and the immutable image contains
-no reusable API credential. TOR-002 provisions the per-boot credential before
-guestd uses the API.
+quarantine mount exist. Its profile and logs are volatile, its Web API binds to
+`127.0.0.1`, and the immutable image contains no reusable API credential.
+TOR-002 must provision and verify local authentication with a per-boot
+credential before guestd uses the API.
+
+NIX-004 establishes only the fail-closed image defaults and service sandbox. It
+does not claim that the current immutable `ExecStartPre` profile copy provisions
+an authenticated Web API session. TOR-002 must replace that bootstrap path with
+a bounded per-boot credential flow, keep the credential in volatile memory,
+prove an authenticated API request succeeds, and prove the credential is absent
+from argv, the environment, the immutable profile and the journal.
 
 ## Leak tests
 

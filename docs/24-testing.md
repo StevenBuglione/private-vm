@@ -204,11 +204,11 @@ the package for Darwin so Linux syscalls cannot leak into common source files.
 Use QEMU TCG in public CI for:
 
 - image boot
-- guest role/capabilities
+- embedded guest identity and exact role/capabilities
 - XFCE/lightdm target
 - no SSH
 - volatile journal
-- VSOCK guestd
+- authenticated VSOCK guestd readiness with the synthetic `fw_cfg` capability
 - scanner no-network specialization
 - exporter headless behavior
 
@@ -223,6 +223,12 @@ boots guestd, and verifies the common hardening and identity invariants. It does
 not use a production capability or any VPN credential. NixOS test
 instrumentation may add its own control channel; that channel is not present in
 the canonical image derivations.
+
+The downloader and both scanner phase gates use a test-only client that first
+proves an incorrect capability is rejected and then authenticates `Hello` with
+that synthetic capability. The client is added only to VM-test configurations,
+never to a production package or image. Run the two 2 GiB scanner gates
+serially on the 16 GiB development host.
 
 The exporter boot gate is run with:
 

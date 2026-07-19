@@ -147,20 +147,38 @@ FreshClam service/timer. The daemon must also render the scan launch with no NIC
 disabling guest services is not accepted as evidence that a network device is
 absent.
 
+The image task does not claim that the update phase has the production Proton
+kill switch. SCAN-001 and the NET tasks must install that policy before any
+external definition update is allowed; the Nix image gate uses only a local,
+non-secret FreshClam fixture and is not VPN-readiness evidence.
+
 `/etc/private-vm/scanner-toolchain.json` records the exact Nix package name and
 version for ClamAV, file identification, bounded archive primitives, parser
 containment, PDF/Office/image/media reconstruction and metadata inspection.
+It is a closed schema-versioned record validated by
+`schemas/scanner-toolchain.schema.json`; both scanner phase records are
+validated by `schemas/scanner-phase.schema.json`.
 Those same direct tool identities appear in the embedded SPDX 2.3 document at
 `/etc/private-vm/scanner-sbom.spdx.json` and the separate `sbom-scanner` flake
 output. This toolchain SBOM is immutable image identity evidence; release
 publication later augments it with the complete image-closure SBOM and artifact
 digest.
+Its SPDX document namespace includes a digest over the guest source commit,
+architecture, flake-lock digest and direct tool records, so two source revisions
+under the same dependency lock cannot reuse one document identity.
 
 The image contains no browser, password manager, source-control/SSH client,
 development toolchain or downloader client. LibreOffice is present only as the
 required headless Office-to-PDF reconstruction backend. Thunar and the terminal
 remain for the explicitly graphical inspection role, with thumbnailing, GVFS
 and UDisks disabled.
+
+The common root guestd service intentionally has only the privileges needed for
+authenticated AF_VSOCK control. It is not the eventual parser, downloader,
+network or block-device worker. TOR, SCAN and USB implementation tasks must add
+separate role-specific workers with only their documented paths, devices,
+namespaces and capabilities. Image construction alone therefore makes no claim
+that those privileged workflow operations are implemented.
 
 ## Downloader desktop
 
