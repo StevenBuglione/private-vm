@@ -1,0 +1,97 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://private-vm.dev/schema/image-cache-entry-v1.json",
+  "title": "private-vm immutable image cache entry",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": { "const": 1 },
+    "oci_manifest_digest": { "$ref": "#/$defs/digest" },
+    "files": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "enum": [
+              "image.qcow2",
+              "manifest.json",
+              "provenance.json",
+              "sbom.spdx.json"
+            ]
+          },
+          "media_type": {
+            "enum": [
+              "application/vnd.private-vm.qcow2+zstd",
+              "application/vnd.private-vm.manifest.v1+json",
+              "application/spdx+json",
+              "application/vnd.dev.sigstore.bundle+json"
+            ]
+          },
+          "source_digest": { "$ref": "#/$defs/digest" },
+          "installed_digest": { "$ref": "#/$defs/digest" },
+          "source_size_bytes": { "type": "integer", "minimum": 1 },
+          "installed_size_bytes": { "type": "integer", "minimum": 1 }
+        },
+        "required": [
+          "name",
+          "media_type",
+          "source_digest",
+          "installed_digest",
+          "source_size_bytes",
+          "installed_size_bytes"
+        ],
+        "allOf": [
+          {
+            "if": { "properties": { "name": { "const": "image.qcow2" } }, "required": ["name"] },
+            "then": { "properties": { "media_type": { "const": "application/vnd.private-vm.qcow2+zstd" } } }
+          },
+          {
+            "if": { "properties": { "name": { "const": "manifest.json" } }, "required": ["name"] },
+            "then": { "properties": { "media_type": { "const": "application/vnd.private-vm.manifest.v1+json" } } }
+          },
+          {
+            "if": { "properties": { "name": { "const": "provenance.json" } }, "required": ["name"] },
+            "then": { "properties": { "media_type": { "const": "application/vnd.dev.sigstore.bundle+json" } } }
+          },
+          {
+            "if": { "properties": { "name": { "const": "sbom.spdx.json" } }, "required": ["name"] },
+            "then": { "properties": { "media_type": { "const": "application/spdx+json" } } }
+          }
+        ]
+      },
+      "allOf": [
+        {
+          "contains": { "properties": { "name": { "const": "image.qcow2" } }, "required": ["name"] },
+          "minContains": 1,
+          "maxContains": 1
+        },
+        {
+          "contains": { "properties": { "name": { "const": "manifest.json" } }, "required": ["name"] },
+          "minContains": 1,
+          "maxContains": 1
+        },
+        {
+          "contains": { "properties": { "name": { "const": "provenance.json" } }, "required": ["name"] },
+          "minContains": 1,
+          "maxContains": 1
+        },
+        {
+          "contains": { "properties": { "name": { "const": "sbom.spdx.json" } }, "required": ["name"] },
+          "minContains": 1,
+          "maxContains": 1
+        }
+      ]
+    }
+  },
+  "required": ["schema_version", "oci_manifest_digest", "files"],
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  }
+}

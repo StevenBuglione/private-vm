@@ -23,6 +23,8 @@
 - Unix peer PID/start-time/UID/group revalidation and PID-reuse rejection
 - control-socket path, ownership, mode, stale-socket, and replacement-race policy
 - exact Polkit action, subject, timeout, empty environment, and output redaction
+- OCI tag-to-digest ordering, descriptor hashing, bounded zstd extraction and
+  immutable cache records
 
 ### Fuzz
 
@@ -40,6 +42,32 @@ Targets:
 - USB descriptors
 - path normalization
 - stream sequence state
+
+### OCI pull and cache boundary
+
+`internal/image` uses an in-memory read-only registry fake to prove that tag
+resolution is the first remote operation, the final directory is the resolved
+manifest digest, cache hits never fetch tag-selected layers, and all four
+component descriptors are independently hashed. Adversarial cases cover
+digest substitution before decoder construction; every forbidden manifest,
+config and layer optional field; the exact `{}` config media type, size, digest
+and fetched bytes; required fixed titles; extra annotations; unsafe or absolute
+titles; duplicate and unknown media types; compressed and installed size limits;
+stream-close failure; verifier
+failure, cancellation, timeout, read-only modes, cache tampering and cleanup of
+every hidden `.partial-*` directory.
+
+The ORAS adapter test proves HTTPS-only, bounded and anonymous construction.
+After an official public image exists, maintainers can run the opt-in anonymous
+registry acceptance without embedding credentials:
+
+```bash
+PRIVATE_VM_TEST_PUBLIC_OCI_REFERENCE='ghcr.io/stevenbuglione/private-vm/workstation-basic:rc' \
+  go test ./internal/image -run '^TestORASAnonymousResolve$'
+```
+
+The opt-in test resolves only. Complete installation remains blocked until the
+IMG-002/IMG-003 verifier accepts the staged manifest, SBOM and provenance.
 
 ### Integration without KVM
 

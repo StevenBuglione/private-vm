@@ -158,6 +158,33 @@ the Go error text directly.
 | `ErrCallback` | A bounded secret-reader callback was not supplied. |
 | `ErrSerialization` | A supported serialization path was rejected. |
 
+## Image pull/cache errors
+
+These stable internal classifications map to CLI exit 12 at the image command
+boundary, except cancellation and timeout, which normalize to the canonical
+`OPERATION_CANCELLED` exit 21 and `OPERATION_TIMEOUT` exit 15 records. Their
+messages and remediations never include a registry response, source reference,
+cache path or wrapped filesystem/network failure.
+The Go error retains its wrapped cause for trusted `errors.Is`/`errors.As`
+classification, but implements safe formatting and Go-string behavior so
+ordinary, detailed and structural `fmt` verbs cannot reveal that cause.
+
+| Code | Safe meaning |
+|---|---|
+| `IMAGE_REFERENCE_INVALID` | The OCI reference is malformed or omits both tag and digest. |
+| `IMAGE_RESOLVE_FAILED` | A repository or reference could not be resolved to an immutable manifest descriptor. |
+| `IMAGE_OCI_MANIFEST_INVALID` | The OCI v1 manifest, descriptor set, media type, title or component count is unsupported. |
+| `IMAGE_ARTIFACT_LIMIT` | Manifest, metadata, compressed image, installed image, component count or deadline limits are invalid or exceeded. |
+| `IMAGE_DIGEST_MISMATCH` | Resolved, downloaded or installed bytes do not match their canonical SHA-256 identity. |
+| `IMAGE_DOWNLOAD_FAILED` | A bounded OCI response could not be fetched, read or closed completely. |
+| `IMAGE_EXTRACTION_FAILED` | The zstd image or fixed cache file could not be decoded, written, synchronized or closed. |
+| `IMAGE_CACHE_INVALID` | Cache ownership, mode, type, layout, schema or recorded file integrity is invalid. |
+| `IMAGE_CACHE_CONFLICT` | A digest entry could not be atomically published or reconciled with a valid concurrent entry. |
+| `IMAGE_VERIFICATION_FAILED` | The mandatory manifest/SBOM/provenance verifier rejected the complete staged entry. |
+| `IMAGE_VERIFICATION_UNAVAILABLE` | No IMG-002/IMG-003 verifier was installed, so no cache entry was published. |
+| `IMAGE_PULL_CANCELLED` | The caller cancelled before atomic publication; partial data was removed. |
+| `IMAGE_PULL_TIMEOUT` | The bounded pull deadline expired; partial data was removed. |
+
 ## Mandatory blocking diagnostic codes
 
 ### Host

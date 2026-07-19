@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "oci_manifest_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+  "files": [
+    {
+      "name": "image.qcow2",
+      "media_type": "application/vnd.private-vm.qcow2+zstd",
+      "source_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "installed_digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+      "source_size_bytes": 2147483648,
+      "installed_size_bytes": 8589934592
+    },
+    {
+      "name": "manifest.json",
+      "media_type": "application/vnd.private-vm.manifest.v1+json",
+      "source_digest": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+      "installed_digest": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+      "source_size_bytes": 4096,
+      "installed_size_bytes": 4096
+    },
+    {
+      "name": "provenance.json",
+      "media_type": "application/vnd.dev.sigstore.bundle+json",
+      "source_digest": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+      "installed_digest": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+      "source_size_bytes": 8192,
+      "installed_size_bytes": 8192
+    },
+    {
+      "name": "sbom.spdx.json",
+      "media_type": "application/spdx+json",
+      "source_digest": "sha256:6666666666666666666666666666666666666666666666666666666666666666",
+      "installed_digest": "sha256:6666666666666666666666666666666666666666666666666666666666666666",
+      "source_size_bytes": 1048576,
+      "installed_size_bytes": 1048576
+    }
+  ]
+}

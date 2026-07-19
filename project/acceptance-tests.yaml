@@ -50,6 +50,20 @@
           "given": "scanner image labeled as workstation request",
           "when": "plan",
           "then": "hard failure"
+        },
+        {
+          "id": "SUPPLY-004",
+          "name": "Mutable tag resolves before component download",
+          "given": "a public OCI tag for a private-vm image",
+          "when": "images pull resolves and downloads the artifact",
+          "then": "the tag is resolved first, every component is fetched by its resolved SHA-256 descriptor, and the cache key is the immutable manifest digest"
+        },
+        {
+          "id": "SUPPLY-005",
+          "name": "Incomplete image pull is never runnable",
+          "given": "cancellation, timeout, limit, digest, decode, stream-close or verifier failure during pull",
+          "when": "the bounded pull terminates",
+          "then": "no final digest directory exists and every hidden partial directory is removed"
         }
       ]
     },

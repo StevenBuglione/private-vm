@@ -167,6 +167,7 @@ Current and planned narrowly scoped dependencies include:
 - `mdlayher/vsock`
 - `pelletier/go-toml/v2`
 - `oras-go/v2`
+- `klauspost/compress/zstd` for bounded in-process QCOW2 decompression
 - `sigstore-go`
 - `google/uuid` or standard random UUID implementation
 - `golang.org/x/sys/unix`

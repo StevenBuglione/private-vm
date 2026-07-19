@@ -22,6 +22,7 @@ pairs = [
         "json",
     ),
     ("schemas/guest-image-identity.schema.json", "examples/guest-image-identity.example.json", "json"),
+    ("schemas/image-cache-entry.schema.json", "examples/image-cache-entry.example.json", "json"),
     ("schemas/image-manifest.schema.json", "examples/image-manifest.example.json", "json"),
     ("schemas/scan-report.schema.json", "examples/scan-report.example.json", "json"),
     ("schemas/workstation-bundles.schema.json", "project/workstation-bundles.json", "json"),
@@ -46,6 +47,12 @@ exporter_tool_schema = json.loads(
 )
 exporter_tool_inventory = json.loads(
     (ROOT / "examples/exporter-tool-inventory.example.json").read_text(encoding="utf-8")
+)
+image_cache_schema = json.loads(
+    (ROOT / "schemas/image-cache-entry.schema.json").read_text(encoding="utf-8")
+)
+image_cache_entry = json.loads(
+    (ROOT / "examples/image-cache-entry.example.json").read_text(encoding="utf-8")
 )
 
 negative_cases = []
@@ -86,6 +93,15 @@ unknown_exporter_tool_field["packages"][0]["credential"] = "forbidden"
 negative_cases.append(
     ("unknown exporter tool field", exporter_tool_schema, unknown_exporter_tool_field)
 )
+traversal_cache_name = deepcopy(image_cache_entry)
+traversal_cache_name["files"][0]["name"] = "../image.qcow2"
+negative_cases.append(("cache traversal filename", image_cache_schema, traversal_cache_name))
+duplicate_cache_component = deepcopy(image_cache_entry)
+duplicate_cache_component["files"][1] = deepcopy(duplicate_cache_component["files"][0])
+negative_cases.append(("duplicate cache component", image_cache_schema, duplicate_cache_component))
+unknown_cache_field = deepcopy(image_cache_entry)
+unknown_cache_field["source_reference"] = "mutable-tag"
+negative_cases.append(("unknown cache field", image_cache_schema, unknown_cache_field))
 
 for label, schema, value in negative_cases:
     if Draft202012Validator(schema).is_valid(value):
