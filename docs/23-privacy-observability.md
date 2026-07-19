@@ -75,6 +75,10 @@ metrics from session state.
 
 User reviews the manifest before writing it.
 
+Without `--export`, `private-vm system diagnostics` only renders the redacted
+manifest and performs no write. Under `--json`, the manifest is returned in the
+same versioned success envelope documented in `docs/07-cli-reference.md`.
+
 ## Approved wording
 
 Use:

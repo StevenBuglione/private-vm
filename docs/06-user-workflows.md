@@ -129,7 +129,8 @@ private-vm session abort --session <id>
 ```
 
 The CLI returns only after cleanup audit or returns a specific cleanup failure
-that `private-vm cleanup` can remediate.
+that `private-vm session cleanup --session <id>` can remediate. Recovery of all
+verified private-vm-owned orphans uses `private-vm session cleanup --all`.
 
 ## JSON automation
 

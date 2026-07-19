@@ -7,15 +7,44 @@ Codes are stable API. Human wording may improve without changing the code.
 | Code | Meaning |
 |---:|---|
 | 0 | success |
-| 2 | CLI usage |
-| 10 | host or plan preflight blocked |
-| 11 | image trust failure |
-| 12 | authorization failure |
-| 20 | runtime failure |
-| 30 | scan/policy rejection |
-| 31 | transfer/export failure |
-| 40 | cleanup incomplete |
-| 70 | internal invariant failure |
+| 2 | usage error |
+| 10 | host preflight failure |
+| 11 | configuration or schema failure |
+| 12 | image/provenance failure |
+| 13 | VPN/network enforcement failure |
+| 14 | storage/capacity failure |
+| 15 | QEMU/runtime failure |
+| 16 | guest handshake/protocol failure |
+| 17 | torrent workflow failure |
+| 18 | scan rejected or incomplete |
+| 19 | USB identity/export failure |
+| 20 | workspace transfer/integrity failure |
+| 21 | user cancellation |
+| 22 | dirty workspace prevents stop |
+| 23 | authorization denied |
+| 24 | cleanup incomplete |
+| 70 | internal error |
+
+This table is identical to the canonical contract in
+`docs/07-cli-reference.md`. Exit values outside this set are not part of the v1
+CLI API.
+
+## Stable CLI-layer errors
+
+| Code | Exit | Safe meaning |
+|---|---:|---|
+| `CLI_USAGE` | 2 | Command syntax, an argument or an option was invalid. |
+| `SAFE_REPAIR_NOT_IMPLEMENTED` | 10 | `doctor --repair-safe` was requested, but the bounded repair path is not implemented. No repair was attempted. |
+| `HOST_PREFLIGHT_FAILED` | 10 | One or more blocking host diagnostics prevent the requested operation. |
+| `OPERATION_TIMEOUT` | 15 | The operation exceeded its bounded timeout and was stopped. |
+| `NOT_IMPLEMENTED` | 15 | The documented security-sensitive command exists but refuses to run until its implementation and acceptance gates pass. |
+| `OPERATION_CANCELLED` | 21 | The caller or process context cancelled the operation. |
+| `OUTPUT_RENDER_FAILED` | 70 | The CLI could not safely encode or write bounded output. Wrapped writer or encoder details are not exposed. |
+| `INTERNAL_ERROR` | 70 | An invalid or unclassified internal result was normalized to the redacted internal-error contract. |
+| `COMPLETION_FAILED` | 70 | Shell completion generation exceeded its bound or could not be safely produced or written. |
+
+These meanings are safe for logs and automation. Human error records add a
+bounded remediation but never serialize a wrapped cause or raw command output.
 
 ## Mandatory blocking diagnostic codes
 

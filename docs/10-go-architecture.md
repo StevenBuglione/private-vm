@@ -21,7 +21,40 @@ guest daemons are currently statically linked.
 ### `cmd/private-vm`
 
 Thin composition root. It creates configuration, API client, renderer, and
-command tree.
+command tree. The process root converts `SIGINT` and `SIGTERM` into context
+cancellation; the CLI maps cancellation to exit 21, while the invoked workflow
+remains responsible for its bounded, idempotent cleanup.
+
+`internal/cli` validates every argument and option before creating a sealed,
+typed semantic intent. Commands with selectors, paths, policies or destructive
+modes cannot dispatch an empty or arbitrary parameter map. Convenience aliases
+construct the same intent and command ID as their canonical workflow entry
+point. The default invoker fails closed with `NOT_IMPLEMENTED` until the owning
+backlog task installs a tested orchestrator implementation.
+
+Machine records use closed success, error and event envelopes plus reviewed
+typed payloads. Encoding is buffered, size-bounded and written as one record;
+wrapped error causes never cross the presentation boundary. Sensitive terminal
+input disables echo and restores it on success, failure, timeout and
+cancellation; terminal acquisition is process-serialized. Value and stream
+requests have hard 1 MiB and 64 MiB ceilings. Value-collection buffers allocate
+their final plaintext capacity once so superseded backing arrays cannot retain
+copies.
+Process standard-input ownership is serialized and read through a raw, bounded
+Linux descriptor duplicate; cleanup restores the original status flags before
+releasing the lease, and any close/restore failure invalidates a produced
+secret. The embedding API rejects caller-owned `*os.File` values
+instead of modifying or closing their poller/deadline state. Context-aware and
+known in-memory readers remain valid test and embedding inputs. File input uses
+`openat2` to reject symlinks in every path component and is regular-file and
+size checked. POSIX regular-file open/read calls cannot be portably interrupted,
+so the CLI input boundary rejects deadline-bearing file requests before I/O and
+uses no detached helper goroutine; future transfer implementations require an
+owned worker/cleanup boundary. Untimed calls check cancellation immediately
+before and after I/O. Strict
+credential input additionally requires caller ownership with no group, world
+or executable permission bits. Linux rejects FUSE, NFS, SMB and 9P sensitive
+input files because their reads cannot honor a local deadline.
 
 ### `cmd/private-vmd`
 

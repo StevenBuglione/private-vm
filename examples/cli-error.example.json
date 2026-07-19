@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "ok": false,
+  "code": "CONFIG_INVALID",
+  "exit_code": 11,
+  "message": "Configuration validation failed.",
+  "remediation": "Correct the reported field without placing secrets in TOML."
+}

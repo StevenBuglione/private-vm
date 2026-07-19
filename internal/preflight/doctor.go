@@ -26,6 +26,16 @@ type Doctor struct {
 }
 
 func (d Doctor) Run() Report {
+	return d.RunContext(context.Background())
+}
+
+// RunContext executes the read-only diagnostic set under the caller's bounded
+// lifetime. External probes inherit the context and every phase observes
+// cancellation before continuing.
+func (d Doctor) RunContext(ctx context.Context) Report {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	report := Report{SchemaVersion: 1}
 	add := func(diag Diagnostic) {
 		report.Diagnostics = append(report.Diagnostics, diag)
@@ -34,6 +44,9 @@ func (d Doctor) Run() Report {
 		}
 	}
 	report.Runnable = true
+	if ctx.Err() != nil {
+		return report
+	}
 
 	if runtime.GOOS != "linux" {
 		add(blocking("HOST_OS_UNSUPPORTED", "private-vm requires Linux.", "Run on a supported NixOS, Fedora, Ubuntu, or Debian host."))
@@ -62,6 +75,9 @@ func (d Doctor) Run() Report {
 	}
 	paths := make(map[string]string, len(required))
 	for _, item := range required {
+		if ctx.Err() != nil {
+			return report
+		}
 		path, err := exec.LookPath(item.name)
 		if err != nil {
 			add(blocking(item.code, fmt.Sprintf("Required command %q was not found.", item.name), "Install the complete private-vm host package or NixOS module."))
@@ -75,7 +91,7 @@ func (d Doctor) Run() Report {
 		paths[item.name] = absolute
 	}
 	if qemu := paths["qemu-system-x86_64"]; qemu != "" {
-		checkQEMU(add, qemu)
+		checkQEMU(ctx, add, qemu)
 	}
 
 	return report
@@ -231,8 +247,8 @@ func checkOrphans(add func(Diagnostic)) {
 	}
 }
 
-func checkQEMU(add func(Diagnostic), binary string) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+func checkQEMU(parent context.Context, add func(Diagnostic), binary string) {
+	ctx, cancel := context.WithTimeout(parent, 5*time.Second)
 	defer cancel()
 	version, err := boundedOutput(ctx, binary, "--version")
 	if err != nil || !strings.Contains(string(version), "QEMU emulator version") {

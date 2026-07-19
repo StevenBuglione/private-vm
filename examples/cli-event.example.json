@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "ok": true,
+  "code": "IMAGE_PULL_PROGRESS",
+  "sequence": 7,
+  "session_id": "pvm-11111111111111111111111111111111",
+  "data": {
+    "current": 64,
+    "total": 128,
+    "unit": "MiB"
+  }
+}
