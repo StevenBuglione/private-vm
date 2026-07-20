@@ -1,5 +1,9 @@
 # Operations and recovery runbook
 
+For initial installation, normal workflows and the ordered proof matrix, start
+with `docs/06-user-workflows.md` and `docs/43-verification-runbook.md`. This file
+covers failure recovery after an operation has already started.
+
 ## Session will not stop
 
 ```bash

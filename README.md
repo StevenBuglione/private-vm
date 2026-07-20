@@ -1,12 +1,17 @@
 # private-vm
 
-`private-vm` is a proposed open-source Linux tool for running disposable
+`private-vm` is an open-source Linux project for running disposable
 graphical workstations and a compartmentalized torrent-download, malware-scan,
 sanitization and USB-export workflow.
 
-This repository contains the frozen v1 specification and an implementation in
-progress. Completed boundaries are tested as they land; unfinished workflows
-continue to fail closed.
+The six implementation batches are consolidated on `main`. The codebase is
+still pre-release: completed boundaries are tested, while unimplemented adapters
+and unrun live/hardware gates continue to fail closed.
+
+Start with the [user guide](docs/06-user-workflows.md), then use the
+[verification runbook](docs/43-verification-runbook.md) to prove the exact
+checkout and target host. The [CLI reference](docs/07-cli-reference.md) is the
+canonical command, exit-code and machine-output contract.
 
 ## Read in this order
 
@@ -45,8 +50,8 @@ continue to fail closed.
 
 ## What is included
 
-- 40 numbered design, operations, and acceptance-evidence documents
-- 10 architecture decision records
+- numbered design, operations, implementation and acceptance-evidence documents
+- architecture decision records for every approved design change
 - complete v1 CLI and error catalog
 - host and guest protobuf contracts
 - versioned JSON schemas and example configurations
@@ -62,27 +67,32 @@ continue to fail closed.
 ## Local validation
 
 ```bash
-go test ./...
-go vet ./...
-python3 tools/validate_schemas.py
-go run ./cmd/private-vm version
+systemd-run --user --scope --quiet \
+  -p MemoryHigh=1536M -p MemoryMax=2G -p MemorySwapMax=0 \
+  nix develop --offline --command env GOMAXPROCS=2 GOMEMLIMIT=1536MiB \
+  go test -p=1 ./...
+
+nix develop --offline --command go run -p=1 ./cmd/private-vm version --json
 ```
 
-See [`VALIDATION.md`](VALIDATION.md) for what was and was not verified while
-creating this package.
+See the [verification runbook](docs/43-verification-runbook.md) for the complete
+memory-bounded gates. [`VALIDATION.md`](VALIDATION.md) is retained only as the
+historical handoff validation record.
 
 ## Important status
 
-This is not yet an operational security product. Configuration, diagnostics,
+This is not yet a released security product. Configuration, diagnostics,
 the authenticated host daemon, volatile session records, typed QEMU/QMP
 lifecycle, ephemeral storage primitives, authenticated role-restricted guest
 channels, role orchestration, VPN/torrent/scanner workflows, and exact-identity
 USB claim/prepare/export are implemented and covered by source, unit, and
-integration tests. The live image/KVM, real-Proton, physical-USB, reboot,
-remote-publication, clean-distribution package, host-installation, and complete
-acceptance gates remain in progress. Intentional fail-closed gaps, including
-encrypted-bundle workspace export and automatic doctor repair, remain reported
-as unsupported rather than simulated as successful.
+integration tests. Representative image TCG boots and isolated Linux networking
+have also passed locally. Real-Proton, physical-USB, advanced reboot recovery,
+protected publication, clean-distribution package and complete target-host
+acceptance remain open. The visible but unimplemented command adapters are
+listed explicitly in the user guide. Intentional gaps, including
+encrypted-bundle workspace export and automatic Doctor repair, report failure
+instead of simulating success.
 
 ## License
 

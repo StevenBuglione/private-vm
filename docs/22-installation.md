@@ -257,19 +257,25 @@ user exports are preserved and are not accepted as removal-plan inputs.
 
 ```bash
 private-vm doctor --strict
-private-vm images sync --role workstation --bundle basic
-private-vm vpn import
-private-vm usb enroll
+private-vm vpn import --from-file /absolute/private/path/profile.conf
+private-vm usb list --json
+private-vm usb enroll --device DEVICE_ID
 ```
+
+The image-management adapter is still fail-closed in the integrated pre-release
+tree. Until it is completed, build the exact flake image outputs documented in
+`docs/19-image-build.md`; do not treat `NOT_IMPLEMENTED` as a successful sync.
+USB enrollment requires the opaque discovery ID returned by `usb list` and a
+review of the full identity shown by `usb inspect`.
 
 ## Upgrade
 
-Package manager upgrade replaces binaries and units. Image updates are separate:
-
-```bash
-private-vm images sync
-private-vm images verify --all
-```
+Package manager upgrade replaces binaries and units. Image updates are separate.
+The integrated pre-release tree does not yet wire the image command adapter, so
+`images sync`, `images list` and `images verify REF` fail closed. After the
+adapter is completed, synchronize the required role/bundle and verify each
+immutable OCI reference separately. `images verify --all` is not a valid v1
+command.
 
 The daemon protocol must support a bounded compatibility window. Active sessions
 are never hot-upgraded.
