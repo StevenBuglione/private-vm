@@ -630,6 +630,27 @@ Cancellation and deadline failures preserve their typed context result; all
 other failures are redacted. These source tests do not claim that live namespace
 packet counters have run.
 
+The opt-in `verify-network-live` gate re-executes the test binary under
+unprivileged user, mount and network namespaces and mounts a private tmpfs on
+`/run`, so its nested `ip netns`, TUN and nftables objects cannot enter host
+networking. It uses the flake-pinned `ip`, `nft`, `sysctl` and `unshare` paths and
+the production Linux backend. The gate proves real namespace/veth/TAP creation,
+the exact IPv4 and IPv6 endpoint paths, DNS/LAN/metadata/unrelated-public drops,
+both live policy tables with zero second-boundary counters, cancellation,
+deadline propagation, repeated cleanup and exact final
+absence. It constructs fixed synthetic addresses directly and never constructs
+a VPN profile or WireGuard key. Output is bounded to the Go JSON stream plus one
+versioned boolean-only evidence record.
+
+The disposable outer namespace enables its own global IPv6 forwarding before
+the packet proof. The gate demonstrated that the current runtime's owned-veth
+setting alone is insufficient when outer `net.ipv6.conf.all.forwarding` is off.
+By contrast, it asserts that outer `net.ipv4.ip_forward` remains off while the
+current exact ingress-veth IPv4 forwarding setting passes the permitted packet.
+The installed host module and `doctor --strict` must therefore supply and verify
+that prerequisite, or a replacement ADR must redesign the outer forwarding
+boundary. This source gate does not prove that production-host prerequisite.
+
 NET-003 source tests prove that the guest kill switch is installed before any
 underlay/tunnel configuration, permits only `proton0`, the exact UDP endpoint
 and required neighbor discovery, and contains no clear-interface DNS or TCP
