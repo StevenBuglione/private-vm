@@ -111,6 +111,8 @@ in
       "kvm"
       "vhost_vsock"
       "tun"
+      "dm_mod"
+      "loop"
     ];
     # Linux requires the outer namespace's global IPv6 forwarding switch for
     # routed traffic even when the daemon enables forwarding on its owned

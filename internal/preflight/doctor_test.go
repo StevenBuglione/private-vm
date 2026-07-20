@@ -6,6 +6,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -47,6 +48,224 @@ func TestCheckIPv6Forwarding(t *testing.T) {
 				t.Fatalf("diagnostics = %#v", diagnostics)
 			}
 		})
+	}
+}
+
+func TestArchitectureAndKernelIdentityContract(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name       string
+		check      func(func(Diagnostic))
+		wantCode   string
+		wantStatus Severity
+	}{
+		{name: "amd64", check: func(add func(Diagnostic)) { checkArchitecture(add, "amd64") }, wantCode: "HOST_ARCH_X86_64", wantStatus: SeverityInfo},
+		{name: "arm64 outside v1", check: func(add func(Diagnostic)) { checkArchitecture(add, "arm64") }, wantCode: "HOST_ARCH_UNSUPPORTED", wantStatus: SeverityBlocking},
+		{name: "minimum kernel", check: func(add func(Diagnostic)) { checkKernelRelease(add, "6.6.0") }, wantCode: "KERNEL_VERSION_SUPPORTED", wantStatus: SeverityInfo},
+		{name: "new kernel suffix", check: func(add func(Diagnostic)) { checkKernelRelease(add, "6.18.12-custom") }, wantCode: "KERNEL_VERSION_SUPPORTED", wantStatus: SeverityInfo},
+		{name: "old kernel", check: func(add func(Diagnostic)) { checkKernelRelease(add, "6.5.19") }, wantCode: "KERNEL_UNSUPPORTED", wantStatus: SeverityBlocking},
+		{name: "malformed kernel", check: func(add func(Diagnostic)) { checkKernelRelease(add, "private") }, wantCode: "KERNEL_STATUS_UNKNOWN", wantStatus: SeverityBlocking},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			var diagnostic Diagnostic
+			test.check(func(value Diagnostic) { diagnostic = value })
+			if diagnostic.Code != test.wantCode || diagnostic.Severity != test.wantStatus {
+				t.Fatalf("diagnostic = %#v", diagnostic)
+			}
+		})
+	}
+}
+
+func TestNetworkNamespaceIdentityIsReadOnlyAndStrict(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	valid := filepath.Join(root, "valid")
+	if err := os.Symlink("net:[4026531840]", valid); err != nil {
+		t.Fatal(err)
+	}
+	invalid := filepath.Join(root, "invalid")
+	if err := os.WriteFile(invalid, []byte("net:[1]"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, test := range []struct {
+		name, path, code string
+		severity         Severity
+	}{
+		{name: "valid", path: valid, code: "NETNS_PRESENT", severity: SeverityInfo},
+		{name: "regular file", path: invalid, code: "NETNS_UNAVAILABLE", severity: SeverityBlocking},
+		{name: "missing", path: filepath.Join(root, "missing"), code: "NETNS_UNAVAILABLE", severity: SeverityBlocking},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			var diagnostic Diagnostic
+			checkNetworkNamespace(func(value Diagnostic) { diagnostic = value }, test.path)
+			if diagnostic.Code != test.code || diagnostic.Severity != test.severity {
+				t.Fatalf("diagnostic = %#v", diagnostic)
+			}
+		})
+	}
+}
+
+func TestControlDeviceAndSparseFilesystemEvidence(t *testing.T) {
+	t.Parallel()
+	if !isCharacterDevice(os.ModeDevice|os.ModeCharDevice|0o600) || isCharacterDevice(os.ModeDevice|0o600) || isCharacterDevice(0o600) {
+		t.Fatal("character-device mode classifier drifted")
+	}
+	for _, filesystemType := range []int64{extFilesystemMagic, btrfsMagic, xfsMagic, tmpfsMagic} {
+		if !knownSparseFilesystem(filesystemType) {
+			t.Fatalf("reviewed sparse filesystem %#x rejected", filesystemType)
+		}
+	}
+	if knownSparseFilesystem(0x12345678) {
+		t.Fatal("unknown filesystem guessed sparse-capable")
+	}
+}
+
+func TestHostToolProbesUseOnlyBoundedReadOnlyOperations(t *testing.T) {
+	t.Parallel()
+	paths := make(map[string]string, len(hostToolProbes))
+	outputs := make(map[string][]byte, len(hostToolProbes))
+	for _, probe := range hostToolProbes {
+		path := "/tools/" + probe.name
+		paths[probe.name] = path
+		outputs[path] = []byte(probe.markers[0] + " 1.0\n")
+	}
+	var calls [][]string
+	run := func(_ context.Context, executable string, arguments ...string) ([]byte, error) {
+		call := append([]string{executable}, arguments...)
+		calls = append(calls, call)
+		if executable == paths["ip"] && len(arguments) == 2 && arguments[0] == "netns" && arguments[1] == "list" {
+			return nil, nil
+		}
+		return append([]byte(nil), outputs[executable]...), nil
+	}
+	var diagnostics []Diagnostic
+	checkHostToolCapabilities(t.Context(), func(value Diagnostic) { diagnostics = append(diagnostics, value) }, paths, run)
+	if len(diagnostics) != len(hostToolProbes) || len(calls) != len(hostToolProbes)+1 {
+		t.Fatalf("diagnostics=%#v calls=%#v", diagnostics, calls)
+	}
+	for _, diagnostic := range diagnostics {
+		if diagnostic.Severity != SeverityInfo {
+			t.Fatalf("diagnostic = %#v", diagnostic)
+		}
+	}
+	allowed := map[string]bool{
+		"nft --version": true, "ip -Version": true, "ip netns list": true,
+		"cryptsetup --version": true, "losetup --version": true,
+		"mkfs.ext4 -V": true, "remote-viewer --version": true,
+		"usbguard --version": true,
+	}
+	for _, call := range calls {
+		key := filepath.Base(call[0])
+		for _, argument := range call[1:] {
+			key += " " + argument
+		}
+		if !allowed[key] {
+			t.Fatalf("mutating or unreviewed probe invoked: %q", key)
+		}
+		delete(allowed, key)
+	}
+	if len(allowed) != 0 {
+		t.Fatalf("required probes were skipped: %#v", allowed)
+	}
+}
+
+func TestHostToolProbeClearsCapturedOutput(t *testing.T) {
+	t.Parallel()
+	output := []byte("nftables v1.1.6\n")
+	probe := hostToolProbe{arguments: []string{"--version"}, markers: []string{"nftables"}}
+	if !runHostToolProbe(t.Context(), "/tools/nft", probe, func(context.Context, string, ...string) ([]byte, error) {
+		return output, nil
+	}) {
+		t.Fatal("valid bounded probe was rejected")
+	}
+	for index, value := range output {
+		if value != 0 {
+			t.Fatalf("captured output byte %d was not cleared", index)
+		}
+	}
+}
+
+func TestHostToolProbeFailuresAreBlockingAndRedacted(t *testing.T) {
+	t.Parallel()
+	paths := map[string]string{"nft": "/tools/nft"}
+	var diagnostics []Diagnostic
+	checkHostToolCapabilities(t.Context(), func(value Diagnostic) { diagnostics = append(diagnostics, value) }, paths,
+		func(context.Context, string, ...string) ([]byte, error) {
+			return []byte("private raw output"), errors.New("failed")
+		})
+	if len(diagnostics) != 1 || diagnostics[0].Code != "NFTABLES_UNSUPPORTED" || diagnostics[0].Severity != SeverityBlocking ||
+		strings.Contains(diagnostics[0].Summary, "private") || strings.Contains(diagnostics[0].Summary, "raw output") {
+		t.Fatalf("diagnostics = %#v", diagnostics)
+	}
+}
+
+func TestQEMUAcceptsIntentionalSpiceHelpExitAndRequiresUnixSecurityOptions(t *testing.T) {
+	t.Parallel()
+	outputs := map[string][]byte{
+		"--version":     []byte("QEMU emulator version 10.2.4\n"),
+		"-machine help": []byte("q35 Standard PC\n"),
+		"-device help":  []byte("vhost-vsock virtio-net virtio-blk usb-host\n"),
+		"-spice help":   []byte("spice options:\n  unix=<bool>\n  disable-copy-paste=<bool>\n  disable-agent-file-xfer=<bool>\n"),
+	}
+	run := func(_ context.Context, _ string, arguments ...string) ([]byte, error) {
+		key := strings.Join(arguments, " ")
+		if key == "-spice help" {
+			return append([]byte(nil), outputs[key]...), errors.New("QEMU help exit status 1")
+		}
+		return append([]byte(nil), outputs[key]...), nil
+	}
+	var diagnostics []Diagnostic
+	checkQEMUWithRunner(t.Context(), func(value Diagnostic) { diagnostics = append(diagnostics, value) }, "/tools/qemu-system-x86_64", run)
+	if len(diagnostics) != 1 || diagnostics[0].Code != "QEMU_FEATURES_VERIFIED" || diagnostics[0].Severity != SeverityInfo {
+		t.Fatalf("diagnostics = %#v", diagnostics)
+	}
+
+	outputs["-spice help"] = []byte("spice options:\n  port=<num>\n")
+	diagnostics = nil
+	checkQEMUWithRunner(t.Context(), func(value Diagnostic) { diagnostics = append(diagnostics, value) }, "/tools/qemu-system-x86_64", run)
+	if len(diagnostics) != 1 || diagnostics[0].Code != "QEMU_UNSUPPORTED" || diagnostics[0].Severity != SeverityBlocking {
+		t.Fatalf("missing Unix SPICE controls diagnostics = %#v", diagnostics)
+	}
+}
+
+func TestQEMUProbeClearsCapturedOutput(t *testing.T) {
+	t.Parallel()
+	outputs := map[string][]byte{
+		"--version":     []byte("QEMU emulator version 10.2.4\n"),
+		"-machine help": []byte("q35 Standard PC\n"),
+		"-device help":  []byte("vhost-vsock virtio-net virtio-blk usb-host\n"),
+		"-spice help":   []byte("spice options:\n  unix=<bool>\n  disable-copy-paste=<bool>\n  disable-agent-file-xfer=<bool>\n"),
+	}
+	checkQEMUWithRunner(t.Context(), func(Diagnostic) {}, "/tools/qemu-system-x86_64",
+		func(_ context.Context, _ string, arguments ...string) ([]byte, error) {
+			return outputs[strings.Join(arguments, " ")], nil
+		})
+	for name, output := range outputs {
+		for index, value := range output {
+			if value != 0 {
+				t.Fatalf("%s captured output byte %d was not cleared", name, index)
+			}
+		}
+	}
+}
+
+func TestQEMUVersionFloorIsNinePointTwo(t *testing.T) {
+	t.Parallel()
+	for _, test := range []struct {
+		version string
+		want    bool
+	}{
+		{version: "QEMU emulator version 9.1.9", want: false},
+		{version: "QEMU emulator version 9.2.0", want: true},
+		{version: "QEMU emulator version 10.2.4", want: true},
+		{version: "QEMU emulator version 9", want: false},
+		{version: "unexpected", want: false},
+	} {
+		if got := supportedQEMUVersion(test.version); got != test.want {
+			t.Fatalf("supportedQEMUVersion(%q)=%t want %t", test.version, got, test.want)
+		}
 	}
 }
 

@@ -63,6 +63,7 @@ The module:
 - creates the `private-vm` group
 - enables the systemd daemon service, which creates the Unix control socket
 - creates runtime/state directories
+- loads the KVM, VSOCK, TUN, device-mapper and loop kernel modules
 - enables Polkit, installs `pkcheck`, and installs only the
   `org.private-vm.usb.prepare` action
 - configures tmpfiles
@@ -115,6 +116,13 @@ must install an equivalent static sysctl fragment and activate it through the
 distribution's normal mechanism or a reboot before starting the daemon. Doctor
 reports a blocking diagnostic until the kernel value is exactly `1`; the daemon
 does not change this global setting dynamically.
+
+Strict Doctor verifies the x86_64/6.6-or-newer kernel contract, the current
+network namespace, device-mapper and loop control-node metadata, bounded host
+tool versions and the scratch filesystem's reviewed sparse-file semantics. It
+does not open root-only control nodes, list the nftables ruleset or create a
+probe file. An unknown scratch filesystem is therefore blocking; use ext4,
+XFS, Btrfs or tmpfs rather than overriding the result.
 
 The daemon configuration is `/etc/private-vm/config.toml`. It must be a
 root-owned regular local file with no group/world write or executable bits; the

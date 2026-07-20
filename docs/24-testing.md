@@ -376,6 +376,19 @@ The targets enforce the decoder's 1 MiB journal bound or a 64 KiB QMP fuzz
 input bound and exercise strict unknown-field, trailing-document, message-shape
 and legal-transition validation without launching external processes.
 
+Doctor unit tests cover the exact x86_64 and Linux 6.6 minimum, malformed and
+old kernel identities, network-namespace symlink validation, character-device
+classification and the closed ext4/XFS/Btrfs/tmpfs sparse-capability allowlist.
+A fake runner records every host-tool invocation and rejects drift outside
+`--version`, `mkfs.ext4 -V`, `ip -Version` and `ip netns list`; failure output
+is not projected into diagnostics. QEMU fixtures prove the intentional nonzero
+`-spice help` status is accepted only with Unix-socket, clipboard-disable and
+file-transfer-disable controls. The focused race gate is:
+
+```bash
+GOMAXPROCS=2 go test -race -p=1 ./internal/preflight
+```
+
 ### Volatile-secret evidence
 
 Linux tests verify the memfd mode, required seals, `FD_CLOEXEC`, read-only

@@ -18,8 +18,11 @@ import (
 )
 
 const (
-	commandProbeLimit = 4 << 20
-	tmpfsMagic        = 0x01021994
+	commandProbeLimit  = 4 << 20
+	tmpfsMagic         = 0x01021994
+	extFilesystemMagic = 0x0000ef53
+	btrfsMagic         = 0x9123683e
+	xfsMagic           = 0x58465342
 )
 
 type Doctor struct {
@@ -70,9 +73,13 @@ func (d Doctor) RunContext(ctx context.Context) Report {
 		return report
 	}
 	add(info("HOST_OS_LINUX", "Linux host detected."))
+	checkHostIdentity(add)
 
 	checkFile(add, "/run/systemd/system", "SYSTEMD_REQUIRED", "systemd is not running.", "Boot the host with systemd as PID 1.")
 	checkFile(add, "/sys/fs/cgroup/cgroup.controllers", "CGROUP_V2_REQUIRED", "cgroups v2 is unavailable.", "Enable the unified cgroups v2 hierarchy.")
+	checkNetworkNamespace(add, "/proc/self/ns/net")
+	checkControlDevice(add, "/dev/mapper/control", "DEVICE_MAPPER_UNAVAILABLE", "DEVICE_MAPPER_CONTROL_PRESENT", "Load dm_mod and expose the device-mapper control node.")
+	checkControlDevice(add, "/dev/loop-control", "LOOP_CONTROL_UNAVAILABLE", "LOOP_CONTROL_PRESENT", "Load the loop module and expose /dev/loop-control.")
 	checkDevice(add, "/dev/kvm", true, "KVM_UNAVAILABLE", "KVM_PERMISSION_DENIED")
 	checkDevice(add, "/dev/net/tun", true, "TUN_UNAVAILABLE", "TUN_PERMISSION_DENIED")
 	checkDevice(add, "/dev/vhost-vsock", false, "VSOCK_UNAVAILABLE", "VSOCK_PERMISSION_DENIED")
@@ -81,6 +88,7 @@ func (d Doctor) RunContext(ctx context.Context) Report {
 	checkSwapAndResume(add)
 	checkRootEncryption(add)
 	checkCapacity(add)
+	checkSparseCapability(add, "/var/lib/private-vm/scratch")
 	checkOrphans(add)
 
 	required := []struct {
@@ -90,7 +98,7 @@ func (d Doctor) RunContext(ctx context.Context) Report {
 		{"qemu-system-x86_64", "QEMU_UNSUPPORTED"}, {"qemu-img", "QEMU_IMG_MISSING"},
 		{"cryptsetup", "CRYPTSETUP_MISSING"}, {"nft", "NFTABLES_MISSING"}, {"ip", "IPROUTE2_MISSING"},
 		{"mkfs.ext4", "EXT4_TOOLS_MISSING"}, {"remote-viewer", "SPICE_VIEWER_MISSING"}, {"usbguard", "USBGUARD_MISSING"},
-		{"pkcheck", "POLKIT_CHECK_MISSING"},
+		{"pkcheck", "POLKIT_CHECK_MISSING"}, {"losetup", "LOSETUP_MISSING"},
 	}
 	paths := make(map[string]string, len(required))
 	for _, item := range required {
@@ -112,9 +120,168 @@ func (d Doctor) RunContext(ctx context.Context) Report {
 	if qemu := paths["qemu-system-x86_64"]; qemu != "" {
 		checkQEMU(ctx, add, qemu)
 	}
+	checkHostToolCapabilities(ctx, add, paths, boundedOutput)
 	checkInstalledIntegration(ctx, d.Strict, add, d.installation)
 
 	return report
+}
+
+func checkHostIdentity(add func(Diagnostic)) {
+	checkArchitecture(add, runtime.GOARCH)
+	var identity unix.Utsname
+	if err := unix.Uname(&identity); err != nil {
+		add(blocking("KERNEL_STATUS_UNKNOWN", "The running Linux kernel identity could not be inspected.", "Boot a supported Linux kernel and make uname information available."))
+		return
+	}
+	checkKernelRelease(add, unix.ByteSliceToString(identity.Release[:]))
+}
+
+func checkArchitecture(add func(Diagnostic), architecture string) {
+	if architecture != "amd64" {
+		add(blocking("HOST_ARCH_UNSUPPORTED", "The host architecture is outside the frozen v1 runtime contract.", "Use x86_64 Linux for private-vm v1."))
+		return
+	}
+	add(info("HOST_ARCH_X86_64", "The host architecture is x86_64."))
+}
+
+func checkKernelRelease(add func(Diagnostic), release string) {
+	base := strings.SplitN(strings.TrimSpace(release), "-", 2)[0]
+	parts := strings.Split(base, ".")
+	if len(parts) < 2 {
+		add(blocking("KERNEL_STATUS_UNKNOWN", "The running Linux kernel version could not be parsed.", "Use Linux kernel 6.6 or newer with a canonical release identifier."))
+		return
+	}
+	major, majorErr := strconv.Atoi(parts[0])
+	minor, minorErr := strconv.Atoi(parts[1])
+	if majorErr != nil || minorErr != nil || major < 0 || minor < 0 {
+		add(blocking("KERNEL_STATUS_UNKNOWN", "The running Linux kernel version could not be parsed.", "Use Linux kernel 6.6 or newer with a canonical release identifier."))
+		return
+	}
+	if major < 6 || major == 6 && minor < 6 {
+		add(blocking("KERNEL_UNSUPPORTED", "The running Linux kernel is older than 6.6.", "Boot Linux kernel 6.6 or newer."))
+		return
+	}
+	add(info("KERNEL_VERSION_SUPPORTED", "The running Linux kernel is version 6.6 or newer."))
+}
+
+func checkNetworkNamespace(add func(Diagnostic), path string) {
+	metadata, err := os.Lstat(path)
+	if err != nil || metadata.Mode()&os.ModeSymlink == 0 {
+		add(blocking("NETNS_UNAVAILABLE", "The current process network namespace identity is unavailable.", "Enable Linux network namespaces and expose /proc/self/ns/net."))
+		return
+	}
+	target, err := os.Readlink(path)
+	if err != nil || !strings.HasPrefix(target, "net:[") || !strings.HasSuffix(target, "]") {
+		add(blocking("NETNS_UNAVAILABLE", "The current process network namespace identity is invalid.", "Enable Linux network namespaces and expose /proc/self/ns/net."))
+		return
+	}
+	identifier := strings.TrimSuffix(strings.TrimPrefix(target, "net:["), "]")
+	value, err := strconv.ParseUint(identifier, 10, 64)
+	if err != nil || value == 0 {
+		add(blocking("NETNS_UNAVAILABLE", "The current process network namespace identity is invalid.", "Enable Linux network namespaces and expose /proc/self/ns/net."))
+		return
+	}
+	add(info("NETNS_PRESENT", "The current process has a Linux network namespace identity."))
+}
+
+func checkControlDevice(add func(Diagnostic), path, failureCode, successCode, remediation string) {
+	metadata, err := os.Stat(path)
+	if err != nil || !isCharacterDevice(metadata.Mode()) {
+		add(blocking(failureCode, path+" is not an available character-device control node.", remediation))
+		return
+	}
+	add(info(successCode, path+" is an available character-device control node."))
+}
+
+func isCharacterDevice(mode os.FileMode) bool {
+	return mode&os.ModeDevice != 0 && mode&os.ModeCharDevice != 0
+}
+
+type hostToolProbe struct {
+	name        string
+	arguments   []string
+	markers     []string
+	failureCode string
+	successCode string
+}
+
+var hostToolProbes = []hostToolProbe{
+	{name: "nft", arguments: []string{"--version"}, markers: []string{"nftables"}, failureCode: "NFTABLES_UNSUPPORTED", successCode: "NFTABLES_CAPABILITY_VERIFIED"},
+	{name: "ip", arguments: []string{"-Version"}, markers: []string{"ip utility", "iproute2"}, failureCode: "IPROUTE2_UNSUPPORTED", successCode: "IPROUTE2_CAPABILITY_VERIFIED"},
+	{name: "cryptsetup", arguments: []string{"--version"}, markers: []string{"cryptsetup"}, failureCode: "CRYPTSETUP_UNSUPPORTED", successCode: "CRYPTSETUP_CAPABILITY_VERIFIED"},
+	{name: "losetup", arguments: []string{"--version"}, markers: []string{"losetup"}, failureCode: "LOSETUP_UNSUPPORTED", successCode: "LOSETUP_CAPABILITY_VERIFIED"},
+	{name: "mkfs.ext4", arguments: []string{"-V"}, markers: []string{"mke2fs"}, failureCode: "EXT4_TOOLS_UNSUPPORTED", successCode: "EXT4_TOOLS_CAPABILITY_VERIFIED"},
+	{name: "remote-viewer", arguments: []string{"--version"}, markers: []string{"remote viewer", "remote-viewer", "virt-viewer"}, failureCode: "SPICE_VIEWER_UNSUPPORTED", successCode: "SPICE_VIEWER_CAPABILITY_VERIFIED"},
+	{name: "usbguard", arguments: []string{"--version"}, markers: []string{"usbguard"}, failureCode: "USBGUARD_UNSUPPORTED", successCode: "USBGUARD_CAPABILITY_VERIFIED"},
+}
+
+func checkHostToolCapabilities(ctx context.Context, add func(Diagnostic), paths map[string]string, run probeCommand) {
+	for _, probe := range hostToolProbes {
+		if ctx.Err() != nil {
+			return
+		}
+		binary := paths[probe.name]
+		if binary == "" {
+			continue
+		}
+		if !runHostToolProbe(ctx, binary, probe, run) {
+			add(blocking(probe.failureCode, "A required host tool failed its bounded read-only capability probe.", "Install the complete supported "+probe.name+" package and retry."))
+			continue
+		}
+		if probe.name == "ip" {
+			operation, cancel := context.WithTimeout(ctx, 3*time.Second)
+			output, err := run(operation, binary, "netns", "list")
+			cancel()
+			clear(output)
+			if err != nil {
+				add(blocking(probe.failureCode, "iproute2 cannot inspect Linux network namespaces.", "Install iproute2 with network-namespace support and retry."))
+				continue
+			}
+		}
+		add(info(probe.successCode, "The required host tool passed its bounded read-only capability probe."))
+	}
+}
+
+func runHostToolProbe(ctx context.Context, binary string, probe hostToolProbe, run probeCommand) bool {
+	operation, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+	output, err := run(operation, binary, probe.arguments...)
+	if err != nil {
+		clear(output)
+		return false
+	}
+	matched := false
+	for _, marker := range probe.markers {
+		if containsASCIIFold(output, marker) {
+			matched = true
+			break
+		}
+	}
+	clear(output)
+	return matched
+}
+
+func containsASCIIFold(data []byte, lowercaseMarker string) bool {
+	if len(lowercaseMarker) == 0 || len(data) < len(lowercaseMarker) {
+		return false
+	}
+	for start := 0; start <= len(data)-len(lowercaseMarker); start++ {
+		matched := true
+		for offset := 0; offset < len(lowercaseMarker); offset++ {
+			value := data[start+offset]
+			if value >= 'A' && value <= 'Z' {
+				value += 'a' - 'A'
+			}
+			if value != lowercaseMarker[offset] {
+				matched = false
+				break
+			}
+		}
+		if matched {
+			return true
+		}
+	}
+	return false
 }
 
 func defaultInstallationProbe() *installationProbe {
@@ -177,7 +344,9 @@ func checkInstalledIntegration(ctx context.Context, strict bool, add func(Diagno
 func checkActiveUnit(ctx context.Context, strict bool, add func(Diagnostic), run probeCommand, systemctl, unit, failureCode, successCode string) {
 	operation, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	if _, err := run(operation, systemctl, "is-active", "--quiet", unit); err != nil {
+	output, err := run(operation, systemctl, "is-active", "--quiet", unit)
+	clear(output)
+	if err != nil {
 		add(integrationFailure(strict, failureCode, "A required installed host service is inactive.", "Enable and start "+unit+", then rerun Doctor."))
 		return
 	}
@@ -390,6 +559,33 @@ func checkCapacity(add func(Diagnostic)) {
 	}
 }
 
+// checkSparseCapability derives read-only evidence from the filesystem type.
+// Doctor intentionally does not create a probe file in scratch: even a
+// temporary write would violate its no-mutation contract. Unknown filesystem
+// types therefore fail closed instead of being guessed sparse-capable.
+func checkSparseCapability(add func(Diagnostic), path string) {
+	path = nearestExisting(path)
+	var stat unix.Statfs_t
+	if err := unix.Statfs(path, &stat); err != nil {
+		add(blocking("SPARSE_FILE_SUPPORT_UNKNOWN", "Scratch sparse-file capability could not be inspected without mutation.", "Place scratch on ext4, XFS, Btrfs or tmpfs and retry."))
+		return
+	}
+	if !knownSparseFilesystem(stat.Type) {
+		add(blocking("SPARSE_FILE_SUPPORT_UNKNOWN", "The scratch filesystem is not in the read-only sparse-capability allowlist.", "Place scratch on ext4, XFS, Btrfs or tmpfs; Doctor never writes a probe file."))
+		return
+	}
+	add(info("SPARSE_FILE_SUPPORT_VERIFIED", "The scratch filesystem type has reviewed sparse-file semantics."))
+}
+
+func knownSparseFilesystem(filesystemType int64) bool {
+	switch filesystemType {
+	case extFilesystemMagic, btrfsMagic, xfsMagic, tmpfsMagic:
+		return true
+	default:
+		return false
+	}
+}
+
 func nearestExisting(path string) string {
 	for {
 		if _, err := os.Stat(path); err == nil {
@@ -427,42 +623,65 @@ func checkOrphans(add func(Diagnostic)) {
 }
 
 func checkQEMU(parent context.Context, add func(Diagnostic), binary string) {
+	checkQEMUWithRunner(parent, add, binary, boundedOutput)
+}
+
+func checkQEMUWithRunner(parent context.Context, add func(Diagnostic), binary string, run probeCommand) {
 	ctx, cancel := context.WithTimeout(parent, 5*time.Second)
 	defer cancel()
-	version, err := boundedOutput(ctx, binary, "--version")
+	version, err := run(ctx, binary, "--version")
 	if err != nil || !strings.Contains(string(version), "QEMU emulator version") {
+		clear(version)
 		add(blocking("QEMU_UNSUPPORTED", "QEMU version probing failed.", "Install QEMU 9.2 or newer with SPICE and VSOCK support."))
 		return
 	}
-	fields := strings.Fields(string(version))
-	versionOK := false
-	for i, field := range fields {
-		if field == "version" && i+1 < len(fields) {
-			parts := strings.Split(fields[i+1], ".")
-			major, _ := strconv.Atoi(parts[0])
-			versionOK = major >= 9
-			break
-		}
-	}
-	if !versionOK {
+	versionSupported := supportedQEMUVersion(string(version))
+	clear(version)
+	if !versionSupported {
 		add(blocking("QEMU_UNSUPPORTED", "QEMU is older than 9.2.", "Install a supported QEMU release."))
 		return
 	}
-	machines, machineErr := boundedOutput(ctx, binary, "-machine", "help")
-	devices, deviceErr := boundedOutput(ctx, binary, "-device", "help")
-	spice, spiceErr := boundedOutput(ctx, binary, "-spice", "help")
-	all := string(machines) + string(devices) + string(spice)
-	for _, feature := range []string{"q35", "vhost-vsock", "virtio-net", "virtio-blk", "usb-host", "spice"} {
-		if !strings.Contains(strings.ToLower(all), feature) {
-			add(blocking("QEMU_UNSUPPORTED", "QEMU is missing required feature "+feature+".", "Install QEMU with KVM, SPICE, VSOCK, VirtIO and USB host support."))
-			return
+	machines, machineErr := run(ctx, binary, "-machine", "help")
+	devices, deviceErr := run(ctx, binary, "-device", "help")
+	spice, _ := run(ctx, binary, "-spice", "help")
+	featuresPresent := true
+	for _, feature := range []string{"q35", "vhost-vsock", "virtio-net", "virtio-blk", "usb-host"} {
+		if !containsASCIIFold(machines, feature) && !containsASCIIFold(devices, feature) {
+			featuresPresent = false
+			break
 		}
 	}
-	if machineErr != nil || deviceErr != nil || spiceErr != nil {
+	spicePresent := containsASCIIFold(spice, "spice options:") && containsASCIIFold(spice, "unix=<") &&
+		containsASCIIFold(spice, "disable-copy-paste=<") && containsASCIIFold(spice, "disable-agent-file-xfer=<")
+	clear(machines)
+	clear(devices)
+	clear(spice)
+	if !featuresPresent {
+		add(blocking("QEMU_UNSUPPORTED", "QEMU is missing a required q35, VSOCK, VirtIO or USB-host feature.", "Install QEMU with KVM, SPICE, VSOCK, VirtIO and USB host support."))
+		return
+	}
+	if machineErr != nil || deviceErr != nil || !spicePresent {
 		add(blocking("QEMU_UNSUPPORTED", "QEMU feature probing returned an error.", "Install the complete supported QEMU package."))
 		return
 	}
 	add(info("QEMU_FEATURES_VERIFIED", "QEMU version and required features are present."))
+}
+
+func supportedQEMUVersion(output string) bool {
+	fields := strings.Fields(output)
+	for index, field := range fields {
+		if field != "version" || index+1 >= len(fields) {
+			continue
+		}
+		parts := strings.Split(fields[index+1], ".")
+		if len(parts) < 2 {
+			return false
+		}
+		major, majorErr := strconv.Atoi(parts[0])
+		minor, minorErr := strconv.Atoi(parts[1])
+		return majorErr == nil && minorErr == nil && (major > 9 || major == 9 && minor >= 2)
+	}
+	return false
 }
 
 func boundedOutput(ctx context.Context, binary string, args ...string) ([]byte, error) {

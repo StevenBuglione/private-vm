@@ -1167,6 +1167,13 @@
         assert builtins.elem "pvm-custom" host.config.users.users.pvm-test-user.extraGroups;
         assert builtins.length integrations == 1;
         assert builtins.elem (builtins.head integrations) host.config.services.udev.packages;
+        assert nixpkgs.lib.all (module: builtins.elem module host.config.boot.kernelModules) [
+          "kvm"
+          "vhost_vsock"
+          "tun"
+          "dm_mod"
+          "loop"
+        ];
         assert host.config.boot.kernel.sysctl."net.ipv6.conf.all.forwarding" == 1;
         assert host.config.services.usbguard.enable;
         assert host.config.services.usbguard.implicitPolicyTarget == "block";
@@ -1186,6 +1193,7 @@
             runtime_mode = service.serviceConfig.RuntimeDirectoryMode;
             state_mode = service.serviceConfig.StateDirectoryMode;
             authorized_users = host.config.services.private-vm.authorizedUsers;
+            kernel_modules = host.config.boot.kernelModules;
             usbguard_present_policy = host.config.services.usbguard.presentDevicePolicy;
             usbguard_inserted_policy = host.config.services.usbguard.insertedDevicePolicy;
             usbguard_restore_controller_state = host.config.services.usbguard.restoreControllerDeviceState;

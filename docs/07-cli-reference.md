@@ -108,6 +108,20 @@ the always-blocking kernel, device, swap, resume, capacity, networking or image
 checks. An unencrypted host root remains an explicit defense-in-depth warning
 because writable session state is independently tmpfs-backed or encrypted.
 
+Doctor also requires x86_64, Linux 6.6 or newer, a valid current network
+namespace, device-mapper and loop control character devices, and a reviewed
+sparse-capable scratch filesystem. Its external capability probes are limited
+to fixed version arguments and `ip netns list`; output is bounded, discarded
+from diagnostics and never includes an nftables ruleset. It does not open the
+root-only device-mapper or loop control nodes and does not create a sparse test
+file.
+
+QEMU probing requires q35, VSOCK, VirtIO block/network and USB-host device help,
+plus SPICE help containing Unix-socket, clipboard-disable and file-transfer
+disable controls. Supported QEMU releases intentionally return a nonzero status
+for `-spice help`; Doctor accepts that status only when the complete bounded
+capability output is present.
+
 The read-only report blocks online-role planning when
 `net.ipv6.conf.all.forwarding` is not exactly `1`. The NixOS module declares
 this prerequisite; distribution packages must install an equivalent sysctl
