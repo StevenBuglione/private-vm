@@ -192,6 +192,28 @@ func (p *Process) PID() int { return p.identity.PID }
 
 func (p *Process) Identity() ProcessIdentity { return p.identity }
 
+// AttachUSB and DetachUSB expose only the typed exporter hotplug operations;
+// the QMP client and its generic command path remain private to this package.
+func (p *Process) AttachUSB(ctx context.Context, bus, address uint8) error {
+	p.qmpMu.Lock()
+	client := p.qmp
+	p.qmpMu.Unlock()
+	if client == nil {
+		return errors.New("QMP USB attach is unavailable")
+	}
+	return client.AttachUSB(ctx, bus, address)
+}
+
+func (p *Process) DetachUSB(ctx context.Context) error {
+	p.qmpMu.Lock()
+	client := p.qmp
+	p.qmpMu.Unlock()
+	if client == nil {
+		return errors.New("QMP USB detach is unavailable")
+	}
+	return client.DetachUSB(ctx)
+}
+
 func (p *Process) Wait(ctx context.Context) error {
 	select {
 	case <-p.waitDone:

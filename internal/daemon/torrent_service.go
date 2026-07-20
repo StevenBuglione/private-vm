@@ -27,7 +27,7 @@ const (
 type TorrentOrchestrator interface {
 	Add(context.Context, session.Snapshot, torrent.InputKind, io.Reader) (*privatevmv1.TorrentMetadata, error)
 	Metadata(context.Context, session.Snapshot) (*privatevmv1.TorrentMetadata, error)
-	Select(context.Context, session.Snapshot, []uint32) (*privatevmv1.TorrentMetadata, error)
+	Select(context.Context, session.Snapshot, []uint32, torrent.Destination) (*privatevmv1.TorrentMetadata, error)
 	Start(context.Context, session.Snapshot, func(*privatevmv1.TorrentEvent) error) error
 	Pause(context.Context, session.Snapshot) (*privatevmv1.TorrentStatus, error)
 	Status(context.Context, session.Snapshot) (*privatevmv1.TorrentStatus, error)
@@ -123,13 +123,17 @@ func (s *Service) SelectTorrentFiles(ctx context.Context, request *privatevmv1.H
 	if s.Torrents == nil {
 		return nil, unimplemented("Authenticated torrent relay")
 	}
+	destination, err := torrentDestination(request.GetDestination())
+	if err != nil {
+		return nil, torrentServiceError(err)
+	}
 	lock := s.roleOperation(snapshot.ID)
 	lock.Lock()
 	defer lock.Unlock()
 	if snapshot.WorkflowState != "FILE_SELECTION_REQUIRED" {
 		return nil, torrentStateError("FILE_SELECTION_REQUIRED")
 	}
-	metadata, operationErr := s.Torrents.Select(ctx, snapshot, append([]uint32(nil), request.GetIndexes()...))
+	metadata, operationErr := s.Torrents.Select(ctx, snapshot, append([]uint32(nil), request.GetIndexes()...), destination)
 	if operationErr != nil {
 		return nil, torrentServiceError(operationErr)
 	}
@@ -140,6 +144,17 @@ func (s *Service) SelectTorrentFiles(ctx context.Context, request *privatevmv1.H
 		return nil, sessionError(err)
 	}
 	return metadata, nil
+}
+
+func torrentDestination(value privatevmv1.TorrentDestination) (torrent.Destination, error) {
+	switch value {
+	case privatevmv1.TorrentDestination_TORRENT_DESTINATION_WORKSTATION:
+		return torrent.DestinationWorkstation, nil
+	case privatevmv1.TorrentDestination_TORRENT_DESTINATION_USB:
+		return torrent.DestinationUSB, nil
+	default:
+		return "", torrent.ErrCapacityEvidence
+	}
 }
 
 func (s *Service) StartTorrentDownload(request *privatevmv1.TorrentControlRequest, stream privatevmv1.PrivateVMDaemonService_StartTorrentDownloadServer) error {
@@ -309,6 +324,8 @@ func torrentServiceError(err error) error {
 		grpcCode = codes.InvalidArgument
 	case errors.Is(err, torrent.ErrInputTooLarge), errors.Is(err, torrent.ErrCapacity):
 		grpcCode = codes.ResourceExhausted
+	case errors.Is(err, torrent.ErrCapacityEvidence):
+		grpcCode = codes.FailedPrecondition
 	case errors.Is(err, torrent.ErrCleanupIncomplete):
 		grpcCode = codes.Unavailable
 	}

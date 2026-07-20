@@ -9,8 +9,8 @@ were exercised by these low-memory tests.
 | `SCAN-001` | update/definition receipt and same-overlay offline transition | quarantine-present, absent network/VPN, stale/incomplete definitions, overlay mismatch and non-loopback offline interface reject |
 | `SCAN-002` | descriptor-relative inventory and identity-pinned reopen | hashes and MIME disagreement record; symlink, hardlink, FIFO, special file, replacement, cancellation and count/byte/path limit reject |
 | `SCAN-003` | bounded clamd Unix `INSTREAM` protocol | clean/malware/encrypted/skipped/limit/error/timeout verdicts parse strictly; changed sizes, oversized responses and incomplete streams reject; readers close |
-| `SCAN-004` | ZIP/TAR preflight, extraction and reinventory | absolute/traversal, symlink/hardlink, special, encrypted, nested and high-ratio fixtures reject; unprivileged tmpfs extraction cleans idempotently and will not delete a substituted path |
-| `SCAN-005` | reconstruction orchestration and volatile outputs | PDF and Office raster path, PNG/JPEG re-encode, media/text policy, output bounds, MIME/hash, structure verification, mandatory rescan, failure/cancellation cleanup and active/unsupported rejection |
+| `SCAN-004` | ZIP/TAR preflight, extraction and reinventory | absolute/traversal, symlink/hardlink, special, encrypted, nested and high-ratio fixtures reject; production guestd requires its exact service-private 512 MiB tmpfs, `nosuid,nodev,noexec`, a root-owned `0711` mount root and scanner-owned `0700` worker child before use; missing, malformed, ambiguous, unsafe and oversized evidence rejects; extraction cleans idempotently and will not delete a substituted path |
+| `SCAN-005` | reconstruction orchestration and volatile outputs | PDF all-page size/count evidence and Office raster path, PNG/JPEG re-encode, media/text policy, output bounds, MIME/hash, structure verification, mandatory rescan, failure/cancellation cleanup and active/unsupported rejection |
 | `SCAN-006` | strict canonical report plus volatile HMAC | complete approval verifies; tampering, wrong/destroyed key, incomplete phases, blocking verdicts, unrescanned output and noncanonical JSON reject |
 
 The scanner guest RPC integration adds a single serialized phase owner over
@@ -32,6 +32,15 @@ cover success, failure, cancellation, timeout and cleanup-audit failure.
 Local commands use `CGO_ENABLED=0`, `GOMAXPROCS=2` and `-p 1`. They use no VPN
 credential, magnet, torrent, public download or physical USB.
 
+The scanner image declares the scratch mount with systemd
+`TemporaryFileSystem`, so it exists only in guestd's mount namespace. A fixed
+privileged `ExecStartPre` creates only the worker-owned child; guestd remains
+unprivileged and cannot mount or resize it. Runtime verification runs both when
+the production service is composed and immediately before reconstruction. The
+3 GiB guestd and 2 GiB clamd per-service ceilings are each below the scanner
+VM's 4 GiB memory allocation; they are independent cgroup ceilings, not an
+additional memory reservation.
+
 Remaining system acceptance before these issues may be treated as fully closed:
 
 - boot the update scanner with Proton and no quarantine, run real `freshclam`,
@@ -40,9 +49,8 @@ Remaining system acceptance before these issues may be treated as fully closed:
   prove the guest mount and failed write;
 - run the pinned libmagic, ClamAV, Ghostscript/Poppler, LibreOffice and ffmpeg
   toolchain against the versioned hostile corpus;
-- compose the host scanner runtime with image-pinned storage/QEMU/QMP/VSOCK
-  providers and the guest image's retained-overlay receipt,
-  freshclam/libmagic/clamd/archive and reconstruction adapters;
-- prove the authenticated scanner promotion relay into a fresh workstation and
-  exporter end to end;
+- verify the private scratch mount, exact options, ownership and 512 MiB ceiling
+  from inside guestd's mount namespace in both booted scanner phases;
+- exercise the implemented authenticated scanner-to-fresh-workstation relay and
+  exporter path end to end in booted guests;
 - verify cleanup through scanner/QEMU death and daemon recovery.

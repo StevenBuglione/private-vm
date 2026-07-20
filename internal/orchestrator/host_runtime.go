@@ -138,10 +138,12 @@ func (stack *RuntimeStack) Start(ctx context.Context, request HostRuntimeRequest
 	}
 	resource.network = networkHandle
 	directories, err := createRuntimeSocketDirectories(stack.RuntimeRoot, request.Snapshot.ID)
+	if directories != nil {
+		resource.directories = directories
+	}
 	if err != nil {
 		return fail(err)
 	}
-	resource.directories = directories
 	lease, err := request.Storage.ActivateImages()
 	if err != nil {
 		return fail(err)
@@ -175,6 +177,16 @@ func (stack *RuntimeStack) Start(ctx context.Context, request HostRuntimeRequest
 	if networked == nil {
 		return fail(ErrHostRuntimeUnavailable)
 	}
+	if request.Snapshot.Role == session.RoleWorkstation {
+		display, err := startDisplayProxy(stack.RuntimeRoot, request.Snapshot.ID, request.Snapshot.OwnerUID, directories.SPICESocket())
+		if err != nil {
+			return fail(err)
+		}
+		resource.display = display
+		if err := networked.attachDisplay(display); err != nil {
+			return fail(err)
+		}
+	}
 	stack.Forget(request.Snapshot.ID)
 	return resource, nil
 }
@@ -189,6 +201,7 @@ type hostRuntimeResource struct {
 	capability  *guest.Token
 	network     *network.Handle
 	networked   *NetworkedRuntime
+	display     *displayProxy
 	images      qemu.RuntimeImageLease
 	directories *runtimeSocketDirectories
 }
@@ -199,6 +212,11 @@ func (resource *hostRuntimeResource) Stop(ctx context.Context, discard bool) err
 	}
 	resource.mu.Lock()
 	defer resource.mu.Unlock()
+	if resource.display != nil {
+		if err := resource.display.Stop(); err != nil {
+			return err
+		}
+	}
 	if resource.networked != nil {
 		if err := resource.networked.Stop(ctx, discard); err != nil {
 			return err
@@ -241,6 +259,9 @@ func (resource *hostRuntimeResource) Audit(ctx context.Context) error {
 	resource.mu.Lock()
 	defer resource.mu.Unlock()
 	var audits []error
+	if resource.display != nil {
+		audits = append(audits, resource.display.Audit())
+	}
 	if resource.networked != nil {
 		audits = append(audits, resource.networked.Audit(ctx))
 	} else if resource.capability != nil || resource.network != nil {
@@ -303,17 +324,29 @@ func runtimeQEMUSpec(binary string, request HostRuntimeRequest, cid uint32, dire
 
 type networkPolicyAuditor struct {
 	sessionID string
-	handle    *network.Handle
+	handle    networkPolicyAuditHandle
 }
 
-func (auditor networkPolicyAuditor) Verify(_ context.Context, sessionID string) (EgressProof, error) {
-	if auditor.handle == nil || sessionID != auditor.sessionID {
+type networkPolicyAuditHandle interface {
+	AuditPolicy(context.Context) (network.PolicyAudit, error)
+}
+
+func (auditor networkPolicyAuditor) Verify(ctx context.Context, sessionID string) (EgressProof, error) {
+	if ctx == nil || isNilLike(auditor.handle) || sessionID != auditor.sessionID {
 		return EgressProof{}, ErrNetworkedNotVerified
 	}
-	inspection := auditor.handle.Inspect()
-	ready := inspection.SchemaVersion == 1 && inspection.Ready && inspection.TAPReady &&
-		inspection.IPv4EndpointCount+inspection.IPv6EndpointCount > 0
-	return EgressProof{NamespacePolicyPresent: ready, HostPolicyPresent: ready, ForbiddenEgressZero: ready}, nil
+	proof, err := auditor.handle.AuditPolicy(ctx)
+	if err != nil {
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return EgressProof{}, err
+		}
+		return EgressProof{}, ErrNetworkedNotVerified
+	}
+	return EgressProof{
+		NamespacePolicyPresent: proof.NamespacePolicyPresent,
+		HostPolicyPresent:      proof.HostPolicyPresent,
+		ForbiddenEgressZero:    proof.ForbiddenEgressZero,
+	}, nil
 }
 
 type runtimeSocketDirectories struct {
@@ -345,13 +378,14 @@ func createRuntimeSocketDirectories(runtimeRoot, sessionID string) (*runtimeSock
 	}{{"qmp", &directories.qmp}, {"spice", &directories.spice}} {
 		path := filepath.Join(parent, item.name)
 		if err := os.Mkdir(path, 0o700); err != nil {
-			_ = directories.Cleanup()
-			return nil, err
+			return directories, errors.Join(err, directories.Cleanup())
 		}
+		// Retain at least the created locator before inspection so a failed
+		// identity read cannot be mistaken for successful cleanup.
+		item.destination.path = path
 		identity, err := inspectRuntimeDirectory(path)
 		if err != nil {
-			_ = directories.Cleanup()
-			return nil, err
+			return directories, errors.Join(err, directories.Cleanup())
 		}
 		*item.destination = identity
 	}

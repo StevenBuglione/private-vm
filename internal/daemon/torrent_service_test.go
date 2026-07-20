@@ -12,13 +12,15 @@ import (
 	"github.com/StevenBuglione/private-vm/internal/session"
 	"github.com/StevenBuglione/private-vm/internal/torrent"
 	"google.golang.org/grpc/codes"
+	grpcstatus "google.golang.org/grpc/status"
 )
 
 type fakeTorrentOrchestrator struct {
-	input    []byte
-	addErr   error
-	state    string
-	selected []uint32
+	input       []byte
+	addErr      error
+	state       string
+	selected    []uint32
+	destination torrent.Destination
 }
 
 func (orchestrator *fakeTorrentOrchestrator) Add(_ context.Context, _ session.Snapshot, _ torrent.InputKind, reader io.Reader) (*privatevmv1.TorrentMetadata, error) {
@@ -39,8 +41,9 @@ func (orchestrator *fakeTorrentOrchestrator) Metadata(context.Context, session.S
 	return torrentTestMetadata(orchestrator.state == "CAPACITY_VERIFIED"), nil
 }
 
-func (orchestrator *fakeTorrentOrchestrator) Select(_ context.Context, _ session.Snapshot, indexes []uint32) (*privatevmv1.TorrentMetadata, error) {
+func (orchestrator *fakeTorrentOrchestrator) Select(_ context.Context, _ session.Snapshot, indexes []uint32, destination torrent.Destination) (*privatevmv1.TorrentMetadata, error) {
 	orchestrator.selected = append([]uint32(nil), indexes...)
+	orchestrator.destination = destination
 	orchestrator.state = "CAPACITY_VERIFIED"
 	return torrentTestMetadata(true), nil
 }
@@ -105,8 +108,19 @@ func TestTorrentRPCSuccessOwnsEveryWorkflowTransition(t *testing.T) {
 	clear(orchestrator.input)
 
 	context := validRequestContext(snapshot.ID)
-	selected, err := client.SelectTorrentFiles(t.Context(), &privatevmv1.HostSelectTorrentFilesRequest{Context: context, Indexes: []uint32{0}})
-	if err != nil || selected.GetSelectedSizeBytes() != 64 || !slices.Equal(orchestrator.selected, []uint32{0}) {
+	_, missingErr := client.SelectTorrentFiles(t.Context(), &privatevmv1.HostSelectTorrentFilesRequest{Context: context, Indexes: []uint32{0}})
+	missingStatus, ok := grpcstatus.FromError(missingErr)
+	if !ok || missingStatus.Code() != codes.FailedPrecondition || len(missingStatus.Details()) != 1 {
+		t.Fatalf("missing destination error = %v", missingErr)
+	}
+	detail, ok := missingStatus.Details()[0].(*privatevmv1.ErrorDetail)
+	if !ok || detail.GetCode() != "TORRENT_CAPACITY_EVIDENCE_UNAVAILABLE" || detail.GetRemediation() == "" {
+		t.Fatalf("missing destination detail = %+v", missingStatus.Details())
+	}
+	selected, err := client.SelectTorrentFiles(t.Context(), &privatevmv1.HostSelectTorrentFilesRequest{
+		Context: context, Indexes: []uint32{0}, Destination: privatevmv1.TorrentDestination_TORRENT_DESTINATION_WORKSTATION,
+	})
+	if err != nil || selected.GetSelectedSizeBytes() != 64 || !slices.Equal(orchestrator.selected, []uint32{0}) || orchestrator.destination != torrent.DestinationWorkstation {
 		t.Fatalf("selection=%+v err=%v", selected, err)
 	}
 	download, err := client.StartTorrentDownload(t.Context(), &privatevmv1.TorrentControlRequest{Context: context})

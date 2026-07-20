@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 
 	"golang.org/x/sys/unix"
 )
@@ -21,6 +22,12 @@ const (
 	quarantineDevicePath = "/dev/disk/by-id/virtio-quarantine"
 	maximumMountInfo     = 256 << 10
 	minimumDiskSectors   = 16384
+)
+
+var (
+	ErrQuarantineMountTargetUnsafe    = errors.New("quarantine mount target is unsafe")
+	ErrQuarantineMountSystemCall      = errors.New("quarantine mount system call failed")
+	ErrQuarantineMountEvidenceInvalid = errors.New("quarantine mount evidence is invalid")
 )
 
 type quarantineFormatState uint8
@@ -87,20 +94,20 @@ func newLinuxQuarantineBackend(mkfs, devicePath, mountPath string, uid, gid int)
 }
 
 func (backend *linuxQuarantineBackend) verifySysfsIdentity() error {
-	root := "/sys/dev/block/" + strconv.FormatUint(uint64(backend.major), 10) + ":" + strconv.FormatUint(uint64(backend.minor), 10)
-	serial, err := readSmallFile(filepath.Join(root, "device/serial"), 64)
+	serialPath, readOnlyPath, capacityPath := quarantineSysfsAttributePaths(backend.major, backend.minor)
+	serial, err := readSmallFile(serialPath, 64)
 	if err != nil || string(bytes.TrimSpace(serial)) != "quarantine" {
 		clearBytes(serial)
 		return errors.New("fixed quarantine device identity mismatch")
 	}
 	clearBytes(serial)
-	readOnly, err := readSmallFile(filepath.Join(root, "ro"), 8)
+	readOnly, err := readSmallFile(readOnlyPath, 8)
 	if err != nil || string(bytes.TrimSpace(readOnly)) != "0" {
 		clearBytes(readOnly)
 		return errors.New("fixed quarantine device is not writable")
 	}
 	clearBytes(readOnly)
-	sectors, err := readSmallFile(filepath.Join(root, "size"), 32)
+	sectors, err := readSmallFile(capacityPath, 32)
 	if err != nil {
 		return errors.New("fixed quarantine capacity unavailable")
 	}
@@ -110,6 +117,13 @@ func (backend *linuxQuarantineBackend) verifySysfsIdentity() error {
 		return errors.New("fixed quarantine capacity invalid")
 	}
 	return nil
+}
+
+func quarantineSysfsAttributePaths(major, minor uint32) (string, string, string) {
+	root := "/sys/dev/block/" + strconv.FormatUint(uint64(major), 10) + ":" + strconv.FormatUint(uint64(minor), 10)
+	// Virtio-blk publishes serial on the block device. The device directory
+	// points back to the transport and does not contain this attribute.
+	return filepath.Join(root, "serial"), filepath.Join(root, "ro"), filepath.Join(root, "size")
 }
 
 func (backend *linuxQuarantineBackend) Mounted(context.Context) (bool, error) {
@@ -155,12 +169,12 @@ func (backend *linuxQuarantineBackend) Mount(ctx context.Context) error {
 	source := "/proc/self/fd/" + strconv.FormatUint(uint64(backend.device.Fd()), 10)
 	flags := uintptr(unix.MS_NODEV | unix.MS_NOSUID | unix.MS_NOEXEC)
 	if err := unix.Mount(source, backend.mountPath, "ext4", flags, "errors=remount-ro"); err != nil {
-		return errors.New("fixed quarantine mount failed")
+		return ErrQuarantineMountSystemCall
 	}
 	mounted, err := backend.mountEvidence()
 	if err != nil || !mounted {
 		_ = unix.Unmount(backend.mountPath, 0)
-		return errors.New("fixed quarantine mount evidence invalid")
+		return ErrQuarantineMountEvidenceInvalid
 	}
 	return nil
 }
@@ -180,11 +194,13 @@ func (backend *linuxQuarantineBackend) PrepareDirectories(ctx context.Context) e
 		if err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
 			return errors.New("quarantine directory identity invalid")
 		}
-		stat, ok := info.Sys().(*unix.Stat_t)
+		stat, ok := info.Sys().(*syscall.Stat_t)
 		if !ok || stat.Nlink < 2 || (stat.Uid != 0 && stat.Uid != uint32(backend.uid)) {
 			return errors.New("quarantine directory identity invalid")
 		}
-		if err := os.Chown(path, backend.uid, backend.gid); err != nil || os.Chmod(path, 0o700) != nil {
+		// Set the final mode while root still owns the new directory, then use
+		// only CAP_CHOWN for the one-way handoff to the unprivileged process.
+		if err := os.Chmod(path, 0o700); err != nil || os.Chown(path, backend.uid, backend.gid) != nil {
 			return errors.New("quarantine directory permissions failed")
 		}
 	}
@@ -272,7 +288,17 @@ func parseQuarantineMountEvidence(raw []byte, major, minor uint32, mountPath str
 		}
 		deviceMatches := string(fields[2]) == prefix
 		targetMatches := string(fields[4]) == mountPath
-		if deviceMatches != targetMatches {
+		if targetMatches && !deviceMatches {
+			// systemd realizes ReadWritePaths beneath ProtectSystem=strict as an
+			// exact bind of the directory to itself before making the surrounding
+			// image read-only. This trusted staging mount is required so guestd can
+			// mount the verified quarantine over it. It is not quarantine evidence.
+			if string(fields[3]) == mountPath && strings.Contains(","+string(fields[5])+",", ",rw,") {
+				continue
+			}
+			return false, errors.New("quarantine mount ownership conflict")
+		}
+		if deviceMatches && !targetMatches {
 			return false, errors.New("quarantine mount ownership conflict")
 		}
 		if !deviceMatches {
@@ -327,14 +353,18 @@ func inspectQuarantineFormat(file *os.File) (quarantineFormatState, error) {
 
 func validateMountTarget(path string) error {
 	info, err := os.Lstat(path)
-	if err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 || info.Mode().Perm()&0o077 != 0 {
-		return errors.New("quarantine mount target unsafe")
-	}
-	stat, ok := info.Sys().(*unix.Stat_t)
-	if !ok || stat.Uid != 0 || stat.Nlink != 2 {
-		return errors.New("quarantine mount target unsafe")
+	if err != nil || !validMountTargetInfo(info, 0) {
+		return ErrQuarantineMountTargetUnsafe
 	}
 	return nil
+}
+
+func validMountTargetInfo(info os.FileInfo, owner uint32) bool {
+	if info == nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 || info.Mode().Perm()&0o077 != 0 {
+		return false
+	}
+	stat, ok := info.Sys().(*syscall.Stat_t)
+	return ok && stat.Uid == owner && stat.Nlink == 2
 }
 
 func readSmallFile(path string, maximum int64) ([]byte, error) {

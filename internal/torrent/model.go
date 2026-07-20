@@ -111,17 +111,63 @@ type CapacityBudget struct {
 	RootOverlayBudgetBytes   uint64
 	ArchiveExpansionBytes    uint64
 	ReconstructionBytes      uint64
+	MaximumOutputBytes       uint64
 	MaximumSelectedBytes     uint64
 }
 
+type Destination string
+
+const (
+	DestinationWorkstation Destination = "workstation"
+	DestinationUSB         Destination = "usb"
+)
+
+// CapacityEvidence contains only daemon-attested, semantic downstream limits.
+// The downloader supplies QuarantineAvailableBytes itself from a fresh probe.
+type CapacityEvidence struct {
+	Destination             Destination
+	ScanAvailableBytes      uint64
+	ReconstructionAvailable uint64
+	DestinationAvailable    uint64
+	RootOverlayBudgetBytes  uint64
+	ArchiveExpansionBytes   uint64
+	ReconstructionBytes     uint64
+	MaximumOutputBytes      uint64
+	MaximumSelectedBytes    uint64
+}
+
+func (evidence CapacityEvidence) budget(quarantineAvailable uint64) (CapacityBudget, error) {
+	if (evidence.Destination != DestinationWorkstation && evidence.Destination != DestinationUSB) ||
+		quarantineAvailable == 0 || evidence.ScanAvailableBytes == 0 || evidence.ReconstructionAvailable == 0 ||
+		evidence.DestinationAvailable == 0 || evidence.RootOverlayBudgetBytes == 0 || evidence.ReconstructionBytes == 0 || evidence.MaximumOutputBytes == 0 ||
+		evidence.MaximumSelectedBytes == 0 {
+		return CapacityBudget{}, capacityEvidenceUnavailable()
+	}
+	return CapacityBudget{
+		QuarantineAvailableBytes: quarantineAvailable,
+		ScanAvailableBytes:       evidence.ScanAvailableBytes,
+		ReconstructionAvailable:  evidence.ReconstructionAvailable,
+		DestinationAvailable:     evidence.DestinationAvailable,
+		RootOverlayBudgetBytes:   evidence.RootOverlayBudgetBytes,
+		ArchiveExpansionBytes:    evidence.ArchiveExpansionBytes,
+		ReconstructionBytes:      evidence.ReconstructionBytes,
+		MaximumOutputBytes:       evidence.MaximumOutputBytes,
+		MaximumSelectedBytes:     evidence.MaximumSelectedBytes,
+	}, nil
+}
+
 type CapacityPlan struct {
-	SelectedBytes       uint64
-	QuarantineRequired  uint64
-	ScanRequired        uint64
-	ReconstructionNeed  uint64
-	DestinationRequired uint64
-	SessionRequired     uint64
-	SafetyMargin        uint64
+	SelectedBytes        uint64
+	QuarantineRequired   uint64
+	ScanRequired         uint64
+	ReconstructionNeed   uint64
+	DestinationRequired  uint64
+	SessionRequired      uint64
+	SafetyMargin         uint64
+	QuarantineMargin     uint64
+	ScanMargin           uint64
+	ReconstructionMargin uint64
+	DestinationMargin    uint64
 }
 
 type Progress struct {

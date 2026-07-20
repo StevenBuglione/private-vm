@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "ok": true,
+  "code": "WORKSPACE_STATUS",
+  "data": {
+    "schema_version": 1,
+    "state": "UNEXPORTED",
+    "file_count": 1,
+    "exported_count": 0,
+    "unexported_count": 1,
+    "changed_count": 0
+  }
+}

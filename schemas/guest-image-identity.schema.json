@@ -163,7 +163,9 @@
               "offline-verification",
               "reconstruct",
               "scan",
-              "scan-report"
+              "scan-report",
+              "vpn-verification",
+              "wireguard-config"
             ]
           }
         }

@@ -103,10 +103,11 @@ func (stack StorageStack) Allocate(ctx context.Context, snapshot session.Snapsho
 type hostStorageResource struct {
 	mu sync.Mutex
 
-	reservation *storage.CapacityReservation
-	outer       outerStorage
-	overlay     *storage.OverlayHandle
-	quarantine  string
+	reservation      *storage.CapacityReservation
+	outer            outerStorage
+	overlay          *storage.OverlayHandle
+	quarantine       string
+	quarantineLeased bool
 
 	overlayClean     bool
 	outerClean       bool
@@ -143,6 +144,9 @@ func (resource *hostStorageResource) Cleanup(ctx context.Context) error {
 	}
 	resource.mu.Lock()
 	defer resource.mu.Unlock()
+	if resource.quarantineLeased {
+		return ErrHostStorageUnavailable
+	}
 	if !resource.overlayClean && resource.overlay != nil {
 		if err := resource.overlay.Destroy(ctx); err != nil {
 			return err
@@ -167,6 +171,73 @@ func (resource *hostStorageResource) Cleanup(ctx context.Context) error {
 		resource.reservationClean = true
 	} else if resource.reservation == nil {
 		resource.reservationClean = true
+	}
+	return nil
+}
+
+func (resource *hostStorageResource) acquireQuarantine() (HostQuarantineLease, error) {
+	if resource == nil {
+		return nil, ErrHostStorageUnavailable
+	}
+	resource.mu.Lock()
+	defer resource.mu.Unlock()
+	if resource.quarantine == "" || resource.quarantineLeased || resource.outerClean || resource.overlayClean {
+		return nil, ErrHostStorageUnavailable
+	}
+	resource.quarantineLeased = true
+	return &hostQuarantineLease{owner: resource, path: resource.quarantine}, nil
+}
+
+type hostQuarantineLease struct {
+	mu       sync.Mutex
+	owner    *hostStorageResource
+	path     string
+	released bool
+}
+
+func (lease *hostQuarantineLease) Path() string {
+	if lease == nil {
+		return ""
+	}
+	lease.mu.Lock()
+	defer lease.mu.Unlock()
+	if lease.released {
+		return ""
+	}
+	return lease.path
+}
+
+func (lease *hostQuarantineLease) Release(context.Context) error {
+	if lease == nil {
+		return nil
+	}
+	lease.mu.Lock()
+	defer lease.mu.Unlock()
+	if lease.released {
+		return nil
+	}
+	if lease.owner == nil {
+		return ErrHostStorageUnavailable
+	}
+	lease.owner.mu.Lock()
+	defer lease.owner.mu.Unlock()
+	if !lease.owner.quarantineLeased || lease.owner.quarantine != lease.path {
+		return ErrHostStorageUnavailable
+	}
+	lease.owner.quarantineLeased = false
+	lease.released = true
+	lease.path = ""
+	return nil
+}
+
+func (lease *hostQuarantineLease) Audit(context.Context) error {
+	if lease == nil {
+		return ErrHostStorageUnavailable
+	}
+	lease.mu.Lock()
+	defer lease.mu.Unlock()
+	if !lease.released {
+		return ErrHostStorageUnavailable
 	}
 	return nil
 }

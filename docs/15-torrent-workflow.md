@@ -70,25 +70,27 @@ Executable types are shown as blocked under safe policy before download.
 
 ## Capacity planning
 
-Conservative formula:
+Conservative stage formulas:
 
 ```text
-session_required =
-  root_overlay_budget
-+ selected_download_bytes
-+ filesystem_overhead
-+ archive_expansion_budget
-+ reconstruction_budget
-+ safety_margin
+quarantine_required = selected + filesystem_overhead + quarantine_margin
+scan_required = selected + scan_margin
+reconstruction_required = archive_expansion + reconstruction_work + scratch_margin
+destination_required = maximum_output + filesystem_overhead + destination_margin
+session_required = root_overlay + quarantine_required + reconstruction_required + session_margin
 ```
 
-Default safety margin: max(10%, 4 GiB).
+Quarantine, scan, reconstruction and destination margins are each 10 percent
+with a 64 MiB floor. The aggregate session reserve remains max(10%, 4 GiB), but
+it is not charged again against the 512 MiB scanner scratch stage.
 
 For unknown archive expansion, use policy maximum rather than compressed size.
-The v1 scanner accepts at most 4 GiB for one regular file and for total expanded
-archive work. `max_input_bytes` remains the cumulative quarantine-capacity
-bound, so a larger multi-file selection is valid only when every selected file
-and planned expansion remains within its scanner-specific limit.
+The safe policy's general upper bounds remain 4 GiB per regular file and 4 GiB
+of expanded archive work. The 512 MiB production scanner is deliberately more
+restrictive: capacity admission and runtime both cap selected input at 128 MiB,
+cumulative archive expansion at 128 MiB and one reconstructed output at 96 MiB.
+The reconstruction working budget is 192 MiB for one intermediate plus one
+final output; later candidate outputs are rejected before allocation.
 
 ## Download
 
@@ -135,9 +137,12 @@ TOR-001 through TOR-003 are implemented in the source boundary as follows:
 - path traversal, absolute/backslash paths, Windows device names, excessive
   counts/lengths, Unicode-normalized duplicates and case collisions reject;
   executable/script/package/disk-image suffixes are blocking in safe policy;
-- selection recalculates encrypted quarantine, scanner expansion,
-  reconstruction and destination capacity with checked arithmetic and a
-  `max(10%, 4 GiB)` safety margin before start;
+- selection re-probes encrypted-quarantine free bytes in the downloader guest
+  and combines them with separate daemon-attested scanner handoff,
+  reconstruction-scratch and declared-destination limits. It recalculates all
+  stages with checked arithmetic and stage-specific margins before every
+  selection; the 4 GiB floor applies only to aggregate session headroom and no
+  stage is populated by copying another stage's `statfs`;
 - cancellation, timeout, stream failure, stall and typed VPN loss force a
   bounded pause attempt; completion verifies exact selected regular files and
   hashes before qBittorrent shutdown and quarantine sync/unmount;
@@ -157,7 +162,10 @@ quarantine block I/O, VPN packet loss, QEMU destruction and scanner attachment
 remain system acceptance gates; source tests do not report those gates as
 passed.
 
-The daemon composition root still requires the concrete role runtime to supply
-an authenticated VSOCK downloader client and exact QEMU/quarantine cleanup
-implementation. Until that provider is installed, the semantic daemon methods
-fail closed with `NOT_IMPLEMENTED`; the CLI does not bypass the daemon.
+The production daemon composition supplies the authenticated VSOCK downloader
+client, exact QEMU/quarantine cleanup owner and a typed downstream-capacity
+source. `torrent select` requires `--destination`; missing evidence and the USB
+destination before enrollment/capacity attestation fail closed with
+`TORRENT_CAPACITY_EVIDENCE_UNAVAILABLE`. The host never opens or mounts the
+opaque quarantine, scanner or destination filesystem while creating this
+receipt.

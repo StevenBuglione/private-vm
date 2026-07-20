@@ -43,6 +43,7 @@ type backend interface {
 	ConfigureTAP(context.Context, topologySpec) error
 	ApplyNamespacePolicy(context.Context, topologySpec, endpointPolicy) error
 	ApplyHostPolicy(context.Context, topologySpec, endpointPolicy) error
+	AuditPolicy(context.Context, topologySpec) (PolicyAudit, error)
 	DisableEgress(context.Context, topologySpec) error
 	DeleteHostPolicy(context.Context, topologySpec) error
 	DeleteNamespacePolicy(context.Context, topologySpec) error

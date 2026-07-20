@@ -27,11 +27,26 @@ const (
 	CommandScannerReport    CommandID = "scan.report"
 	CommandScannerApprove   CommandID = "scan.approve"
 	CommandScannerReject    CommandID = "scan.reject"
+	CommandDesktopConnect   CommandID = "desktop.connect"
+	CommandDesktopRestart   CommandID = "desktop.restart-viewer"
+	CommandWorkspaceImport  CommandID = "workspace.import"
+	CommandWorkspaceInbox   CommandID = "workspace.inbox"
+	CommandWorkspaceList    CommandID = "workspace.list"
+	CommandWorkspaceExport  CommandID = "workspace.export"
+	CommandWorkspaceVerify  CommandID = "workspace.verify"
+	CommandWorkspaceDiscard CommandID = "workspace.discard"
 	CommandVPNImport        CommandID = "vpn.import"
 	CommandVPNInspect       CommandID = "vpn.inspect"
 	CommandVPNTest          CommandID = "vpn.test"
 	CommandVPNRotate        CommandID = "vpn.rotate"
 	CommandVPNRemove        CommandID = "vpn.remove"
+	CommandUSBList          CommandID = "usb.list"
+	CommandUSBInspect       CommandID = "usb.inspect"
+	CommandUSBEnroll        CommandID = "usb.enroll"
+	CommandUSBVerify        CommandID = "usb.verify"
+	CommandUSBForget        CommandID = "usb.forget"
+	CommandUSBPrepare       CommandID = "usb.prepare"
+	CommandUSBExport        CommandID = "usb.export"
 )
 
 type Intent interface {
@@ -94,13 +109,15 @@ func (WorkspacePathIntent) privateVMIntent() {}
 type WorkspaceExportIntent struct {
 	SessionID   string
 	Destination string
+	OutputID    string
 }
 
 func (WorkspaceExportIntent) privateVMIntent() {}
 
 type WorkspaceVerifyIntent struct {
-	Last     bool
-	ExportID string
+	SessionID string
+	Last      bool
+	ExportID  string
 }
 
 func (WorkspaceVerifyIntent) privateVMIntent() {}
@@ -127,7 +144,8 @@ type TorrentInputIntent struct {
 func (TorrentInputIntent) privateVMIntent() {}
 
 type TorrentSelectionIntent struct {
-	Files []uint32
+	Files       []uint32
+	Destination string
 }
 
 func (TorrentSelectionIntent) privateVMIntent() {}
@@ -161,7 +179,9 @@ type VPNProfileIntent struct {
 func (VPNProfileIntent) privateVMIntent() {}
 
 type USBDeviceIntent struct {
-	DeviceID string
+	DeviceID          string
+	Label             string
+	AcceptPortBinding bool
 }
 
 func (USBDeviceIntent) privateVMIntent() {}
@@ -171,6 +191,15 @@ type USBPrepareIntent struct {
 }
 
 func (USBPrepareIntent) privateVMIntent() {}
+
+type USBExportIntent struct {
+	ExporterSession string
+	ClaimID         string
+	SourceSession   string
+	OutputID        string
+}
+
+func (USBExportIntent) privateVMIntent() {}
 
 type ImageSelectionIntent struct {
 	Role   string

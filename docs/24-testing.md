@@ -12,6 +12,30 @@
 - WireGuard parser
 - capacity planner
 - USB identity matching
+- sysfs USB/block association, USBGuard record parsing, serial-or-explicit-port
+  enrollment, duplicate-device ambiguity, host root/boot exclusion and
+  mode-`0600` enrollment round trips
+- claim collision, cancellation rollback, absence audit, release retry, stale
+  preparation challenges, two exact confirmation steps, final identity
+  revalidation, Polkit-before-commit ordering and incomplete prepare evidence
+- exporter-only daemon claim admission, mismatched-enrollment rejection,
+  serialized workflow ownership, partial-acquisition cleanup and idempotent
+  explicit-release/session-cleanup absence audit
+- one-way chunk sequencing and bounds, authenticated safe-policy eligibility,
+  scanner/relay/exporter/reread hash equality, source-close failure, timeout,
+  fsync/rename evidence, networkless role boundaries and retryable reverse-order
+  export cleanup without serializing filenames or hashes
+- authenticated exporter-only prepare/write/verify/finalize RPC composition,
+  first-frame and passphrase bounds, fixed identity expectation, receive/reread
+  equality, fsync/rename/unmount/LUKS-close evidence, timeout cleanup and generic
+  exporter composition that fails closed without its fixed-path adapter
+- daemon session/claim-bound USB plan, secret-stream preparation and approved
+  scanner-to-exporter bridge, including complete workflow-state evidence
+- production exporter no-NIC/xHCI argument shape, fixed typed QMP hotplug,
+  guest `InspectUSB` no-network evidence, ambiguous attach ownership, per-step
+  cleanup-handle retention, failed first cleanup and successful retry
+- one-use role/session/output source selection for authenticated scanner
+  reconstruction and workstation Export without a host path
 - scan report parser
 - policy decisions
 - stream framing/hash
@@ -192,6 +216,36 @@ resources clean in offline-runtime → update-runtime → storage order. Injecte
 operation failure, cancellation, timeout and cleanup-audit failure prove either
 `DESTROYED` convergence or an explicit retryable `DESTROYING` record.
 
+The production scanner-runtime unit gate additionally proves the sealed
+quarantine lease blocks downloader storage cleanup, the same scanner root
+storage is reused across both boots, the update boot completes the full typed
+VPN and host-egress sequence before its scanner client is available, and QEMU
+renders update as NIC/no-quarantine with `definitions-update` boot intent, then
+scan as no-NIC/read-only-quarantine with `scan-offline` boot intent. Failure,
+cancellation and timeout return the same idempotent cleanup owner.
+
+Focused production guest-adapter tests prove the fixed FreshClam/clamscan/clamd
+unit order, complete official receipt evidence, per-overlay identity retention,
+the scoped VPN context gate, receipt-before-offline-staging order, fixed-unit
+staging failure/cancellation/timeout cleanup, QEMU-mode/Nix-phase agreement,
+strict manifest identity/command parsing, exact conditional report-tool
+composition, bounded one-output text reconstruction and idempotent volatile
+cleanup. Missing required IDs, duplicate IDs or commands, malformed metadata,
+operation aliases and version conflicts all fail closed. Archive fixtures prove a valid nested ZIP is
+extracted, reinventoried, scanned, recursively reconstructed and promoted only
+as its sanitized leaf. Traversal, encryption, expansion-ratio bombs, depth
+exhaustion and member extension/type mismatch become blocking findings; member
+scan cancellation and deadline leave no extraction tree or output.
+
+The WS-002 production promotion gate proves that only the sole output in a
+complete approved report is requested, scanner framing is bounded and rejects
+trailing data, the relay assigns a destination transfer ID without exposing a
+host path, and scanner sender, daemon relay and workstation receipt hashes are
+equal. Daemon transport tests prove creation uses a separate active workstation
+session and failure, cancellation or timeout converges that destination to
+`DESTROYED`. CLI tests prove only successful workstation approval returns the
+destination ID and invokes the user-owned viewer; USB approval omits both.
+
 ### Session, QEMU and ephemeral-storage evidence
 
 Batch 1 runtime tests exhaust every allowed lifecycle transition and each
@@ -237,6 +291,60 @@ the scanner/exporter host workflows. Workstation and downloader acceptance also
 requires the role-specific guest VPN RPC implementation to consume the typed
 underlay and fixed probe targets; a host build paired with an older guestd must
 fail the authenticated readiness gate and is not release evidence.
+
+The D-005 source recovery harness supplies all resource classes in reverse
+order and proves the reconciler nevertheless executes the fixed dependency
+order: QEMU/process, cgroup, private sockets, VSOCK CID, TAP/veth/netns/nftables,
+USB claim, outer mount, mapper, loop, ciphertext and volatile runtime path. It
+also injects identity replacement before the first mutation and immediately
+before cleanup, a live-registry owner, available/unknown volatile-key evidence,
+cleanup failure, per-object audit failure, whole-session audit failure,
+cancellation, timeout and immutable-base-image drift. Reports are schema
+validated and inspected for absence of session IDs, locators, fingerprints and
+wrapped backend errors.
+
+These source tests use typed fakes and make no host mutation. The release gate
+still requires daemon-startup composition with the concrete QEMU, cgroup,
+network, storage, VSOCK and USB inventories, a daemon `SIGKILL` acceptance, and
+one controlled maintenance-window reboot.
+
+The production startup path is now source-tested with the concrete Linux
+filesystem/outer-storage adapter. Private temporary roots prove early-record
+cleanup, exact ciphertext deletion after volatile-key-loss evidence, identity
+replacement rejection, unknown-key retention, cancellation, immutable-base
+drift, closed report publication and refusal to admit the daemon for incomplete,
+timed-out or canceled recovery. These tests run no recovery command against the
+real host. Process/cgroup, network, VSOCK and USB recovery remains fail-closed,
+not simulated as successful production evidence.
+
+Focused production-composition tests additionally prove volatile plan/image/
+storage/runtime ownership, reverse cleanup, partial-runtime timeout ownership,
+scanner/exporter fail-closed behavior, downloader seal-before-absence audit,
+idempotent private socket-directory cleanup, bounded 16-KiB guest torrent
+framing, single first-frame context and oversize/send-failure rejection.
+
+The exporter/USB source gate runs without QEMU, USB mutation or a host mount:
+
+```bash
+GOMAXPROCS=2 go test -p=1 \
+  ./internal/qemu ./internal/orchestrator ./internal/usb \
+  ./internal/daemon ./internal/cli ./cmd/private-vmd
+```
+
+This focused gate does not prove live network namespace counters, mock-peer
+packets, a real Proton handshake, cached official role images, KVM launch, or
+physical USB preparation/export. Workstation and downloader acceptance also
+requires the role-specific guest VPN RPC implementation to consume the typed
+underlay and fixed probe targets; a host build paired with an older guestd must
+fail the authenticated readiness gate and is not release evidence.
+
+The approved-source tests additionally prove scanner registration requires one
+complete approved report output, binds the authenticated scanner role/context,
+accepts the exact begin/chunk/end/EOF sequence only, and is one-use. The
+workstation case proves registration occurs only after guest export
+verification, repeats current exported/unchanged inventory validation at open,
+and rejects a changed identity. Daemon tests prove USB approval retains the
+offline scanner and a successful exporter receipt stops and cleans it.
 
 The bounded fuzz smoke is reproducible with:
 
@@ -375,9 +483,15 @@ and 16 GiB maintainer-host budget:
   actual database installation while explicitly excluding the official main,
   daily and bytecode databases, so it cannot rely on Internet availability or
   a real credential.
+  It also proves no FreshClam service/timer is present and the fixed guestd-owned
+  definitions oneshot is disabled and inactive before authenticated RPC use.
+  It verifies the offline specialisation switch exists and its fixed staging
+  oneshot is disabled and inactive before authenticated RPC use.
 - `scanner-offline` uses explicit QEMU `-nic none`, verifies zero non-loopback
   interfaces, attaches one read-only ext4 fixture, verifies the block read-only
   bit and `ro,nodev,nosuid,noexec` mount flags, then proves writing fails.
+  The update and offline boots inject their exact typed `fw_cfg` phase values;
+  offline also proves neither update nor staging unit is present.
 
 Both scanner boots verify the compiled `scanner` role and the exact advertised
 common-plus-scanner capability list. They also reject SSH/sudo, credential
@@ -388,7 +502,10 @@ The public image workflow maps the six canonical image outputs to these exact
 TCG gates in six independent standard-runner jobs. It builds no two canonical
 images in one workspace. A scanner job is the sole exception to one boot per
 job: its update and offline phase tests execute serially because both phases
-belong to the same scanner image contract.
+belong to the same scanner image contract. Each row requires its canonical build
+to emit exactly one existing direct `/nix/store` path and reports closure size
+from that captured path, so closure reporting cannot select a different target
+or trigger a second flake evaluation.
 
 ### KVM acceptance
 
@@ -440,7 +557,16 @@ python3 tools/validate_examples.py
 It generates ZIP/TAR fixtures in memory and proves traversal, absolute path,
 symlink, hardlink, FIFO, encrypted archive, nesting, expansion-ratio and output
 replacement failures. A local `net.Pipe` implements the ClamAV protocol fixture;
-no daemon, definitions download or hostile public corpus is required. Real
+the production scratch fixtures prove the exact private-tmpfs relationship,
+flags, ownership and 512 MiB ceiling, including missing, malformed, oversized
+and cancelled verification plus reconstruction cleanup. A Nix source contract
+and flake assertion keep those runtime expectations synchronized with the
+scanner service unit. The PDF probe fixture proves fixed stdin-only all-page
+arguments, maximum
+dimensions across heterogeneous pages, and rejection of missing, duplicate,
+out-of-range, inconsistent, over-limit and oversized-output evidence while
+preserving cancellation and timeout codes. No daemon, definitions download or
+hostile public corpus is required. Real
 freshclam, offline boot/device enforcement and pinned PDF/Office/media tools
 remain separate scanner-image and KVM acceptance gates.
 
@@ -498,6 +624,36 @@ an error, generic exit status `1` cannot claim absence, and repeated exact
 inventory of already absent resources performs no mutation. These tests do not
 exercise host privileges or a real credential.
 
+Production counter-auditor source tests feed bounded synthetic `nft -j` records
+through the real parser. They prove exact host/namespace table selection,
+versioned ownership, primary and later fail-closed audit-chain presence, every
+IPv4/IPv6/DNS/private-range/unrelated-egress counter at zero, output destruction,
+and rejection of missing, malformed, nonzero, stale and unowned evidence.
+Cancellation and deadline failures preserve their typed context result; all
+other failures are redacted. These source tests do not claim that live namespace
+packet counters have run.
+
+The opt-in `verify-network-live` gate re-executes the test binary under
+unprivileged user, mount and network namespaces and mounts a private tmpfs on
+`/run`, so its nested `ip netns`, TUN and nftables objects cannot enter host
+networking. It uses the flake-pinned `ip`, `nft`, `sysctl` and `unshare` paths and
+the production Linux backend. The gate proves real namespace/veth/TAP creation,
+the exact IPv4 and IPv6 endpoint paths, DNS/LAN/metadata/unrelated-public drops,
+both live policy tables with zero second-boundary counters, cancellation,
+deadline propagation, repeated cleanup and exact final
+absence. It constructs fixed synthetic addresses directly and never constructs
+a VPN profile or WireGuard key. Output is bounded to the Go JSON stream plus one
+versioned boolean-only evidence record.
+
+The disposable outer namespace enables its own global IPv6 forwarding before
+the packet proof. The gate demonstrated that the current runtime's owned-veth
+setting alone is insufficient when outer `net.ipv6.conf.all.forwarding` is off.
+By contrast, it asserts that outer `net.ipv4.ip_forward` remains off while the
+current exact ingress-veth IPv4 forwarding setting passes the permitted packet.
+The installed host module and `doctor --strict` must therefore supply and verify
+that prerequisite, or a replacement ADR must redesign the outer forwarding
+boundary. This source gate does not prove that production-host prerequisite.
+
 NET-003 source tests prove that the guest kill switch is installed before any
 underlay/tunnel configuration, permits only `proton0`, the exact UDP endpoint
 and required neighbor discovery, and contains no clear-interface DNS or TCP
@@ -517,9 +673,10 @@ typed workstation-warning/downloader-pause responses, and host lifecycle
 composition. The orchestration fault matrix proves ordered start, refusal of
 incomplete guest/counter proofs, cancellation, dirty-stop protection,
 unexpected QEMU exit cleanup, retry and idempotence. Namespace packet tests, a
-mock WireGuard peer, production namespace counters, image composition, live
-QEMU ordering and the controlled Proton smoke test remain image/acceptance
-gates.
+mock WireGuard peer, image composition, live QEMU ordering and the controlled
+Proton smoke test remain image/acceptance gates. The isolated Linux topology
+gate above now supplies the real namespace packet and production nftables
+counter evidence without mutating the host network.
 
 Mock Proton endpoint:
 
@@ -543,6 +700,16 @@ metadata fetch, zero-payload evidence, path/case hazards, safe-policy blocked
 types, explicit selection and all capacity stages; success, error,
 cancellation, timeout/stall pause, VPN-loss pause, exact manifest matching,
 sync/unmount, idempotent cleanup and retryable downloader absence audit.
+Capacity-specific tests use distinct stage values and prove the minimum-stage
+decision, insufficient quarantine/scanner/reconstruction/destination failures,
+checked-arithmetic overflow, a fresh quarantine probe and downstream receipt
+on reselection, cancellation/deadline propagation, stable redacted errors and
+the production role-plan composition. An end-to-end production planner fixture
+admits a small non-archive selection, rejects one-byte deficits independently
+at all four stages, rejects input above the 128 MiB runtime ceiling and proves
+archive/reconstruction/output bounds fit the exact 512 MiB scanner scratch.
+Protobuf descriptor tests prevent paths,
+devices, mounts, endpoints, names or hashes from entering the capacity receipt.
 
 The HTTP contract test proves only loopback API origin, fixed quarantine path,
 paused add and bounded/redacted responses. The Linux file verifier uses
@@ -553,8 +720,10 @@ packets and QEMU absence remain explicit acceptance tests.
 
 The production-composition tests additionally prove that the per-boot
 qBittorrent plaintext is absent from its volatile configuration, authenticated
-requests carry only the bounded loopback SID, cancellation stops a partially
-started fixed unit, and the binding probe observes `proton0`. The quarantine
+requests carry only the bounded loopback SID, and the binding probe observes
+`proton0`. Fixed-child tests cover start failure, canceled start, bounded
+TERM/KILL cleanup, pidfd/process-group ownership, secret-free argv/environment
+and idempotent stop in the same mount namespace as guestd. The quarantine
 owner tests cover blank/ext4/unknown signatures, mount preparation,
 cancellation cleanup, sync/unmount, absence audit, retry after failed unmount
 and idempotent close without invoking a real block device or mount syscall.
@@ -591,10 +760,21 @@ A release must pass all entries in `project/acceptance-tests.yaml`.
 
 Workstation transfer unit tests use only private temporary directories. They
 cover a complete import/export, traversal and symlink rejection, digest failure
-cleanup, no-overwrite staging, opaque inventory identities, verification, and
-changed-after-export detection. The host/daemon/VSOCK relay and dirty-stop
-acceptance remain separate integration gates; guest-only evidence cannot mark
-those gates complete.
+cleanup, no-overwrite staging, opaque inventory identities, verification,
+changed-after-export detection, pinned-parent source behavior, Inbox pathname
+replacement, exact terminal EOF, frame/chunk limits, cancellation, deadline,
+and receiver-failure cleanup. Focused production-relay tests prove that a
+trailing import or export frame prevents the end frame from reaching the next
+commit boundary. The full host/daemon/VSOCK relay and dirty-stop acceptance
+remain separate integration gates; guest-only evidence cannot mark those gates
+complete.
+
+The host workstation source gate additionally uses authenticated daemon fakes
+to exercise import, aggregate inventory, export and verification, and a real
+pair of local Unix sockets to prove the display relay, exact peer UID check,
+fail-fast concurrent-client rejection without a queued hang, bounded
+caller-death cleanup and identity-pinned replacement refusal. It does not start
+QEMU or a graphical viewer.
 
 Daemon role-lifecycle tests run every workstation startup gate through the
 session actor, prove storage and runtime cleanup execute in reverse allocation
@@ -610,6 +790,33 @@ single-session selection, listing, protected stop, start-failure abort, request
 ID failure, stable error-to-exit mapping, and the closed `SESSION_STATUS`
 renderer over a private Unix gRPC fixture. No runtime path, guest endpoint, or
 workspace content is representable in that payload.
+
+Workspace production-invoker tests prove no-follow trusted import, receipt
+mismatch rejection, aggregate-only inventory, fail-before-stream behavior when
+a destination is unsupported, semantic USB enum selection with no path or file
+bytes in the request, and changed-receipt rejection. Daemon destination tests
+prove prepare-before-source, bounded source framing, independent receiver
+re-read evidence, three-way digest matching, final READY verification, and
+idempotent abort on failure, cancellation, timeout, digest mismatch, and cleanup
+failure. Real USB writes remain the destructive system gate; encrypted bundles
+remain fail closed pending their separate contract.
+
+The workstation image boot gate installs its test-only authenticated VSOCK
+client, starts guestd inside the production `ReadWritePaths` namespace, and
+therefore exercises the two fixed endpoint bind mounts while nested mount
+crossings remain forbidden. The exporter image boot gate starts guestd with an
+explicit service-private PATH containing only its declared fixed tool closure;
+it does not rely on an interactive profile.
+
+`TestSystemdWorkspaceSandbox` is an opt-in service-namespace regression test.
+The image boot gate runs the same boundary with the production syscall filter:
+path-based chmod calls are denied while mandatory `openat2` and the fixed
+anonymous-secret `fchmod(0600)` remain available.
+
+The workstation module asserts the exact three-capability set
+`CAP_DAC_OVERRIDE`, `CAP_IPC_LOCK`, `CAP_NET_ADMIN`; the boot gate retains the
+private home at mode `0700` while proving guestd can authenticate and serve the
+pinned workspace endpoints.
 
 ## Test safety
 

@@ -70,7 +70,7 @@ func TestQuarantineOwnerPreparesSyncsAndCleansIdempotently(t *testing.T) {
 	if err := owner.Prepare(t.Context()); err != nil {
 		t.Fatal(err)
 	}
-	if capacity, err := owner.CapacityBytes(); err != nil || capacity != 8<<30 {
+	if capacity, err := owner.CapacityBytes(t.Context()); err != nil || capacity != 8<<30 {
 		t.Fatalf("capacity=%d err=%v", capacity, err)
 	}
 	if err := owner.SyncAndUnmount(t.Context()); err != nil {

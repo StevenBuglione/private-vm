@@ -11,6 +11,7 @@ from unittest import mock
 from check_workflow_policy import (
     PolicyError,
     _run_tool,
+    validate_ci_workflow_text,
     validate_image_workflow_text,
     validate_release_workflow_text,
     validate_workflow_text,
@@ -132,6 +133,11 @@ jobs:
       - name: Verify public artifact anonymously
         run: private-vm-image-release verify-anonymous --repository "${{{{ matrix.repository }}}}" --tag "${{{{ github.ref_name }}}}"
 """
+
+
+def ci_workflow() -> str:
+    root = Path(__file__).resolve().parents[1]
+    return (root / ".github" / "workflows" / "ci.yml").read_text()
 
 
 def workflow(
@@ -341,6 +347,26 @@ jobs:
     def test_accepts_official_build_only_image_matrix(self) -> None:
         validate_image_workflow_text(self.image_workflow())
 
+    def test_accepts_combined_non_image_nix_build(self) -> None:
+        validate_ci_workflow_text(ci_workflow())
+
+    def test_ci_rejects_serial_non_image_nix_builds(self) -> None:
+        source = ci_workflow().replace(
+            "          nix build \\\n"
+            "            .#checks.x86_64-linux.runtime-fuzz \\\n"
+            "            .#checks.x86_64-linux.host-module-contract \\\n"
+            "            .#checks.x86_64-linux.static-binaries \\\n"
+            "            --no-link \\\n"
+            "            --print-build-logs",
+            "          nix build .#checks.x86_64-linux.runtime-fuzz --no-link --print-build-logs\n"
+            "          nix build .#checks.x86_64-linux.host-module-contract --no-link --print-build-logs\n"
+            "          nix build .#checks.x86_64-linux.static-binaries --no-link --print-build-logs",
+            1,
+        )
+        self.assertNotEqual(source, ci_workflow())
+        with self.assertRaisesRegex(PolicyError, "one combined nix build"):
+            validate_ci_workflow_text(source)
+
     def test_image_matrix_rejects_duplicate_role(self) -> None:
         source = self.image_workflow().replace(
             "- image: exporter", "- image: scanner", 1
@@ -364,8 +390,49 @@ jobs:
 
     def test_image_workflow_requires_no_link_builds(self) -> None:
         source = self.image_workflow().replace(" --no-link", "", 1)
-        with self.assertRaisesRegex(PolicyError, "canonical image must use"):
+        with self.assertRaisesRegex(PolicyError, "canonical image build step"):
             validate_image_workflow_text(source)
+
+    def test_image_workflow_rejects_canonical_output_path_drift(self) -> None:
+        base = self.image_workflow()
+        for description, source, message in (
+            (
+                "missing exact output emission",
+                base.replace("              --print-out-paths", "", 1),
+                "canonical image build step",
+            ),
+            (
+                "missing ambiguity rejection",
+                base.replace(
+                    " || \"$image_output_path\" == *$'\\n'*",
+                    "",
+                    1,
+                ),
+                "canonical image build step",
+            ),
+            (
+                "closure expression bypass",
+                base.replace(
+                    "${{ steps.canonical_image.outputs.image_output_path }}",
+                    "${{ matrix.image_target }}",
+                    1,
+                ),
+                "closure report",
+            ),
+            (
+                "closure reevaluates flake",
+                base.replace(
+                    'nix path-info -Sh "$PVM_IMAGE_OUTPUT_PATH"',
+                    'nix path-info -Sh ".#${{ matrix.image_target }}"',
+                    1,
+                ),
+                "closure report",
+            ),
+        ):
+            with self.subTest(description=description):
+                self.assertNotEqual(source, base)
+                with self.assertRaisesRegex(PolicyError, message):
+                    validate_image_workflow_text(source)
 
     def test_accepts_official_tag_only_release_matrix(self) -> None:
         source = release_workflow()

@@ -40,6 +40,22 @@ type recordingDownloaderVPNClient struct {
 	verify  int
 }
 
+type recordingScannerVPNClient struct {
+	privatevmv1.ScannerGuestServiceClient
+	request *privatevmv1.ConfigureWireGuardRequest
+	verify  int
+}
+
+func (client *recordingScannerVPNClient) ConfigureWireGuard(_ context.Context, request *privatevmv1.ConfigureWireGuardRequest, _ ...grpc.CallOption) (*privatevmv1.VPNStatus, error) {
+	client.request = proto.Clone(request).(*privatevmv1.ConfigureWireGuardRequest)
+	return verifiedVPNStatus(false), nil
+}
+
+func (client *recordingScannerVPNClient) VerifyVPN(context.Context, *privatevmv1.VerifyVPNRequest, ...grpc.CallOption) (*privatevmv1.VPNStatus, error) {
+	client.verify++
+	return verifiedVPNStatus(false), nil
+}
+
 func (client *recordingDownloaderVPNClient) ConfigureWireGuard(_ context.Context, request *privatevmv1.ConfigureWireGuardRequest, _ ...grpc.CallOption) (*privatevmv1.VPNStatus, error) {
 	client.request = proto.Clone(request).(*privatevmv1.ConfigureWireGuardRequest)
 	return verifiedVPNStatus(true), nil
@@ -117,12 +133,13 @@ func TestVSOCKGuestConnectionRoutesTypedVPNRequestByRole(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, role := range []session.Role{session.RoleWorkstation, session.RoleDownloader} {
+	for _, role := range []session.Role{session.RoleWorkstation, session.RoleDownloader, session.RoleScanner} {
 		workstation := &recordingWorkstationVPNClient{}
 		downloader := &recordingDownloaderVPNClient{}
+		scanner := &recordingScannerVPNClient{}
 		connection := &vsockGuestConnection{
 			role: role, expected: guestHandshakeExpectation(), probeTargets: targets,
-			workstation: workstation, downloader: downloader,
+			workstation: workstation, downloader: downloader, scanner: scanner,
 		}
 		status, err := connection.ConfigureVPN(t.Context(), underlay, bytes.NewReader([]byte("profile-fixture")))
 		if err != nil || status.State != guestvpn.StateVerified {
@@ -134,10 +151,15 @@ func TestVSOCKGuestConnectionRoutesTypedVPNRequestByRole(t *testing.T) {
 		request := workstation.request
 		if role == session.RoleDownloader {
 			request = downloader.request
-			if workstation.request != nil || workstation.verify != 0 || downloader.verify != 1 {
+			if workstation.request != nil || workstation.verify != 0 || scanner.request != nil || scanner.verify != 0 || downloader.verify != 1 {
 				t.Fatalf("downloader used wrong generated service")
 			}
-		} else if downloader.request != nil || downloader.verify != 0 || workstation.verify != 1 {
+		} else if role == session.RoleScanner {
+			request = scanner.request
+			if workstation.request != nil || workstation.verify != 0 || downloader.request != nil || downloader.verify != 0 || scanner.verify != 1 {
+				t.Fatalf("scanner used wrong generated service")
+			}
+		} else if downloader.request != nil || downloader.verify != 0 || scanner.request != nil || scanner.verify != 0 || workstation.verify != 1 {
 			t.Fatalf("workstation used wrong generated service")
 		}
 		if request == nil || request.GetContext().GetExpectedRole().String() == "GUEST_ROLE_UNSPECIFIED" ||

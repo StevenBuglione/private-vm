@@ -12,6 +12,7 @@ import (
 	"github.com/StevenBuglione/private-vm/internal/qemu"
 	"github.com/StevenBuglione/private-vm/internal/session"
 	"github.com/StevenBuglione/private-vm/internal/torrent"
+	"github.com/StevenBuglione/private-vm/internal/usb"
 )
 
 var (
@@ -31,6 +32,16 @@ type HostStorage interface {
 	QuarantinePath() string
 	ActivateImages() (qemu.RuntimeImageLease, error)
 	Cleanup(context.Context) error
+	Audit(context.Context) error
+}
+
+// HostQuarantineLease is an exclusive, opaque block-image lease. The scanner
+// may pass Path only to the typed QEMU data-disk renderer; it must never open or
+// mount the filesystem on the host. Release is idempotent and Audit succeeds
+// only after ownership has returned to the sealed downloader storage owner.
+type HostQuarantineLease interface {
+	Path() string
+	Release(context.Context) error
 	Audit(context.Context) error
 }
 
@@ -67,7 +78,7 @@ type HostRuntimePreparer interface {
 type TorrentRelay interface {
 	Add(context.Context, torrent.InputKind, io.Reader) (*privatevmv1.TorrentMetadata, error)
 	Metadata(context.Context) (*privatevmv1.TorrentMetadata, error)
-	Select(context.Context, []uint32) (*privatevmv1.TorrentMetadata, error)
+	Select(context.Context, []uint32, torrent.CapacityEvidence) (*privatevmv1.TorrentMetadata, error)
 	Start(context.Context, func(*privatevmv1.TorrentEvent) error) error
 	Pause(context.Context) (*privatevmv1.TorrentStatus, error)
 	Status(context.Context) (*privatevmv1.TorrentStatus, error)
@@ -87,11 +98,13 @@ type hostRoleState struct {
 type HostRoles struct {
 	mu sync.Mutex
 
-	PreflightCheck func(context.Context, session.Snapshot, session.LaunchPlan) error
-	Images         HostImageSelector
-	Storage        HostStorageAllocator
-	Runtime        HostRuntimeStarter
-	states         map[string]*hostRoleState
+	PreflightCheck  func(context.Context, session.Snapshot, session.LaunchPlan) error
+	Images          HostImageSelector
+	Storage         HostStorageAllocator
+	Runtime         HostRuntimeStarter
+	Capacities      TorrentCapacitySource
+	approvedSources *usb.ApprovedSourceRegistry
+	states          map[string]*hostRoleState
 }
 
 func NewHostRoles(images HostImageSelector, storage HostStorageAllocator, runtime HostRuntimeStarter) (*HostRoles, error) {
@@ -99,6 +112,22 @@ func NewHostRoles(images HostImageSelector, storage HostStorageAllocator, runtim
 		return nil, errors.New("host role composition is incomplete")
 	}
 	return &HostRoles{Images: images, Storage: storage, Runtime: runtime, states: make(map[string]*hostRoleState)}, nil
+}
+
+// ConfigureApprovedSources installs the volatile one-use export handoff. It
+// may be configured once by the daemon composition root and is never exposed
+// through an RPC or launch plan.
+func (roles *HostRoles) ConfigureApprovedSources(sources *usb.ApprovedSourceRegistry) error {
+	if roles == nil || sources == nil {
+		return ErrApprovedSourceUnavailable
+	}
+	roles.mu.Lock()
+	defer roles.mu.Unlock()
+	if roles.approvedSources != nil && roles.approvedSources != sources {
+		return ErrApprovedSourceUnavailable
+	}
+	roles.approvedSources = sources
+	return nil
 }
 
 func (roles *HostRoles) PlanAllocation(snapshot session.Snapshot, plan session.LaunchPlan) session.AllocateFunc {
@@ -127,7 +156,11 @@ func (roles *HostRoles) PlanAllocation(snapshot session.Snapshot, plan session.L
 				return ErrHostPlanUnavailable
 			}
 			delete(roles.states, snapshot.ID)
+			sources := roles.approvedSources
 			roles.mu.Unlock()
+			if sources != nil && snapshot.Role == session.RoleWorkstation {
+				sources.RemoveSession(usb.SourceWorkstation, snapshot.ID)
+			}
 			if preparer, ok := roles.Runtime.(HostRuntimePreparer); ok {
 				preparer.Forget(snapshot.ID)
 			}
@@ -150,7 +183,7 @@ func (roles *HostRoles) Preflight(ctx context.Context, snapshot session.Snapshot
 	if err != nil {
 		return err
 	}
-	if snapshot.Role != session.RoleWorkstation && snapshot.Role != session.RoleDownloader {
+	if snapshot.Role != session.RoleWorkstation && snapshot.Role != session.RoleDownloader && snapshot.Role != session.RoleExporter {
 		return ErrHostRoleUnavailable
 	}
 	if roles.PreflightCheck != nil {
@@ -158,10 +191,28 @@ func (roles *HostRoles) Preflight(ctx context.Context, snapshot session.Snapshot
 			return err
 		}
 	}
-	if preparer, ok := roles.Runtime.(HostRuntimePreparer); ok {
-		return preparer.Prepare(ctx, snapshot, state.plan)
+	if snapshot.Role != session.RoleExporter {
+		if preparer, ok := roles.Runtime.(HostRuntimePreparer); ok {
+			return preparer.Prepare(ctx, snapshot, state.plan)
+		}
 	}
 	return nil
+}
+
+// ExporterRequest returns only the already verified image and actor-owned
+// volatile storage for one exporter. It does not expose this seam through the
+// daemon API and accepts no caller-selected paths or QEMU fields.
+func (roles *HostRoles) ExporterRequest(snapshot session.Snapshot) (HostRuntimeRequest, error) {
+	state, err := roles.state(snapshot)
+	if err != nil || snapshot.Role != session.RoleExporter {
+		return HostRuntimeRequest{}, ErrHostRuntimeUnavailable
+	}
+	roles.mu.Lock()
+	defer roles.mu.Unlock()
+	if roles.states[snapshot.ID] != state || state.storage == nil || state.image.ManifestDigest == "" {
+		return HostRuntimeRequest{}, ErrHostStorageUnavailable
+	}
+	return HostRuntimeRequest{Snapshot: snapshot, Plan: state.plan, Image: state.image, Storage: state.storage}, nil
 }
 
 func (roles *HostRoles) VerifyImages(ctx context.Context, snapshot session.Snapshot) error {
@@ -304,12 +355,20 @@ func (roles *HostRoles) Metadata(ctx context.Context, snapshot session.Snapshot)
 	return relay.Metadata(ctx)
 }
 
-func (roles *HostRoles) Select(ctx context.Context, snapshot session.Snapshot, indexes []uint32) (*privatevmv1.TorrentMetadata, error) {
+func (roles *HostRoles) Select(ctx context.Context, snapshot session.Snapshot, indexes []uint32, destination torrent.Destination) (*privatevmv1.TorrentMetadata, error) {
+	state, err := roles.state(snapshot)
+	if err != nil || roles.Capacities == nil {
+		return nil, torrent.ErrCapacityEvidence
+	}
+	evidence, err := roles.Capacities.Evidence(ctx, snapshot, state.plan, destination)
+	if err != nil {
+		return nil, err
+	}
 	relay, err := roles.torrent(snapshot)
 	if err != nil {
 		return nil, err
 	}
-	return relay.Select(ctx, append([]uint32(nil), indexes...))
+	return relay.Select(ctx, append([]uint32(nil), indexes...), evidence)
 }
 
 func (roles *HostRoles) Start(ctx context.Context, snapshot session.Snapshot, emit func(*privatevmv1.TorrentEvent) error) error {
@@ -362,6 +421,46 @@ func (roles *HostRoles) SealAndDestroy(ctx context.Context, snapshot session.Sna
 		return nil, errors.Join(torrent.ErrCleanupIncomplete, err)
 	}
 	return status, nil
+}
+
+// AcquireSealedQuarantine transfers an exclusive use lease only after the
+// downloader QEMU/network owner has proved complete absence. The downloader's
+// storage cleanup fails closed while this lease is held, so a concurrent source
+// cleanup cannot invalidate the scanner's read-only block attachment.
+func (roles *HostRoles) AcquireSealedQuarantine(ctx context.Context, snapshot session.Snapshot) (HostQuarantineLease, error) {
+	if roles == nil || ctx == nil || snapshot.Role != session.RoleDownloader ||
+		snapshot.Phase != session.PhaseActive || snapshot.WorkflowState != "QUARANTINE_SEALED" {
+		return nil, ErrHostStorageUnavailable
+	}
+	state, err := roles.state(snapshot)
+	if err != nil {
+		return nil, ErrHostStorageUnavailable
+	}
+	roles.mu.Lock()
+	storageResource := state.storage
+	runtimeResource := state.runtime
+	roles.mu.Unlock()
+	if storageResource == nil || runtimeResource == nil || runtimeResource.Audit(ctx) != nil {
+		return nil, ErrHostRuntimeUnavailable
+	}
+	owner, ok := storageResource.(interface {
+		acquireQuarantine() (HostQuarantineLease, error)
+	})
+	if !ok {
+		return nil, ErrHostStorageUnavailable
+	}
+	lease, err := owner.acquireQuarantine()
+	if err != nil || lease == nil || lease.Path() == "" {
+		return nil, errors.Join(ErrHostStorageUnavailable, err)
+	}
+	roles.mu.Lock()
+	unchanged := roles.states[snapshot.ID] == state && state.storage == storageResource && state.runtime == runtimeResource
+	roles.mu.Unlock()
+	if !unchanged {
+		_ = lease.Release(context.Background())
+		return nil, ErrHostStorageUnavailable
+	}
+	return lease, nil
 }
 
 func (roles *HostRoles) torrent(snapshot session.Snapshot) (TorrentRelay, error) {

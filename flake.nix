@@ -69,6 +69,8 @@
               "reconstruct"
               "scan"
               "scan-report"
+              "vpn-verification"
+              "wireguard-config"
             ];
             exporter = [
               "usb-finalize"
@@ -234,8 +236,16 @@
             users.users.root.hashedPasswordFile = lib.mkForce null;
             users.users.private = {
               isNormalUser = true;
+              createHome = true;
+              homeMode = "0700";
               hashedPassword = "!";
             };
+            # Keep the smallest guestd boot gate faithful to the workstation
+            # runtime contract without importing the full desktop closure.
+            systemd.tmpfiles.rules = [
+              "d /home/private/Inbox 0700 private users -"
+              "d /home/private/Export 0700 private users -"
+            ];
             virtualisation.memorySize = 1024;
             virtualisation.cores = 2;
             virtualisation.vlans = [ ];
@@ -290,6 +300,7 @@
               loopbackVSOCKTestModule
             ];
             users.users.root.hashedPasswordFile = lib.mkForce null;
+            environment.systemPackages = [ (guestSmokeFor system "workstation") ];
             virtualisation.memorySize = 2048;
             virtualisation.cores = 2;
             virtualisation.vlans = [ ];
@@ -307,6 +318,10 @@
           testScript = ''
             machine.wait_for_unit("graphical.target")
             machine.wait_for_unit("display-manager.service")
+            machine.wait_for_unit("private-vm-guestd.service")
+            machine.succeed("systemctl is-active private-vm-guestd.service")
+            machine.succeed("timeout 15s private-vm-guest-smoke")
+            machine.succeed("ss -H -l -A vsock | grep -E '(^|:)4050([[:space:]]|$)'")
             machine.wait_for_x()
             machine.wait_until_succeeds("loginctl list-sessions --no-legend | grep -E '[[:space:]]private[[:space:]]'")
             machine.succeed("test -x /run/current-system/sw/bin/startxfce4")
@@ -335,7 +350,11 @@
             machine.succeed("ssh_root=$(dirname $(dirname $(readlink -f $(command -v ssh)))); test ! -e $ssh_root/etc/ssh/sshd_config; test ! -e $ssh_root/libexec/sftp-server; test ! -e $ssh_root/libexec/sshd-auth; test ! -e $ssh_root/libexec/sshd-session")
             machine.succeed("test ! -e /run/current-system/sw/bin/sudo")
             listeners = machine.succeed("ss -H -lntu")
-            assert listeners.strip() == "", f"unexpected TCP/UDP listeners: {listeners}"
+            for listener in listeners.splitlines():
+              address = listener.split()[-2]
+              host, port = address.rsplit(":", 1)
+              host = host.split("%", 1)[0]
+              assert host in ("127.0.0.53", "127.0.0.54") and port == "53", listener
           '';
         };
 
@@ -417,15 +436,22 @@
             machine.succeed("test ! -e /var/log/journal")
             listeners = machine.succeed("ss -H -lntu")
             for listener in listeners.splitlines():
-              address = listener.split()[3]
-              assert address.startswith("127.0.0.53:") or address.startswith("127.0.0.54:"), listener
+              address = listener.split()[-2]
+              assert (address.startswith("127.0.0.53") or address.startswith("127.0.0.54")) and address.endswith(":53"), listener
             machine.succeed("for command in evince file-roller firefox git gvfsd jq keepassxc libreoffice mousepad nm-applet parole pavucontrol ristretto thunar tumblerd udisksctl xfce4-screenshooter xfce4-taskmanager xfce4-terminal; do ! command -v $command >/dev/null || exit 1; done")
             machine.succeed("nft list table inet private_vm_downloader | grep -F 'policy drop'")
             machine.succeed("test -b /dev/disk/by-id/virtio-quarantine")
-            machine.succeed("findmnt -n -o FSTYPE /mnt/quarantine | grep -Fx ext4")
-            machine.succeed("findmnt -n -o OPTIONS /mnt/quarantine | grep -E '(^|,)nodev(,|$)' | grep -E '(^|,)nosuid(,|$)' | grep -E '(^|,)noexec(,|$)'")
-            machine.succeed("systemctl is-enabled private-vm-qbittorrent.service | grep -Fx static")
-            machine.succeed("! systemctl is-active --quiet private-vm-qbittorrent.service")
+            # guestd is the single quarantine mount owner. systemd gives it a
+            # private mount namespace, so inspect that namespace instead of
+            # accidentally requiring the hostile filesystem on the guest's
+            # global mount table.
+            machine.succeed("pid=$(systemctl show -p MainPID --value private-vm-guestd.service); test $pid -gt 1; nsenter -t $pid -m findmnt -n -o FSTYPE /mnt/quarantine | grep -Fx ext4")
+            machine.succeed("pid=$(systemctl show -p MainPID --value private-vm-guestd.service); test $pid -gt 1; nsenter -t $pid -m findmnt -n -o OPTIONS /mnt/quarantine | grep -E '(^|,)nodev(,|$)' | grep -E '(^|,)nosuid(,|$)' | grep -E '(^|,)noexec(,|$)'")
+            machine.fail("findmnt -n -o SOURCE /mnt/quarantine | grep -F /dev/vdb")
+            machine.fail("systemctl cat private-vm-qbittorrent.service")
+            machine.succeed("test -x /etc/private-vm/qbittorrent")
+            machine.succeed("readlink -f /etc/private-vm/qbittorrent | grep -E '^/nix/store/[^/]+-qbittorrent-[^/]+/bin/qbittorrent$'")
+            machine.succeed("! pgrep -u private -x qbittorrent")
             machine.succeed("test $(stat -c '%U:%G:%a' /run/private-vm-qbittorrent/config/qBittorrent/qBittorrent.conf) = root:users:440")
             machine.succeed("grep -Fx 'Session\\Interface=proton0' /run/private-vm-qbittorrent/config/qBittorrent/qBittorrent.conf")
             machine.succeed("grep -Fx 'Session\\InterfaceName=proton0' /run/private-vm-qbittorrent/config/qBittorrent/qBittorrent.conf")
@@ -433,22 +459,12 @@
             machine.succeed("grep -E '^WebUI\\\\Password_PBKDF2=\"@ByteArray\\([A-Za-z0-9+/=]+:[A-Za-z0-9+/=]+\\)\"$' /run/private-vm-qbittorrent/config/qBittorrent/qBittorrent.conf")
             machine.succeed("! grep -Eiq '(private.?key|magnet:|endpoint)' /run/private-vm-qbittorrent/config/qBittorrent/qBittorrent.conf")
 
-            machine.succeed("ip link add proton0 type dummy")
-            machine.succeed("ip link set proton0 up")
-            start_status, start_output = machine.execute("systemctl start private-vm-qbittorrent.service")
-            if start_status != 0:
-              log.error(start_output)
-              log.error(machine.succeed("journalctl --no-pager -u private-vm-qbittorrent.service -n 100"))
-            assert start_status == 0, "fixed qBittorrent unit did not start"
-            machine.wait_until_succeeds("systemctl is-active --quiet private-vm-qbittorrent.service")
             listeners = machine.succeed("ss -H -ltn")
             for listener in listeners.splitlines():
-              address = listener.split()[3]
-              assert address.startswith("127.0.0.1:") or address.startswith("127.0.0.53:") or address.startswith("127.0.0.54:"), listener
-
-            machine.succeed("systemctl stop private-vm-qbittorrent.service")
-            machine.wait_until_succeeds("! systemctl is-active --quiet private-vm-qbittorrent.service")
-            machine.succeed("! pgrep -u private -x qbittorrent")
+              address = listener.split()[-2]
+              host, port = address.rsplit(":", 1)
+              host = host.split("%", 1)[0]
+              assert host in ("127.0.0.53", "127.0.0.54") and port == "53", listener
 
             machine.succeed("cp /etc/private-vm/nftables/downloader-vpn-ipv4.nft.in /run/downloader-vpn-ipv4.nft")
             machine.succeed("sed -i -e 's/__PVM_ENDPOINT_IPV4__/192.0.2.1/g' -e 's/__PVM_ENDPOINT_PORT__/51820/g' /run/downloader-vpn-ipv4.nft")
@@ -699,12 +715,40 @@
           '';
         in
         assert scannerConfiguration.config.networking.networkmanager.enable;
-        assert scannerConfiguration.config.services.clamav.updater.enable;
-        assert builtins.hasAttr "clamav-freshclam" scannerConfiguration.config.systemd.services;
-        assert builtins.hasAttr "clamav-freshclam" scannerConfiguration.config.systemd.timers;
+        assert !scannerConfiguration.config.services.clamav.updater.enable;
+        assert !(builtins.hasAttr "clamav-freshclam" scannerConfiguration.config.systemd.services);
+        assert !(builtins.hasAttr "clamav-freshclam" scannerConfiguration.config.systemd.timers);
+        assert builtins.hasAttr "private-vm-scanner-definitions-update"
+          scannerConfiguration.config.systemd.services;
+        assert
+          scannerConfiguration.config.systemd.services.private-vm-scanner-definitions-update.wantedBy == [ ];
+        assert
+          scannerConfiguration.config.systemd.services.private-vm-guestd.serviceConfig.User
+          == "private-vm-scanner";
+        assert
+          scannerConfiguration.config.systemd.services.private-vm-guestd.serviceConfig.StateDirectory
+          == "private-vm/scanner";
+        assert
+          scannerConfiguration.config.systemd.services.private-vm-guestd.serviceConfig.TemporaryFileSystem
+          == [ "/run/private-vm/scanner-scratch:rw,nosuid,nodev,noexec,size=512M,mode=0711,uid=0,gid=0" ];
+        assert
+          scannerConfiguration.config.systemd.services.private-vm-guestd.serviceConfig.MemoryMax == "3G";
+        assert scannerConfiguration.config.systemd.services.clamav-daemon.serviceConfig.MemoryMax == "2G";
+        assert scannerConfiguration.config.security.polkit.enable;
+        assert builtins.hasAttr "private-vm/policy.safe.toml" scannerConfiguration.config.environment.etc;
         assert !offlineConfiguration.networking.networkmanager.enable;
         assert !offlineConfiguration.networking.dhcpcd.enable;
         assert !offlineConfiguration.services.resolved.enable;
+        assert
+          offlineConfiguration.fileSystems."/mnt/quarantine".device == "/dev/disk/by-id/virtio-quarantine";
+        assert builtins.all
+          (option: builtins.elem option offlineConfiguration.fileSystems."/mnt/quarantine".options)
+          [
+            "ro"
+            "nodev"
+            "nosuid"
+            "noexec"
+          ];
         assert !offlineConfiguration.services.clamav.updater.enable;
         assert !(builtins.hasAttr "clamav-freshclam" offlineConfiguration.systemd.services);
         assert !(builtins.hasAttr "clamav-freshclam" offlineConfiguration.systemd.timers);
@@ -752,11 +796,11 @@
             grep -Fx 'MaxFileSize 4G' "${scannerEtc}/etc/clamav/clamd.conf"
             grep -Fx 'MaxScanTime 300000' "${scannerEtc}/etc/clamav/clamd.conf"
             grep -Fx 'AlertEncrypted true' "${scannerEtc}/etc/clamav/clamd.conf"
-            grep -Fx 'DatabaseMirror database.clamav.net' "${scannerEtc}/etc/clamav/freshclam.conf"
-            grep -Fx 'ConnectTimeout 10' "${scannerEtc}/etc/clamav/freshclam.conf"
-            grep -Fx 'ReceiveTimeout 60' "${scannerEtc}/etc/clamav/freshclam.conf"
-            grep -Fx 'MaxAttempts 3' "${scannerEtc}/etc/clamav/freshclam.conf"
-            ! grep -Eq '^(DatabaseCustomURL|PrivateMirror) ' "${scannerEtc}/etc/clamav/freshclam.conf"
+            grep -Fx 'DatabaseMirror database.clamav.net' "${scannerEtc}/etc/private-vm/freshclam.conf"
+            grep -Fx 'ConnectTimeout 10' "${scannerEtc}/etc/private-vm/freshclam.conf"
+            grep -Fx 'ReceiveTimeout 60' "${scannerEtc}/etc/private-vm/freshclam.conf"
+            grep -Fx 'MaxAttempts 3' "${scannerEtc}/etc/private-vm/freshclam.conf"
+            ! grep -Eq '^(DatabaseCustomURL|PrivateMirror) ' "${scannerEtc}/etc/private-vm/freshclam.conf"
             ${nixpkgs.lib.concatMapStringsSep "\n" verifyCommand toolchain.requiredCommands}
             ${nixpkgs.lib.concatMapStringsSep "\n" verifyTool toolchain.tools}
             ${nixpkgs.lib.concatMapStringsSep "\n" verifyForbiddenCommand scannerForbiddenCommands}
@@ -802,7 +846,10 @@
             virtualisation.memorySize = 2048;
             virtualisation.cores = 2;
             virtualisation.vlans = [ 1 ];
-            virtualisation.qemu.options = tcgQEMUOptionsFor system;
+            virtualisation.qemu.options = tcgQEMUOptionsFor system ++ [
+              "-fw_cfg"
+              "name=opt/private-vm/scanner-boot-mode,string=definitions-update"
+            ];
           };
           testScript = ''
             import json
@@ -818,8 +865,13 @@
             machine.succeed("freshclam --config-file=${freshclamTestConfig} --datadir=/var/lib/clamav-test --no-dns --stdout")
             machine.succeed("test -s /var/lib/clamav-test/private-vm-test.hdb")
             machine.succeed("grep -Fx '44d88612fea8a8f36de82e1278abb02f:68:Eicar-Test-Signature' /var/lib/clamav-test/private-vm-test.hdb")
-            machine.succeed("systemctl is-enabled clamav-freshclam.timer")
-            machine.succeed("systemctl is-active clamav-freshclam.timer")
+            machine.succeed("! systemctl list-unit-files --no-legend clamav-freshclam.service | grep -F clamav-freshclam.service")
+            machine.succeed("! systemctl list-unit-files --no-legend clamav-freshclam.timer | grep -F clamav-freshclam.timer")
+            machine.succeed("systemctl is-disabled private-vm-scanner-definitions-update.service")
+            machine.succeed("! systemctl is-active private-vm-scanner-definitions-update.service")
+            machine.succeed("test $(systemctl is-enabled private-vm-scanner-stage-offline.service) = static")
+            machine.succeed("! systemctl is-active private-vm-scanner-stage-offline.service")
+            machine.succeed("test -x /run/current-system/specialisation/scan-offline/bin/switch-to-configuration")
             machine.succeed("systemctl is-active NetworkManager.service")
             machine.succeed("test $(find /sys/class/net -mindepth 1 -maxdepth 1 ! -name lo | wc -l) -ge 1")
             machine.succeed("jq -e '.phase == \"definitions-update\" and .network_device_policy == \"proton-only\" and .quarantine_device_policy == \"forbidden\"' /etc/private-vm/scanner-phase.json")
@@ -836,6 +888,8 @@
               "reconstruct",
               "scan",
               "scan-report",
+              "vpn-verification",
+              "wireguard-config",
             ]
             version = json.loads(machine.succeed("private-vm-guestd --version"))
             image = json.loads(machine.succeed("cat /etc/private-vm/image.json"))
@@ -903,6 +957,8 @@
             # a later `-nic none`, which cannot remove an already-declared NIC.
             virtualisation.qemu.networkingOptions = lib.mkForce [ "-nic none" ];
             virtualisation.qemu.options = tcgQEMUOptionsFor system ++ [
+              "-fw_cfg"
+              "name=opt/private-vm/scanner-boot-mode,string=scan-offline"
               "-drive"
               "file=${quarantineFixture},if=none,format=raw,readonly=on,id=quarantine"
               "-device"
@@ -921,6 +977,8 @@
             machine.succeed("! systemctl is-active NetworkManager.service")
             machine.succeed("! systemctl list-unit-files --no-legend clamav-freshclam.service | grep -F clamav-freshclam.service")
             machine.succeed("! systemctl list-unit-files --no-legend clamav-freshclam.timer | grep -F clamav-freshclam.timer")
+            machine.succeed("! systemctl list-unit-files --no-legend private-vm-scanner-definitions-update.service | grep -F private-vm-scanner-definitions-update.service")
+            machine.succeed("! systemctl list-unit-files --no-legend private-vm-scanner-stage-offline.service | grep -F private-vm-scanner-stage-offline.service")
             machine.succeed("jq -e '.phase == \"scan-offline\" and .network_device_policy == \"forbidden\" and .quarantine_device_policy == \"required-read-only\" and .quarantine_mount_options == [\"nodev\", \"noexec\", \"nosuid\", \"ro\"] and .definitions_update == \"disabled\"' /etc/private-vm/scanner-phase.json")
             machine.succeed("test -x /run/current-system/sw/bin/startxfce4")
             machine.succeed("test -x /run/current-system/sw/bin/clamscan")
@@ -938,6 +996,8 @@
               "reconstruct",
               "scan",
               "scan-report",
+              "vpn-verification",
+              "wireguard-config",
             ]
             version = json.loads(machine.succeed("private-vm-guestd --version"))
             image = json.loads(machine.succeed("cat /etc/private-vm/image.json"))
@@ -1077,6 +1137,7 @@
         assert nixpkgs.lib.hasInfix "--group pvm-custom" service.serviceConfig.ExecStart;
         assert service.serviceConfig.RuntimeDirectoryMode == "0750";
         assert service.serviceConfig.StateDirectoryMode == "0700";
+        assert host.config.boot.kernel.sysctl."net.ipv6.conf.all.forwarding" == 1;
         assert builtins.length policies == 1;
         assert nixpkgs.lib.all (package: nixpkgs.lib.elem package service.path) requiredPath;
         assert builtins.length (nixpkgs.lib.splitString "<action id=" policySource) == 2;
@@ -1119,18 +1180,23 @@
           };
           imagePackages = nixpkgs.lib.optionalAttrs (system == "x86_64-linux") {
             image-workstation-basic = workstationBasic.config.system.build.images.qemu-efi;
-            closure-workstation-basic = workstationBasic.config.system.build.images.qemu-efi.passthru.config.system.build.toplevel;
+            closure-workstation-basic =
+              workstationBasic.config.system.build.images.qemu-efi.passthru.config.system.build.toplevel;
             image-workstation-office = workstationOffice.config.system.build.images.qemu-efi;
-            closure-workstation-office = workstationOffice.config.system.build.images.qemu-efi.passthru.config.system.build.toplevel;
+            closure-workstation-office =
+              workstationOffice.config.system.build.images.qemu-efi.passthru.config.system.build.toplevel;
             image-workstation-development = workstationDevelopment.config.system.build.images.qemu-efi;
-            closure-workstation-development = workstationDevelopment.config.system.build.images.qemu-efi.passthru.config.system.build.toplevel;
+            closure-workstation-development =
+              workstationDevelopment.config.system.build.images.qemu-efi.passthru.config.system.build.toplevel;
             image-downloader = downloader.config.system.build.images.qemu-efi;
-            closure-downloader = downloader.config.system.build.images.qemu-efi.passthru.config.system.build.toplevel;
+            closure-downloader =
+              downloader.config.system.build.images.qemu-efi.passthru.config.system.build.toplevel;
             image-scanner = scanner.config.system.build.images.qemu-efi;
             closure-scanner = scanner.config.system.build.images.qemu-efi.passthru.config.system.build.toplevel;
             sbom-scanner = scannerSBOMFor system;
             image-exporter = exporter.config.system.build.images.qemu-efi;
-            closure-exporter = exporter.config.system.build.images.qemu-efi.passthru.config.system.build.toplevel;
+            closure-exporter =
+              exporter.config.system.build.images.qemu-efi.passthru.config.system.build.toplevel;
           };
         in
         binaryPackages // imagePackages
@@ -1254,12 +1320,13 @@
           scanner-update = scannerUpdateTestFor system;
           scanner-offline = scannerOfflineTestFor system;
           workstation-bundles = workstationBundlesCheckFor system;
-          workstation-desktop =
-            workstationDesktopTestFor system "basic" ./nix/guests/workstation-basic.nix;
+          workstation-desktop = workstationDesktopTestFor system "basic" ./nix/guests/workstation-basic.nix;
           workstation-office-desktop =
-            workstationDesktopTestFor system "office" ./nix/guests/workstation-office.nix;
+            workstationDesktopTestFor system "office"
+              ./nix/guests/workstation-office.nix;
           workstation-development-desktop =
-            workstationDesktopTestFor system "development" ./nix/guests/workstation-development.nix;
+            workstationDesktopTestFor system "development"
+              ./nix/guests/workstation-development.nix;
         }
       );
 

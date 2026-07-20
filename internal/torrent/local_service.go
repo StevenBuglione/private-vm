@@ -14,7 +14,6 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"sync"
@@ -25,7 +24,6 @@ import (
 )
 
 const (
-	qbitSystemdUnit        = "private-vm-qbittorrent.service"
 	qbitRuntimeRoot        = "/run/private-vm-qbittorrent"
 	qbitConfigPath         = qbitRuntimeRoot + "/config/qBittorrent/qBittorrent.conf"
 	qbitUsername           = "private-vm"
@@ -44,46 +42,9 @@ type localServiceManager interface {
 	Stop(context.Context) error
 }
 
-type systemdServiceManager struct{ path string }
-
-func newSystemdServiceManager(path string) (*systemdServiceManager, error) {
-	if !filepath.IsAbs(path) || filepath.Clean(path) != path || filepath.Base(path) != "systemctl" {
-		return nil, invalidRequest()
-	}
-	return &systemdServiceManager{path: path}, nil
-}
-
-func (manager *systemdServiceManager) Start(ctx context.Context) error {
-	return manager.run(ctx, "start")
-}
-
-func (manager *systemdServiceManager) Stop(ctx context.Context) error {
-	return manager.run(ctx, "stop")
-}
-
-func (manager *systemdServiceManager) run(ctx context.Context, operation string) error {
-	if manager == nil || ctx == nil || (operation != "start" && operation != "stop") {
-		return invalidRequest()
-	}
-	// Blocking systemd job completion is required: start must be accepted before
-	// login polling, and stop must prove the process exited before tunnel removal.
-	// CommandContext supplies the caller's hard bound without a detached job.
-	command := exec.CommandContext(ctx, manager.path, "--system", operation, qbitSystemdUnit)
-	command.Env = []string{"LANG=C.UTF-8"}
-	command.Stdout = io.Discard
-	command.Stderr = io.Discard
-	if err := command.Run(); err != nil {
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
-		return errors.New("bounded local qBittorrent service operation failed")
-	}
-	return nil
-}
-
-// LocalQBittorrentService owns one per-boot credential, a fixed systemd unit
-// and the authenticated loopback HTTP client. It cannot select another unit,
-// URL, profile or save path.
+// LocalQBittorrentService owns one per-boot credential, one fixed qBittorrent
+// child process and the authenticated loopback HTTP client. It cannot select
+// another executable, URL, profile or save path.
 type LocalQBittorrentService struct {
 	mu         sync.Mutex
 	manager    localServiceManager
@@ -97,8 +58,8 @@ type LocalQBittorrentService struct {
 
 type qbitConfigWriter func(string, []byte, int, int) error
 
-func NewLocalQBittorrentService(systemctlPath string, privateUID, privateGID int) (*LocalQBittorrentService, error) {
-	manager, err := newSystemdServiceManager(systemctlPath)
+func NewLocalQBittorrentService(qbittorrentPath string, privateUID, privateGID int) (*LocalQBittorrentService, error) {
+	manager, err := newQBittorrentProcessManager(qbittorrentPath, privateUID, privateGID)
 	if err != nil {
 		return nil, err
 	}
@@ -168,9 +129,9 @@ func (service *LocalQBittorrentService) Start(ctx context.Context) error {
 	}
 	operationCtx, cancel := boundedContext(ctx, qbitLoginTimeout)
 	defer cancel()
-	// Claim ownership before requesting start: a canceled systemctl reply can
-	// race with systemd accepting the job, so every error path must stop/audit
-	// the fixed unit instead of assuming it never started.
+	// Claim ownership before requesting start: cancellation can race with exec
+	// and login, so every error path must stop/audit the fixed child instead of
+	// assuming it never started.
 	service.started = true
 	if err := service.manager.Start(operationCtx); err != nil {
 		service.stopAfterFailure()
@@ -393,7 +354,7 @@ func writePrivateQBitConfig(path string, value []byte, uid, gid int) error {
 }
 
 func (service *LocalQBittorrentService) String() string {
-	return fmt.Sprintf("qBittorrentService(%s)", qbitSystemdUnit)
+	return fmt.Sprintf("qBittorrentService(%s)", qbitBaseURL)
 }
 
 var _ HTTPDoer = (*LocalQBittorrentService)(nil)

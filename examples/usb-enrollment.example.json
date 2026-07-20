@@ -1,14 +1,19 @@
 {
-  "version": 1,
-  "enrollment_id": "usb-7d4bb35b",
+  "schema_version": 1,
+  "enrollment_id": "usb-4568eb4a9e23aaa5",
   "label": "PRIVATE_VM_TRANSFER",
-  "vendor_id": "1234",
-  "product_id": "5678",
-  "serial": "EXAMPLE-SERIAL-REPLACE",
-  "port_path": "1-2.3",
-  "interfaces": [
-    "08:06:50"
-  ],
-  "capacity_bytes": 137438953472,
+  "identity": {
+    "vendor_id": "1234",
+    "product_id": "5678",
+    "serial": "EXAMPLE-SERIAL-REPLACE",
+    "usbguard_hash": "0123456789abcdef0123456789abcdef",
+    "interfaces": [
+      "08:06:50"
+    ],
+    "capacity_bytes": 137438953472,
+    "port_path": "1-2.3",
+    "port_bound": false,
+    "model": "EXAMPLE DEDICATED DISK"
+  },
   "filesystem": "luks2-ext4"
 }

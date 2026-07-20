@@ -35,9 +35,21 @@ service PrivateVMDaemonService {
   rpc AbortSession(AbortSessionRequest) returns (Session);
   rpc CleanupSession(CleanupSessionRequest) returns (Session);
   rpc StreamEvents(GetSessionRequest) returns (stream SessionEvent);
+  rpc GetWorkspaceState(HostWorkspaceStateRequest) returns (WorkspaceState);
   rpc ImportWorkspaceFile(stream TransferFrame) returns (TransferReceipt);
   rpc ExportWorkspaceFile(ExportWorkspaceRequest) returns (stream TransferFrame);
+  rpc VerifyWorkspaceExport(VerifyWorkspaceExportRequest) returns (WorkspaceState);
+  rpc ExportWorkspaceToDestination(ExportWorkspaceToDestinationRequest) returns (WorkspaceState);
+  rpc ListUSBDevices(ListUSBDevicesRequest) returns (ListUSBDevicesResponse);
+  rpc InspectUSBDevice(InspectUSBDeviceRequest) returns (USBDeviceStatus);
+  rpc EnrollUSBDevice(EnrollUSBDeviceRequest) returns (USBEnrollmentStatus);
+  rpc GetUSBEnrollment(GetUSBEnrollmentRequest) returns (USBEnrollmentStatus);
+  rpc VerifyUSBEnrollment(VerifyUSBEnrollmentRequest) returns (USBEnrollmentStatus);
+  rpc ForgetUSBEnrollment(ForgetUSBEnrollmentRequest) returns (Empty);
   rpc ClaimUSB(ClaimUSBRequest) returns (USBClaim);
+  rpc PlanUSBPreparation(PlanUSBPreparationRequest) returns (USBPreparePlan);
+  rpc PrepareUSB(stream HostUSBPrepareFrame) returns (USBPrepareReceipt);
+  rpc ExportApprovedToUSB(USBExportRequest) returns (USBExportReceipt);
   rpc ReleaseUSB(ReleaseUSBRequest) returns (Empty);
 }
 
@@ -155,6 +167,7 @@ message TorrentControlRequest { RequestContext context = 1; }
 message HostSelectTorrentFilesRequest {
   RequestContext context = 1;
   repeated uint32 indexes = 2;
+  TorrentDestination destination = 3;
 }
 
 // Scanner host requests are semantic. The source session in StartScanner must
@@ -194,6 +207,9 @@ message HostScannerStatus {
   uint32 blocking_finding_count = 10;
   string code = 11;
   string remediation = 12;
+  // Set only by a successful workstation promotion. This opaque session ID
+  // lets the unprivileged CLI connect the existing user-owned Unix viewer.
+  string destination_session_id = 13;
 }
 
 message HostScannerReportSummary {
@@ -258,6 +274,92 @@ message ExportWorkspaceRequest {
   string output_id = 2;
 }
 
+message HostWorkspaceStateRequest { RequestContext context = 1; }
+
+message VerifyWorkspaceExportRequest {
+  RequestContext context = 1;
+  string output_id = 2;
+  Hash daemon_digest = 3;
+  Hash receiver_digest = 4;
+}
+
+// Workspace export destinations are semantic capabilities owned by the
+// daemon. Requests never contain a host path, block device, mount point or
+// arbitrary exporter argument.
+enum WorkspaceExportDestination {
+  WORKSPACE_EXPORT_DESTINATION_UNSPECIFIED = 0;
+  WORKSPACE_EXPORT_DESTINATION_USB = 1;
+  WORKSPACE_EXPORT_DESTINATION_ENCRYPTED_BUNDLE = 2;
+}
+
+message ExportWorkspaceToDestinationRequest {
+  RequestContext context = 1;
+  string output_id = 2;
+  WorkspaceExportDestination destination = 3;
+}
+
+message ListUSBDevicesRequest { RequestContext context = 1; }
+
+message InspectUSBDeviceRequest {
+  RequestContext context = 1;
+  string device_id = 2;
+}
+
+message EnrollUSBDeviceRequest {
+  RequestContext context = 1;
+  string device_id = 2;
+  string label = 3;
+  bool accept_port_binding = 4;
+}
+
+message GetUSBEnrollmentRequest { RequestContext context = 1; }
+message VerifyUSBEnrollmentRequest { RequestContext context = 1; }
+message ForgetUSBEnrollmentRequest { RequestContext context = 1; }
+
+message USBDeviceStatus {
+  uint32 schema_version = 1;
+  string device_id = 2;
+  string vendor_id = 3;
+  string product_id = 4;
+  string model = 5;
+  string serial = 6;
+  string port_path = 7;
+  repeated string interfaces = 8;
+  uint64 capacity_bytes = 9;
+  bool mounted = 10;
+  bool read_only = 11;
+  bool host_filesystem = 12;
+  bool selectable = 13;
+  string identity_fingerprint = 14;
+  string code = 15;
+  string remediation = 16;
+  string usbguard_hash = 17;
+  string block_path = 18;
+}
+
+message ListUSBDevicesResponse { repeated USBDeviceStatus devices = 1; }
+
+message USBEnrollmentStatus {
+  uint32 schema_version = 1;
+  string enrollment_id = 2;
+  string label = 3;
+  string filesystem = 4;
+  string vendor_id = 5;
+  string product_id = 6;
+  string model = 7;
+  string serial = 8;
+  string port_path = 9;
+  bool port_bound = 10;
+  repeated string interfaces = 11;
+  uint64 capacity_bytes = 12;
+  string identity_fingerprint = 13;
+  bool verified = 14;
+  string code = 15;
+  string remediation = 16;
+  string usbguard_hash = 17;
+  string block_path = 18;
+}
+
 message ClaimUSBRequest {
   RequestContext context = 1;
   string enrollment_id = 2;
@@ -266,6 +368,72 @@ message ClaimUSBRequest {
 message USBClaim {
   string claim_id = 1;
   string enrollment_id = 2;
+}
+
+message PlanUSBPreparationRequest {
+  RequestContext context = 1;
+  string claim_id = 2;
+}
+
+message USBPreparePlan {
+  uint32 schema_version = 1;
+  string enrollment_id = 2;
+  string identity_fingerprint = 3;
+  uint64 capacity_bytes = 4;
+  string filesystem = 5;
+  string challenge = 6;
+  int64 created_unix_seconds = 7;
+  string first_confirmation = 8;
+  string second_confirmation = 9;
+}
+
+message HostUSBPrepareBegin {
+  RequestContext context = 1;
+  string claim_id = 2;
+  string challenge = 3;
+  string first_confirmation = 4;
+  string second_confirmation = 5;
+}
+
+message HostUSBPrepareSecretChunk { bytes data = 1; }
+
+message HostUSBPrepareFrame {
+  oneof frame {
+    HostUSBPrepareBegin begin = 1;
+    HostUSBPrepareSecretChunk passphrase_chunk = 2;
+  }
+}
+
+message USBPrepareReceipt {
+  uint32 schema_version = 1;
+  string enrollment_id = 2;
+  string filesystem = 3;
+  uint64 capacity_bytes = 4;
+  string identity_fingerprint = 5;
+  string state = 6;
+}
+
+message USBExportRequest {
+  RequestContext context = 1;
+  string claim_id = 2;
+  string scanner_session_id = 3;
+  string output_id = 4;
+}
+
+message USBExportReceipt {
+  uint32 schema_version = 1;
+  string enrollment_id = 2;
+  uint64 bytes_written = 3;
+  bool scanner_relay_hash_equal = 4;
+  bool relay_exporter_hash_equal = 5;
+  bool exporter_reread_hash_equal = 6;
+  bool file_synced = 7;
+  bool filesystem_synced = 8;
+  bool atomic_rename = 9;
+  bool usb_unmounted = 10;
+  bool usb_detached = 11;
+  bool exporter_stopped = 12;
+  bool cleanup_complete = 13;
 }
 
 message ReleaseUSBRequest {

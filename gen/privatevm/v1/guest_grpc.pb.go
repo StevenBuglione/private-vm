@@ -1015,6 +1015,8 @@ var DownloaderGuestService_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
+	ScannerGuestService_ConfigureWireGuard_FullMethodName   = "/privatevm.v1.ScannerGuestService/ConfigureWireGuard"
+	ScannerGuestService_VerifyVPN_FullMethodName            = "/privatevm.v1.ScannerGuestService/VerifyVPN"
 	ScannerGuestService_UpdateDefinitions_FullMethodName    = "/privatevm.v1.ScannerGuestService/UpdateDefinitions"
 	ScannerGuestService_GetDefinitionsStatus_FullMethodName = "/privatevm.v1.ScannerGuestService/GetDefinitionsStatus"
 	ScannerGuestService_VerifyOfflineMode_FullMethodName    = "/privatevm.v1.ScannerGuestService/VerifyOfflineMode"
@@ -1029,6 +1031,8 @@ const (
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type ScannerGuestServiceClient interface {
+	ConfigureWireGuard(ctx context.Context, in *ConfigureWireGuardRequest, opts ...grpc.CallOption) (*VPNStatus, error)
+	VerifyVPN(ctx context.Context, in *VerifyVPNRequest, opts ...grpc.CallOption) (*VPNStatus, error)
 	UpdateDefinitions(ctx context.Context, in *ScannerRequest, opts ...grpc.CallOption) (*DefinitionsStatus, error)
 	GetDefinitionsStatus(ctx context.Context, in *ScannerRequest, opts ...grpc.CallOption) (*DefinitionsStatus, error)
 	VerifyOfflineMode(ctx context.Context, in *ScannerRequest, opts ...grpc.CallOption) (*OfflineStatus, error)
@@ -1045,6 +1049,26 @@ type scannerGuestServiceClient struct {
 
 func NewScannerGuestServiceClient(cc grpc.ClientConnInterface) ScannerGuestServiceClient {
 	return &scannerGuestServiceClient{cc}
+}
+
+func (c *scannerGuestServiceClient) ConfigureWireGuard(ctx context.Context, in *ConfigureWireGuardRequest, opts ...grpc.CallOption) (*VPNStatus, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(VPNStatus)
+	err := c.cc.Invoke(ctx, ScannerGuestService_ConfigureWireGuard_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *scannerGuestServiceClient) VerifyVPN(ctx context.Context, in *VerifyVPNRequest, opts ...grpc.CallOption) (*VPNStatus, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(VPNStatus)
+	err := c.cc.Invoke(ctx, ScannerGuestService_VerifyVPN_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func (c *scannerGuestServiceClient) UpdateDefinitions(ctx context.Context, in *ScannerRequest, opts ...grpc.CallOption) (*DefinitionsStatus, error) {
@@ -1167,6 +1191,8 @@ type ScannerGuestService_ExportApprovedFileClient = grpc.ServerStreamingClient[T
 // All implementations must embed UnimplementedScannerGuestServiceServer
 // for forward compatibility.
 type ScannerGuestServiceServer interface {
+	ConfigureWireGuard(context.Context, *ConfigureWireGuardRequest) (*VPNStatus, error)
+	VerifyVPN(context.Context, *VerifyVPNRequest) (*VPNStatus, error)
 	UpdateDefinitions(context.Context, *ScannerRequest) (*DefinitionsStatus, error)
 	GetDefinitionsStatus(context.Context, *ScannerRequest) (*DefinitionsStatus, error)
 	VerifyOfflineMode(context.Context, *ScannerRequest) (*OfflineStatus, error)
@@ -1185,6 +1211,12 @@ type ScannerGuestServiceServer interface {
 // pointer dereference when methods are called.
 type UnimplementedScannerGuestServiceServer struct{}
 
+func (UnimplementedScannerGuestServiceServer) ConfigureWireGuard(context.Context, *ConfigureWireGuardRequest) (*VPNStatus, error) {
+	return nil, status.Error(codes.Unimplemented, "method ConfigureWireGuard not implemented")
+}
+func (UnimplementedScannerGuestServiceServer) VerifyVPN(context.Context, *VerifyVPNRequest) (*VPNStatus, error) {
+	return nil, status.Error(codes.Unimplemented, "method VerifyVPN not implemented")
+}
 func (UnimplementedScannerGuestServiceServer) UpdateDefinitions(context.Context, *ScannerRequest) (*DefinitionsStatus, error) {
 	return nil, status.Error(codes.Unimplemented, "method UpdateDefinitions not implemented")
 }
@@ -1228,6 +1260,42 @@ func RegisterScannerGuestServiceServer(s grpc.ServiceRegistrar, srv ScannerGuest
 		t.testEmbeddedByValue()
 	}
 	s.RegisterService(&ScannerGuestService_ServiceDesc, srv)
+}
+
+func _ScannerGuestService_ConfigureWireGuard_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ConfigureWireGuardRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ScannerGuestServiceServer).ConfigureWireGuard(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ScannerGuestService_ConfigureWireGuard_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ScannerGuestServiceServer).ConfigureWireGuard(ctx, req.(*ConfigureWireGuardRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ScannerGuestService_VerifyVPN_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(VerifyVPNRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ScannerGuestServiceServer).VerifyVPN(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ScannerGuestService_VerifyVPN_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ScannerGuestServiceServer).VerifyVPN(ctx, req.(*VerifyVPNRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
 func _ScannerGuestService_UpdateDefinitions_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -1354,6 +1422,14 @@ var ScannerGuestService_ServiceDesc = grpc.ServiceDesc{
 	HandlerType: (*ScannerGuestServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
+			MethodName: "ConfigureWireGuard",
+			Handler:    _ScannerGuestService_ConfigureWireGuard_Handler,
+		},
+		{
+			MethodName: "VerifyVPN",
+			Handler:    _ScannerGuestService_VerifyVPN_Handler,
+		},
+		{
 			MethodName: "UpdateDefinitions",
 			Handler:    _ScannerGuestService_UpdateDefinitions_Handler,
 		},
@@ -1396,11 +1472,14 @@ var ScannerGuestService_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
-	ExporterGuestService_InspectUSB_FullMethodName  = "/privatevm.v1.ExporterGuestService/InspectUSB"
-	ExporterGuestService_PrepareUSB_FullMethodName  = "/privatevm.v1.ExporterGuestService/PrepareUSB"
-	ExporterGuestService_WriteFile_FullMethodName   = "/privatevm.v1.ExporterGuestService/WriteFile"
-	ExporterGuestService_VerifyFile_FullMethodName  = "/privatevm.v1.ExporterGuestService/VerifyFile"
-	ExporterGuestService_FinalizeUSB_FullMethodName = "/privatevm.v1.ExporterGuestService/FinalizeUSB"
+	ExporterGuestService_InspectUSB_FullMethodName        = "/privatevm.v1.ExporterGuestService/InspectUSB"
+	ExporterGuestService_PrepareUSB_FullMethodName        = "/privatevm.v1.ExporterGuestService/PrepareUSB"
+	ExporterGuestService_WriteFile_FullMethodName         = "/privatevm.v1.ExporterGuestService/WriteFile"
+	ExporterGuestService_VerifyFile_FullMethodName        = "/privatevm.v1.ExporterGuestService/VerifyFile"
+	ExporterGuestService_FinalizeUSB_FullMethodName       = "/privatevm.v1.ExporterGuestService/FinalizeUSB"
+	ExporterGuestService_PrepareExactUSB_FullMethodName   = "/privatevm.v1.ExporterGuestService/PrepareExactUSB"
+	ExporterGuestService_WriteVerifiedFile_FullMethodName = "/privatevm.v1.ExporterGuestService/WriteVerifiedFile"
+	ExporterGuestService_VerifyWrittenFile_FullMethodName = "/privatevm.v1.ExporterGuestService/VerifyWrittenFile"
 )
 
 // ExporterGuestServiceClient is the client API for ExporterGuestService service.
@@ -1412,6 +1491,9 @@ type ExporterGuestServiceClient interface {
 	WriteFile(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[TransferFrame, TransferReceipt], error)
 	VerifyFile(ctx context.Context, in *VerifyExportRequest, opts ...grpc.CallOption) (*TransferReceipt, error)
 	FinalizeUSB(ctx context.Context, in *ExporterRequest, opts ...grpc.CallOption) (*USBStatus, error)
+	PrepareExactUSB(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[PrepareUSBFrame, USBStatus], error)
+	WriteVerifiedFile(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[TransferFrame, USBTransferReceipt], error)
+	VerifyWrittenFile(ctx context.Context, in *VerifyExportRequest, opts ...grpc.CallOption) (*USBTransferReceipt, error)
 }
 
 type exporterGuestServiceClient struct {
@@ -1475,6 +1557,42 @@ func (c *exporterGuestServiceClient) FinalizeUSB(ctx context.Context, in *Export
 	return out, nil
 }
 
+func (c *exporterGuestServiceClient) PrepareExactUSB(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[PrepareUSBFrame, USBStatus], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &ExporterGuestService_ServiceDesc.Streams[1], ExporterGuestService_PrepareExactUSB_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[PrepareUSBFrame, USBStatus]{ClientStream: stream}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type ExporterGuestService_PrepareExactUSBClient = grpc.ClientStreamingClient[PrepareUSBFrame, USBStatus]
+
+func (c *exporterGuestServiceClient) WriteVerifiedFile(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[TransferFrame, USBTransferReceipt], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &ExporterGuestService_ServiceDesc.Streams[2], ExporterGuestService_WriteVerifiedFile_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[TransferFrame, USBTransferReceipt]{ClientStream: stream}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type ExporterGuestService_WriteVerifiedFileClient = grpc.ClientStreamingClient[TransferFrame, USBTransferReceipt]
+
+func (c *exporterGuestServiceClient) VerifyWrittenFile(ctx context.Context, in *VerifyExportRequest, opts ...grpc.CallOption) (*USBTransferReceipt, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(USBTransferReceipt)
+	err := c.cc.Invoke(ctx, ExporterGuestService_VerifyWrittenFile_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ExporterGuestServiceServer is the server API for ExporterGuestService service.
 // All implementations must embed UnimplementedExporterGuestServiceServer
 // for forward compatibility.
@@ -1484,6 +1602,9 @@ type ExporterGuestServiceServer interface {
 	WriteFile(grpc.ClientStreamingServer[TransferFrame, TransferReceipt]) error
 	VerifyFile(context.Context, *VerifyExportRequest) (*TransferReceipt, error)
 	FinalizeUSB(context.Context, *ExporterRequest) (*USBStatus, error)
+	PrepareExactUSB(grpc.ClientStreamingServer[PrepareUSBFrame, USBStatus]) error
+	WriteVerifiedFile(grpc.ClientStreamingServer[TransferFrame, USBTransferReceipt]) error
+	VerifyWrittenFile(context.Context, *VerifyExportRequest) (*USBTransferReceipt, error)
 	mustEmbedUnimplementedExporterGuestServiceServer()
 }
 
@@ -1508,6 +1629,15 @@ func (UnimplementedExporterGuestServiceServer) VerifyFile(context.Context, *Veri
 }
 func (UnimplementedExporterGuestServiceServer) FinalizeUSB(context.Context, *ExporterRequest) (*USBStatus, error) {
 	return nil, status.Error(codes.Unimplemented, "method FinalizeUSB not implemented")
+}
+func (UnimplementedExporterGuestServiceServer) PrepareExactUSB(grpc.ClientStreamingServer[PrepareUSBFrame, USBStatus]) error {
+	return status.Error(codes.Unimplemented, "method PrepareExactUSB not implemented")
+}
+func (UnimplementedExporterGuestServiceServer) WriteVerifiedFile(grpc.ClientStreamingServer[TransferFrame, USBTransferReceipt]) error {
+	return status.Error(codes.Unimplemented, "method WriteVerifiedFile not implemented")
+}
+func (UnimplementedExporterGuestServiceServer) VerifyWrittenFile(context.Context, *VerifyExportRequest) (*USBTransferReceipt, error) {
+	return nil, status.Error(codes.Unimplemented, "method VerifyWrittenFile not implemented")
 }
 func (UnimplementedExporterGuestServiceServer) mustEmbedUnimplementedExporterGuestServiceServer() {}
 func (UnimplementedExporterGuestServiceServer) testEmbeddedByValue()                              {}
@@ -1609,6 +1739,38 @@ func _ExporterGuestService_FinalizeUSB_Handler(srv interface{}, ctx context.Cont
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ExporterGuestService_PrepareExactUSB_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(ExporterGuestServiceServer).PrepareExactUSB(&grpc.GenericServerStream[PrepareUSBFrame, USBStatus]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type ExporterGuestService_PrepareExactUSBServer = grpc.ClientStreamingServer[PrepareUSBFrame, USBStatus]
+
+func _ExporterGuestService_WriteVerifiedFile_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(ExporterGuestServiceServer).WriteVerifiedFile(&grpc.GenericServerStream[TransferFrame, USBTransferReceipt]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type ExporterGuestService_WriteVerifiedFileServer = grpc.ClientStreamingServer[TransferFrame, USBTransferReceipt]
+
+func _ExporterGuestService_VerifyWrittenFile_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(VerifyExportRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ExporterGuestServiceServer).VerifyWrittenFile(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ExporterGuestService_VerifyWrittenFile_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ExporterGuestServiceServer).VerifyWrittenFile(ctx, req.(*VerifyExportRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // ExporterGuestService_ServiceDesc is the grpc.ServiceDesc for ExporterGuestService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -1632,11 +1794,25 @@ var ExporterGuestService_ServiceDesc = grpc.ServiceDesc{
 			MethodName: "FinalizeUSB",
 			Handler:    _ExporterGuestService_FinalizeUSB_Handler,
 		},
+		{
+			MethodName: "VerifyWrittenFile",
+			Handler:    _ExporterGuestService_VerifyWrittenFile_Handler,
+		},
 	},
 	Streams: []grpc.StreamDesc{
 		{
 			StreamName:    "WriteFile",
 			Handler:       _ExporterGuestService_WriteFile_Handler,
+			ClientStreams: true,
+		},
+		{
+			StreamName:    "PrepareExactUSB",
+			Handler:       _ExporterGuestService_PrepareExactUSB_Handler,
+			ClientStreams: true,
+		},
+		{
+			StreamName:    "WriteVerifiedFile",
+			Handler:       _ExporterGuestService_WriteVerifiedFile_Handler,
 			ClientStreams: true,
 		},
 	},

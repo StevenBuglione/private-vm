@@ -142,10 +142,11 @@ The downloader guest composition creates the fixed virtio quarantine owner,
 an authenticated local qBittorrent owner and the torrent controller before it
 registers the downloader service. The qBittorrent owner generates one per-boot
 credential, writes only its derived verifier beneath `/run`, starts one fixed
-systemd unit after guest VPN configuration, authenticates on loopback and
-shares the protected SID with the binding probe and torrent adapter. Cleanup is
-ordered qBittorrent API/controller, local unit, tunnel, kill switch, quarantine
-sync/unmount and device close; a failed dependent step is retained for retry.
+package-pinned child in guestd's quarantine mount namespace after guest VPN
+configuration, authenticates on loopback and shares the protected SID with the
+binding probe and torrent adapter. Cleanup is ordered qBittorrent
+API/controller, pidfd-owned child, tunnel, kill switch, quarantine sync/unmount
+and device close; a failed dependent step is retained for retry.
 
 The workstation service is decorated by the same typed guest network owner,
 using workstation policy and no torrent application. The protobuf methods are
@@ -214,6 +215,14 @@ resource absence. Cleanup first inventories exact names, attempts every resource
 that creation may have touched, and releases ownership only after a final exact
 inventory proves absence.
 
+The same owner performs the live egress audit. A `Handle` holds the lifecycle
+lease and current opaque VPN plan while the Linux backend lists only its exact
+host and namespace nftables tables in JSON mode. The bounded parser requires the
+versioned owner marker, expected base chains and the complete zero-valued audit
+counter set. It destroys raw output and returns only namespace-present,
+host-present and forbidden-egress-zero booleans; stale handles and concurrent
+cleanup fail closed.
+
 One lifecycle mutex is acquired before a network state becomes visible. It
 serializes provisioning, scoped TAP/static-address/VPN-config handoffs and the
 idempotent cleanup owner. Cleanup invalidates readiness immediately, uses its
@@ -227,6 +236,18 @@ inherited descriptor cannot outlive the VM lifecycle.
 No API reveals namespace/interface names, static addresses, endpoint tuples or
 raw rule text. Only the aggregate `network-status.schema.json` inspection is
 serializable.
+
+`internal/recovery` runs before the session manager and control listener are
+created. Its startup registry excludes concurrent admission, its Linux backend
+enumerates only pinned volatile-store and scratch-root objects, and every
+cleanup repeats exact identity validation immediately before a typed operation.
+The backend has fixed adapters for private QMP/SPICE sockets and outer-storage
+mount/mapper/loop/ciphertext teardown. It refuses an advanced surviving journal
+because the current journal schema does not preserve enough exact evidence to
+kill a process or mutate cgroup, network, VSOCK or USB state safely. A closed
+aggregate report is atomically written outside the session-store root under
+volatile `/run`; candidates, locators, fingerprints and tool output are never
+serialized.
 
 The daemon role boundary is semantic and serialized per opaque session ID.
 `StartRole` publishes `PREFLIGHTED`, `IMAGES_VERIFIED`, `STORAGE_READY`, and
@@ -245,9 +266,55 @@ immutable digest cache, registers storage and runtime cleanup owners before
 publishing their phases, and exposes only workspace state or the downloader's
 typed torrent methods. A partial storage or runtime allocation is returned with
 its cleanup/audit contract so timeout or cancellation cannot drop ownership.
-Scanner and exporter requests remain typed fail-closed at this boundary until
-their separate orchestrators are composed; they are never routed through a
-workstation or downloader device model.
+Scanner requests remain typed fail-closed at this boundary until their separate
+orchestrator is composed; they are never routed through a workstation or
+downloader device model. The exporter uses a separate production coordinator:
+it verifies the exporter image, activates actor-owned storage, allocates a CID,
+private QMP directories and capability, launches the headless/no-NIC device
+model, authenticates guestd, hotplugs only the freshly revalidated USB claim,
+and requires the guest `InspectUSB` no-network and exact-identity evidence.
+
+Approved export sources use a one-use in-memory registry keyed by role, session
+and opaque output ID. Factories may implement either authenticated scanner
+reconstruction or workstation Export streaming. The registry and host workflow
+cannot represent a path, mount, device node, QEMU argument or raw digest in
+durable state. The exporter runtime and USB claim are allocations of the same
+serialized session actor, so failed preparation and caller loss converge through
+one cleanup owner.
+
+The workstation runtime exposes one sealed `WorkstationRelay`, not its VSOCK
+client. Host import/export callbacks carry only bounded transfer frames and an
+opaque output ID. The daemon retains its export digest until a separate receiver
+digest matches and the guest re-verifies the current output. Both relay
+directions require EOF immediately after the authenticated end frame before
+forwarding that end frame to the next commit boundary. The host trusted-source
+reader and guest workspace operations retain pinned file or directory
+descriptors, so later pathname replacement cannot redirect an active transfer.
+The scanner
+promotion hook is sealed to the orchestrator package so only a scanner owner
+that authenticated a complete approved report can implement it.
+`WorkstationScannerPromotion` implements that hook by binding the report's sole
+sanitized output to `ScannerGuestService.ExportApprovedFile`, remapping only its
+opaque transfer ID, and feeding the bounded stream into the existing
+`WorkstationRelay.Import`. `Service.ApproveScanner` creates the workstation
+through its own session actor and owns cleanup until the scanner has stopped;
+no host path or generic RPC surface crosses either abstraction.
+
+The scanner definition adapter commits the verified update receipt before
+calling a narrow `ScannerOfflineBootStager`. The production implementation can
+only start the image-owned offline-staging unit; it cannot accept a unit, Nix
+path, boot entry or argument from RPC. The QEMU package separately renders the
+closed scanner boot-mode enum, and the production boot probe compares its
+`fw_cfg` value with the immutable scanner phase document.
+
+Production workspace export uses a daemon-owned
+`WorkspaceDestinationProvider`. Its plan contains only owner UID, source
+session, opaque output ID, and a closed destination enum. A prepared
+transaction consumes the workstation relay through one bounded source callback
+and returns only independent persistence/re-read/cleanup evidence. The daemon
+owns abort on every failed, canceled, or timed-out transaction and marks the
+guest receipt current only after all three digests agree. No provider API can
+represent a host path, mount, block device, guest command, or QEMU argument.
 
 ## Volatile secret contract
 

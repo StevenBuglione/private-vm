@@ -243,6 +243,17 @@ func (s *Store) Remove(id string) error {
 }
 
 func (s *Store) ListIDs() ([]string, error) {
+	return s.listIDs(s.gid)
+}
+
+// ListIDsForRecovery validates a stale control socket against the configured
+// service socket group while retaining the store's pinned root/session owner.
+// It is used before the new listener exists and performs no cleanup itself.
+func (s *Store) ListIDsForRecovery(controlGID uint32) ([]string, error) {
+	return s.listIDs(controlGID)
+}
+
+func (s *Store) listIDs(controlGID uint32) ([]string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -258,7 +269,7 @@ func (s *Store) ListIDs() ([]string, error) {
 	ids := make([]string, 0, len(entries))
 	for _, name := range entries {
 		if name == "control.sock" {
-			if err := s.verifyControlSocket(rootFD); err != nil {
+			if err := s.verifyControlSocket(rootFD, controlGID); err != nil {
 				return nil, err
 			}
 			continue
@@ -436,12 +447,12 @@ func (s *Store) verifySessionFD(fd int) error {
 	return verifyOwnedDirectory("volatile session directory", &stat, s.uid, s.gid, sessionDirMode)
 }
 
-func (s *Store) verifyControlSocket(rootFD int) error {
+func (s *Store) verifyControlSocket(rootFD int, controlGID uint32) error {
 	var stat unix.Stat_t
 	if err := unix.Fstatat(rootFD, "control.sock", &stat, unix.AT_SYMLINK_NOFOLLOW); err != nil {
 		return fmt.Errorf("inspect daemon control socket: %w", err)
 	}
-	if stat.Mode&unix.S_IFMT != unix.S_IFSOCK || stat.Uid != s.uid || stat.Gid != s.gid || stat.Mode&0o7777 != controlSockMode {
+	if stat.Mode&unix.S_IFMT != unix.S_IFSOCK || stat.Uid != s.uid || stat.Gid != controlGID || stat.Mode&0o7777 != controlSockMode {
 		return errors.New("daemon control socket has an unsafe type, owner, group, or mode")
 	}
 	return nil

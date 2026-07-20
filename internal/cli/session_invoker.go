@@ -28,6 +28,26 @@ func (invoker *ProductionInvoker) invokeSession(ctx context.Context, id CommandI
 			return Result{}, invalidSessionIntent()
 		}
 		return invoker.startWorkstation(ctx, client, requestID, request)
+	case CommandDesktopConnect, CommandDesktopRestart:
+		request, ok := intent.(SessionIntent)
+		if !ok {
+			return Result{}, invalidSessionIntent()
+		}
+		current, err := invoker.resolveSession(ctx, client, requestID, request.SessionID, true)
+		if err != nil {
+			return Result{}, daemonRPCError(err)
+		}
+		if current.GetPhase() != privatevmv1.SessionPhase_SESSION_PHASE_ACTIVE {
+			return Result{}, apperror.New("DISPLAY_UNAVAILABLE", exitcode.Runtime, "The workstation display is not active.", "Start the workstation successfully before connecting the viewer.")
+		}
+		viewer := invoker.viewer
+		if viewer == nil {
+			viewer = launchRemoteViewer
+		}
+		if err := viewer(ctx, current.GetId()); err != nil {
+			return Result{}, apperror.Wrap("DISPLAY_VIEWER_FAILED", exitcode.Runtime, "The user-owned SPICE viewer did not complete normally.", "Install the configured remote-viewer package, confirm the workstation remains active, and retry.", err)
+		}
+		return sessionResult(current, nil)
 	case "desktop.status", "session.status":
 		request, ok := intent.(SessionIntent)
 		if !ok {

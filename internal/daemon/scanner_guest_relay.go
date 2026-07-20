@@ -33,7 +33,7 @@ type ScannerGuestRuntime interface {
 	OfflineRuntimeAllocation(session.Snapshot) session.AllocateFunc
 	OfflineClient(context.Context, session.Snapshot) (privatevmv1.ScannerGuestServiceClient, error)
 	VerifyReport(context.Context, session.Snapshot, scan.AuthenticatedReport) (scan.ScanReport, error)
-	Promote(context.Context, session.Snapshot, ScannerReportEvidence, ScannerDestination) error
+	Promote(context.Context, session.Snapshot, ScannerReportEvidence, ScannerDestination, session.Snapshot) error
 	StopOffline(context.Context, session.Snapshot) error
 }
 
@@ -195,14 +195,21 @@ func (relay *GuestScannerRelay) Report(ctx context.Context, scanner session.Snap
 	return cloneScannerEvidence(evidence), nil
 }
 
-func (relay *GuestScannerRelay) Promote(ctx context.Context, scanner session.Snapshot, evidence ScannerReportEvidence, destination ScannerDestination) error {
+func (relay *GuestScannerRelay) Promote(ctx context.Context, scanner session.Snapshot, evidence ScannerReportEvidence, destination ScannerDestination, target session.Snapshot) error {
 	if err := validateScannerEvidence(scanner, evidence); err != nil || evidence.Report.Result != "approved" {
 		return errors.New("scanner report does not authorize promotion")
 	}
 	if destination != ScannerDestinationWorkstation && destination != ScannerDestinationUSB {
 		return errors.New("scanner promotion destination is invalid")
 	}
-	return relay.runtime.Promote(ctx, scanner, cloneScannerEvidence(evidence), destination)
+	if destination == ScannerDestinationWorkstation {
+		if target.Role != session.RoleWorkstation || target.Phase != session.PhaseActive || target.WorkflowState != "WORKING" || target.OwnerUID != scanner.OwnerUID || target.ID == scanner.ID {
+			return errors.New("fresh workstation promotion target is invalid")
+		}
+	} else if target.ID != "" {
+		return errors.New("scanner promotion target is invalid")
+	}
+	return relay.runtime.Promote(ctx, scanner, cloneScannerEvidence(evidence), destination, target)
 }
 
 func (relay *GuestScannerRelay) StopOffline(ctx context.Context, scanner session.Snapshot) error {

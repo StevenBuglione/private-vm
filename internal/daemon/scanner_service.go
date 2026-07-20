@@ -9,6 +9,7 @@ import (
 	"time"
 
 	privatevmv1 "github.com/StevenBuglione/private-vm/gen/privatevm/v1"
+	"github.com/StevenBuglione/private-vm/internal/preflight"
 	"github.com/StevenBuglione/private-vm/internal/scan"
 	"github.com/StevenBuglione/private-vm/internal/session"
 	"google.golang.org/grpc/codes"
@@ -60,7 +61,7 @@ type ScannerOrchestrator interface {
 	Scan(context.Context, session.Snapshot, string, func(*privatevmv1.ScanEvent) error) error
 	Reconstruct(context.Context, session.Snapshot, string, func(*privatevmv1.ScanEvent) error) error
 	Report(context.Context, session.Snapshot, string) (ScannerReportEvidence, error)
-	Promote(context.Context, session.Snapshot, ScannerReportEvidence, ScannerDestination) error
+	Promote(context.Context, session.Snapshot, ScannerReportEvidence, ScannerDestination, session.Snapshot) error
 	StopOffline(context.Context, session.Snapshot) error
 }
 
@@ -336,23 +337,97 @@ func (s *Service) ApproveScanner(ctx context.Context, request *privatevmv1.HostS
 		}
 		return nil, scannerServiceError(err)
 	}
-	if err := s.Scanners.Promote(ctx, scanner, evidence, destination); err != nil {
-		return nil, scannerServiceError(err)
+	var target session.Snapshot
+	if destination == ScannerDestinationWorkstation {
+		target, err = s.createPromotionWorkstation(ctx, identity.UID)
+		if err != nil {
+			return nil, scannerServiceError(err)
+		}
+	}
+	promotionSucceeded := false
+	cleanupTarget := func(cause error) error {
+		if target.ID == "" || promotionSucceeded {
+			return cause
+		}
+		if cleanupErr := s.cleanupPromotionWorkstation(target.ID, identity.UID); cleanupErr != nil {
+			return sessionError(session.ErrCleanupIncomplete)
+		}
+		return cause
+	}
+	if err := s.Scanners.Promote(ctx, scanner, evidence, destination, target); err != nil {
+		return nil, scannerServiceError(cleanupTarget(err))
 	}
 	if scanner, err = s.Sessions.TransitionWorkflow(ctx, scanner.ID, identity.UID, "POLICY_APPROVED"); err != nil {
-		return nil, sessionError(err)
+		return nil, sessionError(cleanupTarget(err))
+	}
+	if destination == ScannerDestinationUSB {
+		// The one-use source factory streams from this authenticated offline
+		// scanner. Its actor remains the cleanup owner until USB export consumes
+		// the factory or the user explicitly cleans the scanner session.
+		return scannerStatusProto(scanner, &evidence), nil
 	}
 	if err := s.Scanners.StopOffline(ctx, scanner); err != nil {
-		return nil, s.failedScanner(scanner.ID, identity.UID, err)
+		return nil, cleanupTarget(s.failedScanner(scanner.ID, identity.UID, err))
 	}
 	if scanner, err = s.Sessions.TransitionWorkflow(ctx, scanner.ID, identity.UID, "SCAN_VM_STOPPED"); err != nil {
-		return nil, s.failedScanner(scanner.ID, identity.UID, err)
+		return nil, cleanupTarget(s.failedScanner(scanner.ID, identity.UID, err))
 	}
 	statusView := scannerStatusProto(scanner, &evidence)
+	statusView.DestinationSessionId = target.ID
 	if _, err := s.cleanupScanner(scanner.ID, identity.UID); err != nil {
-		return nil, err
+		return nil, cleanupTarget(err)
 	}
+	promotionSucceeded = true
 	return statusView, nil
+}
+
+func (s *Service) createPromotionWorkstation(ctx context.Context, ownerUID uint32) (session.Snapshot, error) {
+	if s.Roles == nil || s.Sessions == nil {
+		return session.Snapshot{}, errors.New("fresh workstation runtime is unavailable")
+	}
+	run := s.DoctorRun
+	if run == nil {
+		run = func(ctx context.Context, strict bool) preflight.Report {
+			return preflight.Doctor{Strict: strict}.RunContext(ctx)
+		}
+	}
+	if report := run(ctx, true); ctx.Err() != nil || !report.Runnable {
+		if ctx.Err() != nil {
+			return session.Snapshot{}, ctx.Err()
+		}
+		return session.Snapshot{}, errors.New("fresh workstation preflight failed")
+	}
+	snapshot, err := s.Sessions.Create(ownerUID, session.RoleWorkstation)
+	if err != nil {
+		return session.Snapshot{}, err
+	}
+	resources := resourceDefaults(session.RoleWorkstation, s.Config)
+	plan := session.LaunchPlan{
+		Role: session.RoleWorkstation, ImageBundle: resolvedBundle(session.RoleWorkstation, "", s.Config),
+		VCPUs: resources.GetVcpus(), MemoryBytes: resources.GetMemoryBytes(), RootBytes: resources.GetRootBytes(),
+	}
+	allocation := s.Roles.PlanAllocation(snapshot, plan)
+	if allocation == nil {
+		return session.Snapshot{}, s.cleanupFailedCreate(snapshot, ownerUID, errors.New("fresh workstation plan is unavailable"))
+	}
+	if err := s.Sessions.AcquireResource(ctx, snapshot.ID, ownerUID, "session-plan", allocation); err != nil {
+		return session.Snapshot{}, s.cleanupFailedCreate(snapshot, ownerUID, err)
+	}
+	lock := s.roleOperation(snapshot.ID)
+	lock.Lock()
+	defer lock.Unlock()
+	started, err := s.startRole(ctx, snapshot.ID, ownerUID)
+	if err != nil {
+		return session.Snapshot{}, err
+	}
+	return *started, nil
+}
+
+func (s *Service) cleanupPromotionWorkstation(id string, ownerUID uint32) error {
+	cleanupCtx, cancel := context.WithTimeout(context.Background(), scannerCleanupTimeout)
+	defer cancel()
+	_, err := s.Sessions.Cleanup(cleanupCtx, id, ownerUID)
+	return err
 }
 
 func (s *Service) RejectScanner(ctx context.Context, request *privatevmv1.HostScannerControlRequest) (*privatevmv1.HostScannerStatus, error) {

@@ -91,7 +91,27 @@ func (invoker *ProductionInvoker) invokeScanner(ctx context.Context, id CommandI
 		if err != nil {
 			return Result{}, daemonRPCError(err)
 		}
-		return scannerStatusResult(response)
+		result, err := scannerStatusResult(response)
+		if err != nil {
+			return Result{}, err
+		}
+		if destination == privatevmv1.ScannerApprovalDestination_SCANNER_APPROVAL_DESTINATION_USB {
+			if response.GetDestinationSessionId() != "" {
+				return Result{}, internalScannerError()
+			}
+			return result, nil
+		}
+		if response.GetDestinationSessionId() == "" {
+			return Result{}, internalScannerError()
+		}
+		viewer := invoker.viewer
+		if viewer == nil {
+			viewer = launchRemoteViewer
+		}
+		if err := viewer(ctx, response.GetDestinationSessionId()); err != nil {
+			return Result{}, apperror.Wrap("DISPLAY_VIEWER_FAILED", exitcode.Runtime, "The promoted workstation is active, but the user-owned SPICE viewer did not complete normally.", "Install the configured remote-viewer package, find the active workstation with session list, then use desktop connect.", err)
+		}
+		return result, nil
 	case CommandScannerReject:
 		request, ok := intent.(ScannerIntent)
 		if !ok || request.SessionID == "" {
@@ -111,6 +131,9 @@ func scannerStatusResult(response *privatevmv1.HostScannerStatus) (Result, error
 	if response == nil || response.GetSchemaVersion() != 1 || response.GetScannerSessionId() == "" || response.GetWorkflowState() == "" || response.GetCode() == "" || response.GetRemediation() == "" || response.GetBlockingFindingCount() > response.GetFindingCount() || (response.GetPolicyApproved() && response.GetPolicyRejected()) {
 		return Result{}, internalScannerError()
 	}
+	if response.GetDestinationSessionId() != "" && (!response.GetPolicyApproved() || response.GetWorkflowState() != "SCAN_VM_STOPPED") {
+		return Result{}, internalScannerError()
+	}
 	decision := "pending"
 	if response.GetPolicyApproved() {
 		decision = "approved"
@@ -119,7 +142,8 @@ func scannerStatusResult(response *privatevmv1.HostScannerStatus) (Result, error
 	}
 	payload := ScannerStatusPayload{
 		SchemaVersion: response.GetSchemaVersion(), SessionID: response.GetScannerSessionId(), WorkflowState: response.GetWorkflowState(),
-		ReportComplete: response.GetReportComplete(), Decision: decision, FindingCount: response.GetFindingCount(),
+		DestinationSessionID: response.GetDestinationSessionId(),
+		ReportComplete:       response.GetReportComplete(), Decision: decision, FindingCount: response.GetFindingCount(),
 		BlockingFindingCount: response.GetBlockingFindingCount(), SanitizedOutputCount: response.GetSanitizedOutputCount(),
 		SanitizedOutputBytes: response.GetSanitizedOutputBytes(), Code: response.GetCode(), Remediation: response.GetRemediation(),
 	}

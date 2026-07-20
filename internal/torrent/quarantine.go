@@ -3,6 +3,7 @@ package torrent
 import (
 	"context"
 	"errors"
+	"fmt"
 	"reflect"
 	"sync"
 	"time"
@@ -20,16 +21,26 @@ type quarantineBackend interface {
 	Close() error
 }
 
-func (owner *QuarantineOwner) CapacityBytes() (uint64, error) {
-	if owner == nil {
+func (owner *QuarantineOwner) CapacityBytes(ctx context.Context) (uint64, error) {
+	if owner == nil || ctx == nil {
 		return 0, invalidRequest()
+	}
+	if err := ctx.Err(); err != nil {
+		return 0, err
 	}
 	owner.mu.Lock()
 	defer owner.mu.Unlock()
 	if owner.closed || !owner.mounted {
 		return 0, invalidRequest()
 	}
-	return owner.backend.CapacityBytes()
+	capacity, err := owner.backend.CapacityBytes()
+	if err != nil {
+		return 0, err
+	}
+	if err := ctx.Err(); err != nil {
+		return 0, err
+	}
+	return capacity, nil
 }
 
 // QuarantineOwner is the one guest-side mount/format/teardown owner. Its
@@ -69,7 +80,7 @@ func (owner *QuarantineOwner) Prepare(ctx context.Context) error {
 			return errors.New("quarantine filesystem preparation failed")
 		}
 		if err := owner.backend.Mount(ctx); err != nil {
-			return errors.New("quarantine mount failed")
+			return fmt.Errorf("quarantine mount failed: %w", err)
 		}
 	}
 	owner.mounted = true

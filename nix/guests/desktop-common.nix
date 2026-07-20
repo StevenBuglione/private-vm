@@ -34,6 +34,14 @@
   };
 
   services.spice-vdagentd.enable = true;
+  # Online roles use systemd-resolved only as the guestd-controlled DNS
+  # boundary. Link-local discovery is never part of that boundary and would
+  # otherwise open wildcard UDP/TCP listeners before proton0 is verified.
+  services.avahi.enable = lib.mkForce false;
+  services.resolved.settings.Resolve = {
+    LLMNR = false;
+    MulticastDNS = false;
+  };
   services.gnome.gcr-ssh-agent.enable = false;
   services.gnome.gnome-keyring.enable = guestRole == "workstation";
   programs.thunar.enable = lib.mkForce (builtins.elem guestRole [

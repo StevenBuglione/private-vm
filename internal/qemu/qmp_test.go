@@ -114,6 +114,88 @@ func TestQMPHandshakeStatusEventAndPowerdown(t *testing.T) {
 	}
 }
 
+func TestQMPExporterUSBHotplugUsesFixedTypedShape(t *testing.T) {
+	socket := filepath.Join(privateTestDir(t), "qmp.sock")
+	listener, err := net.Listen("unix", socket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+	if err := os.Chmod(socket, runtimeSocketMode); err != nil {
+		t.Fatal(err)
+	}
+	serverDone := make(chan error, 1)
+	go func() {
+		connection, acceptErr := listener.Accept()
+		if acceptErr != nil {
+			serverDone <- acceptErr
+			return
+		}
+		defer connection.Close()
+		encoder := json.NewEncoder(connection)
+		decoder := json.NewDecoder(connection)
+		if err := encoder.Encode(map[string]any{"QMP": map[string]any{"version": map[string]any{"qemu": map[string]int{"major": 10, "minor": 2, "micro": 4}, "package": ""}, "capabilities": []string{}}}); err != nil {
+			serverDone <- err
+			return
+		}
+		for index := 0; index < 3; index++ {
+			var request struct {
+				Execute   string `json:"execute"`
+				Arguments struct {
+					Driver   string `json:"driver"`
+					ID       string `json:"id"`
+					Bus      string `json:"bus"`
+					HostBus  int    `json:"hostbus"`
+					HostAddr int    `json:"hostaddr"`
+				} `json:"arguments"`
+				ID string `json:"id"`
+			}
+			if err := decoder.Decode(&request); err != nil {
+				serverDone <- err
+				return
+			}
+			switch index {
+			case 0:
+				if request.Execute != "qmp_capabilities" {
+					serverDone <- errors.New("missing QMP capability negotiation")
+					return
+				}
+			case 1:
+				if request.Execute != "device_add" || request.Arguments.Driver != "usb-host" || request.Arguments.ID != "private-vm-export-usb" || request.Arguments.Bus != "usb-controller.0" || request.Arguments.HostBus != 7 || request.Arguments.HostAddr != 9 {
+					serverDone <- errors.New("USB attach command shape changed")
+					return
+				}
+			case 2:
+				if request.Execute != "device_del" || request.Arguments.ID != "private-vm-export-usb" || request.Arguments.Driver != "" || request.Arguments.Bus != "" || request.Arguments.HostBus != 0 || request.Arguments.HostAddr != 0 {
+					serverDone <- errors.New("USB detach command shape changed")
+					return
+				}
+			}
+			if err := encoder.Encode(map[string]any{"return": map[string]any{}, "id": request.ID}); err != nil {
+				serverDone <- err
+				return
+			}
+		}
+		serverDone <- nil
+	}()
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	client, err := DialQMP(ctx, socket, DefaultQMPFrameLimit)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.Close()
+	if err := client.AttachUSB(ctx, 7, 9); err != nil {
+		t.Fatal(err)
+	}
+	if err := client.DetachUSB(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-serverDone; err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestQMPRejectsOversizedGreeting(t *testing.T) {
 	socket := filepath.Join(privateTestDir(t), "qmp.sock")
 	listener, err := net.Listen("unix", socket)

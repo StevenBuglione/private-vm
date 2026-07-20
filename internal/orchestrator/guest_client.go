@@ -38,24 +38,28 @@ func (connector VSOCKGuestConnector) Connect(ctx context.Context, cid uint32, ro
 	}
 	return &vsockGuestConnection{
 		connection: connection, role: role, expected: connector.Expected,
-		probeTargets: connector.ProbeTargets,
-		common:       privatevmv1.NewGuestCommonServiceClient(connection),
-		workstation:  privatevmv1.NewWorkstationGuestServiceClient(connection),
-		downloader:   privatevmv1.NewDownloaderGuestServiceClient(connection),
+		common:           privatevmv1.NewGuestCommonServiceClient(connection),
+		workstation:      privatevmv1.NewWorkstationGuestServiceClient(connection),
+		downloader:       privatevmv1.NewDownloaderGuestServiceClient(connection),
+		scanner:          privatevmv1.NewScannerGuestServiceClient(connection),
+		probeTargets:     connector.ProbeTargets,
+		workspaceExports: make(map[string][32]byte),
 	}, nil
 }
 
 type vsockGuestConnection struct {
 	mu sync.Mutex
 
-	connection   *grpc.ClientConn
-	role         session.Role
-	expected     guest.HandshakeExpectation
-	common       privatevmv1.GuestCommonServiceClient
-	workstation  privatevmv1.WorkstationGuestServiceClient
-	downloader   privatevmv1.DownloaderGuestServiceClient
-	probeTargets guestvpn.ProbeTargets
-	closed       bool
+	connection       *grpc.ClientConn
+	role             session.Role
+	expected         guest.HandshakeExpectation
+	common           privatevmv1.GuestCommonServiceClient
+	workstation      privatevmv1.WorkstationGuestServiceClient
+	downloader       privatevmv1.DownloaderGuestServiceClient
+	scanner          privatevmv1.ScannerGuestServiceClient
+	probeTargets     guestvpn.ProbeTargets
+	workspaceExports map[string][32]byte
+	closed           bool
 }
 
 func (connection *vsockGuestConnection) Handshake(ctx context.Context) error {
@@ -70,7 +74,7 @@ func (connection *vsockGuestConnection) Handshake(ctx context.Context) error {
 }
 
 func (connection *vsockGuestConnection) ConfigureVPN(ctx context.Context, underlay guestvpn.Underlay, profile io.Reader) (guestvpn.Status, error) {
-	if connection.role != session.RoleWorkstation && connection.role != session.RoleDownloader {
+	if connection.role != session.RoleWorkstation && connection.role != session.RoleDownloader && connection.role != session.RoleScanner {
 		return guestvpn.Status{}, ErrNetworkedStart
 	}
 	data, err := io.ReadAll(io.LimitReader(profile, maximumGuestVPNProfileBytes+1))
@@ -100,6 +104,8 @@ func (connection *vsockGuestConnection) ConfigureVPN(ctx context.Context, underl
 		response, err = connection.workstation.ConfigureWireGuard(ctx, configure)
 	case session.RoleDownloader:
 		response, err = connection.downloader.ConfigureWireGuard(ctx, configure)
+	case session.RoleScanner:
+		response, err = connection.scanner.ConfigureWireGuard(ctx, configure)
 	default:
 		err = ErrNetworkedStart
 	}
@@ -119,6 +125,8 @@ func (connection *vsockGuestConnection) VerifyVPN(ctx context.Context) (guestvpn
 		response, err = connection.workstation.VerifyVPN(ctx, &privatevmv1.VerifyVPNRequest{Context: request})
 	case session.RoleDownloader:
 		response, err = connection.downloader.VerifyVPN(ctx, &privatevmv1.VerifyVPNRequest{Context: request})
+	case session.RoleScanner:
+		response, err = connection.scanner.VerifyVPN(ctx, &privatevmv1.VerifyVPNRequest{Context: request})
 	default:
 		err = ErrNetworkedStart
 	}
@@ -166,10 +174,21 @@ func (connection *vsockGuestConnection) respondToVPNLoss(ctx context.Context) er
 		_, err = connection.workstation.ShowNetworkWarning(ctx, &privatevmv1.NetworkWarningRequest{Context: request, WarningCode: "VPN_DEGRADED"})
 	case session.RoleDownloader:
 		_, err = connection.downloader.PauseDownload(ctx, &privatevmv1.TorrentRequest{Context: request})
+	case session.RoleScanner:
+		_, err = connection.common.Shutdown(ctx, &privatevmv1.ShutdownRequest{Context: request, Poweroff: true})
 	default:
 		err = ErrNetworkedStart
 	}
 	return err
+}
+
+func (connection *vsockGuestConnection) ScannerClient() (privatevmv1.ScannerGuestServiceClient, error) {
+	connection.mu.Lock()
+	defer connection.mu.Unlock()
+	if connection.role != session.RoleScanner || connection.closed || connection.scanner == nil {
+		return nil, ErrNetworkedStart
+	}
+	return connection.scanner, nil
 }
 
 func (connection *vsockGuestConnection) WorkspaceDirty(ctx context.Context) (bool, error) {
@@ -216,6 +235,8 @@ func (connection *vsockGuestConnection) Close() error {
 		return nil
 	}
 	connection.closed = true
+	clear(connection.workspaceExports)
+	connection.workspaceExports = nil
 	return connection.connection.Close()
 }
 
@@ -251,12 +272,45 @@ func (connection *vsockGuestConnection) Metadata(ctx context.Context) (*privatev
 	return connection.downloader.GetTorrentMetadata(ctx, request)
 }
 
-func (connection *vsockGuestConnection) Select(ctx context.Context, indexes []uint32) (*privatevmv1.TorrentMetadata, error) {
+func (connection *vsockGuestConnection) Select(ctx context.Context, indexes []uint32, evidence torrent.CapacityEvidence) (*privatevmv1.TorrentMetadata, error) {
 	request, err := connection.guestContext()
 	if err != nil {
 		return nil, err
 	}
-	return connection.downloader.SelectTorrentFiles(ctx, &privatevmv1.SelectTorrentFilesRequest{Context: request, Indexes: append([]uint32(nil), indexes...)})
+	receipt, err := torrentCapacityReceipt(evidence)
+	if err != nil {
+		return nil, err
+	}
+	return connection.downloader.SelectTorrentFiles(ctx, &privatevmv1.SelectTorrentFilesRequest{
+		Context: request, Indexes: append([]uint32(nil), indexes...), Capacity: receipt,
+	})
+}
+
+func torrentCapacityReceipt(evidence torrent.CapacityEvidence) (*privatevmv1.TorrentCapacityReceipt, error) {
+	var destination privatevmv1.TorrentDestination
+	switch evidence.Destination {
+	case torrent.DestinationWorkstation:
+		destination = privatevmv1.TorrentDestination_TORRENT_DESTINATION_WORKSTATION
+	case torrent.DestinationUSB:
+		destination = privatevmv1.TorrentDestination_TORRENT_DESTINATION_USB
+	default:
+		return nil, torrent.ErrCapacityEvidence
+	}
+	if evidence.ScanAvailableBytes == 0 || evidence.ReconstructionAvailable == 0 || evidence.DestinationAvailable == 0 ||
+		evidence.RootOverlayBudgetBytes == 0 || evidence.ReconstructionBytes == 0 || evidence.MaximumOutputBytes == 0 || evidence.MaximumSelectedBytes == 0 {
+		return nil, torrent.ErrCapacityEvidence
+	}
+	return &privatevmv1.TorrentCapacityReceipt{
+		SchemaVersion: 1, Destination: destination,
+		ScanAvailableBytes:           evidence.ScanAvailableBytes,
+		ReconstructionAvailableBytes: evidence.ReconstructionAvailable,
+		DestinationAvailableBytes:    evidence.DestinationAvailable,
+		RootOverlayBudgetBytes:       evidence.RootOverlayBudgetBytes,
+		ArchiveExpansionBytes:        evidence.ArchiveExpansionBytes,
+		ReconstructionBytes:          evidence.ReconstructionBytes,
+		MaximumOutputBytes:           evidence.MaximumOutputBytes,
+		MaximumSelectedBytes:         evidence.MaximumSelectedBytes,
+	}, nil
 }
 
 func (connection *vsockGuestConnection) Start(ctx context.Context, emit func(*privatevmv1.TorrentEvent) error) error {

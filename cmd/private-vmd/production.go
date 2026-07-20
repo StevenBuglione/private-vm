@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/StevenBuglione/private-vm/internal/config"
+	"github.com/StevenBuglione/private-vm/internal/daemon"
 	"github.com/StevenBuglione/private-vm/internal/guest"
 	"github.com/StevenBuglione/private-vm/internal/guestvpn"
 	"github.com/StevenBuglione/private-vm/internal/image"
@@ -18,15 +19,19 @@ import (
 	"github.com/StevenBuglione/private-vm/internal/orchestrator"
 	"github.com/StevenBuglione/private-vm/internal/qemu"
 	"github.com/StevenBuglione/private-vm/internal/storage"
+	"github.com/StevenBuglione/private-vm/internal/usb"
 	"github.com/StevenBuglione/private-vm/internal/vpn"
 )
 
 var qemuVersionPattern = regexp.MustCompile(`(?m)^QEMU emulator version ([0-9]+\.[0-9]+\.[0-9]+)(?:\s|$)`)
 
 type productionHostServices struct {
-	profiles *vpn.MemoryStore
-	resolver *vpn.EndpointResolver
-	roles    *orchestrator.HostRoles
+	profiles   *vpn.MemoryStore
+	resolver   *vpn.EndpointResolver
+	roles      *orchestrator.HostRoles
+	scanners   *daemon.GuestScannerRelay
+	exporters  *orchestrator.ExporterRuntimeStack
+	usbSources *usb.ApprovedSourceRegistry
 }
 
 func (services *productionHostServices) Close() {
@@ -106,23 +111,75 @@ func composeProductionHost(ctx context.Context, cfg config.Config) (*productionH
 		profiles.Close()
 		return nil, err
 	}
+	cids := guest.NewDefaultCIDAllocator()
 	runtimeStack, err := orchestrator.NewRuntimeStack(
 		runtimeConfig.Directory(), tools["qemu-system-x86_64"], cfg.VPN().ProfileName(),
-		profiles, resolver, networks, guest.NewDefaultCIDAllocator(), orchestrator.QEMUAdapter{Launcher: launcher},
+		profiles, resolver, networks, cids, orchestrator.QEMUAdapter{Launcher: launcher},
 		probeTargets,
 	)
 	if err != nil {
 		profiles.Close()
 		return nil, err
 	}
-	roles, err := orchestrator.NewHostRoles(
-		orchestrator.OfficialCacheSelector{Cache: cache, QEMUVersion: qemuVersion}, storageStack, runtimeStack,
+	selector := orchestrator.OfficialCacheSelector{Cache: cache, QEMUVersion: qemuVersion}
+	roles, err := orchestrator.NewHostRoles(selector, storageStack, runtimeStack)
+	if err != nil {
+		profiles.Close()
+		return nil, err
+	}
+	roles.Capacities = productionTorrentCapacitySource()
+	approvedSources := usb.NewApprovedSourceRegistry()
+	if err := roles.ConfigureApprovedSources(approvedSources); err != nil {
+		profiles.Close()
+		return nil, err
+	}
+	workstationPromotion, err := orchestrator.NewWorkstationScannerPromotion(roles)
+	if err != nil {
+		profiles.Close()
+		return nil, err
+	}
+	usbPromotion, err := orchestrator.NewUSBScannerPromotion(approvedSources)
+	if err != nil {
+		profiles.Close()
+		return nil, err
+	}
+	scannerPromotion, err := orchestrator.NewScannerPromotionRouter(workstationPromotion, usbPromotion)
+	if err != nil {
+		profiles.Close()
+		return nil, err
+	}
+	scannerRuntime, err := orchestrator.NewProductionScannerRuntime(
+		roles, selector, storageStack, runtimeStack, scannerPromotion,
+		orchestrator.ScannerRuntimePlan{VCPUs: 4, MemoryBytes: 4 << 30, RootBytes: 32 << 30},
 	)
 	if err != nil {
 		profiles.Close()
 		return nil, err
 	}
-	return &productionHostServices{profiles: profiles, resolver: resolver, roles: roles}, nil
+	scanners, err := daemon.NewGuestScannerRelay(scannerRuntimeDaemonAdapter{runtime: scannerRuntime})
+	if err != nil {
+		profiles.Close()
+		return nil, err
+	}
+	exporters, err := orchestrator.NewExporterRuntimeStack(roles, runtimeConfig.Directory(), tools["qemu-system-x86_64"], cids, launcher)
+	if err != nil {
+		profiles.Close()
+		return nil, err
+	}
+	return &productionHostServices{profiles: profiles, resolver: resolver, roles: roles, scanners: scanners, exporters: exporters, usbSources: approvedSources}, nil
+}
+
+func productionTorrentCapacitySource() orchestrator.PlannedTorrentCapacitySource {
+	capacity := guest.DefaultProductionScannerCapacity()
+	return orchestrator.PlannedTorrentCapacitySource{
+		ScannerReadOnlyBytes:        capacity.ReadOnlyScanBytes,
+		ScannerScratchBytes:         capacity.ScratchBytes,
+		WorkstationDestinationBytes: 32 << 30,
+		ArchiveExpansionBytes:       capacity.ArchiveExpansionBytes,
+		ReconstructionBytes:         capacity.ReconstructionWorkBytes,
+		MaximumOutputBytes:          capacity.MaximumOutputBytes,
+		MaximumSelectedBytes:        capacity.MaximumInputBytes,
+	}
 }
 
 func productionProbeTargets(configuration config.VPN) (guestvpn.ProbeTargets, error) {

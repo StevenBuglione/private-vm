@@ -158,6 +158,31 @@ the Go error text directly.
 | `ErrCallback` | A bounded secret-reader callback was not supplied. |
 | `ErrSerialization` | A supported serialization path was rejected. |
 
+## Startup recovery classifications
+
+Startup recovery returns the existing blocking `ORPHAN_CLEANUP_FAILED`
+diagnostic and maps a daemon RPC retry to `CLEANUP_INCOMPLETE`. Its version-1
+redacted evidence may contain only the following internal classifications. The
+report never contains a session ID, object locator, identity fingerprint or
+wrapped backend error.
+
+| Code | Safe meaning |
+|---|---|
+| `RECOVERY_INVENTORY_FAILED` | The bounded private-vm orphan inventory did not complete. |
+| `RECOVERY_INVENTORY_LIMIT` | Candidate or session count exceeded the fixed startup bound. |
+| `RECOVERY_INVENTORY_DUPLICATE` | The trusted inventories reported the same typed object twice. |
+| `RECOVERY_REGISTRY_CONFLICT` | A candidate could not be exclusively claimed against the live registry. |
+| `RECOVERY_KEY_STATE_UNKNOWN` | Loss of the volatile private-vm key source could not be proven. |
+| `RECOVERY_IDENTITY_REJECTED` | Initial identity or private-vm ownership validation failed. |
+| `RECOVERY_IDENTITY_CHANGED` | Exact identity changed between inventory and mutation. |
+| `RECOVERY_CLEANUP_FAILED` | A typed idempotent cleanup operation failed. |
+| `RECOVERY_ABSENCE_UNPROVEN` | An individual artifact could not be proven absent. |
+| `RECOVERY_SESSION_ABSENCE_UNPROVEN` | The complete cross-subsystem session audit was incomplete. |
+| `RECOVERY_BASE_IMAGE_AUDIT_FAILED` | The pre-cleanup immutable-base identity seal was unavailable. |
+| `RECOVERY_BASE_IMAGE_CHANGED` | The immutable-base identity seal changed during recovery. |
+| `RECOVERY_CANCELED` | Startup recovery was canceled before all absence audits completed. |
+| `RECOVERY_TIMEOUT` | A bounded inventory, identity, cleanup or audit step timed out. |
+
 ## Image pull/cache errors
 
 These stable internal classifications map to CLI exit 12 at the image command
@@ -209,6 +234,8 @@ ordinary, detailed and structural `fmt` verbs cannot reveal that cause.
 - `KVM_PERMISSION_DENIED`
 - `QEMU_UNSUPPORTED`
 - `RUNTIME_NOT_TMPFS`
+- `HOST_IPV6_FORWARDING_STATUS_UNKNOWN`
+- `HOST_IPV6_FORWARDING_DISABLED`
 - `DISK_SWAP_ACTIVE`
 - `HIBERNATION_ENABLED`
 - `INSUFFICIENT_MEMORY`
@@ -345,6 +372,7 @@ their eventual boundary.
 | `TORRENT_SELECTION_INVALID` | 17 | Explicit indexes are absent, duplicate or outside metadata. |
 | `TORRENT_EXECUTABLE_BLOCKED` | 17 | Safe policy blocks the selected executable-like type. |
 | `TORRENT_CAPACITY_INSUFFICIENT` | 14 | A required encrypted workflow stage lacks conservative capacity. |
+| `TORRENT_CAPACITY_EVIDENCE_UNAVAILABLE` | 14 | A declared destination lacks independent scanner, reconstruction or receiver evidence. |
 | `TORRENT_PAYLOAD_NOT_APPROVED` | 17 | Payload start was requested before selection/capacity approval. |
 | `TORRENT_DOWNLOAD_STALLED` | 17 | No bounded progress occurred before the stall ceiling. |
 | `TORRENT_DOWNLOAD_FAILED` | 17 | qBittorrent reported invalid state, progress or an operation failure. |
@@ -373,6 +401,8 @@ names, content hashes, endpoints, source paths and qBittorrent output.
 - `SCAN_FILE_SKIPPED`
 - `SCAN_LIMIT_REACHED`
 - `ARCHIVE_ENCRYPTED`
+- `ARCHIVE_FORMAT_UNSUPPORTED`
+- `ARCHIVE_INVALID`
 - `ARCHIVE_LIMIT_REACHED`
 - `TYPE_MISMATCH`
 - `ACTIVE_CONTENT_BLOCKED`
@@ -392,21 +422,29 @@ names, content hashes, endpoints, source paths and qBittorrent output.
 - `SCAN_SPECIAL_FILE_REJECTED`
 - `CLAMAV_UNAVAILABLE`
 - `ARCHIVE_PATH_UNSAFE`
+- `ARCHIVE_DUPLICATE_PATH`
 - `ARCHIVE_LINK_REJECTED`
 - `ARCHIVE_SPECIAL_FILE_REJECTED`
+- `ARCHIVE_EXTRACTION_FAILED`
+- `ARCHIVE_SANDBOX_UNVERIFIED`
 - `ARCHIVE_CLEANUP_INCOMPLETE`
 - `SANITIZER_UNSUPPORTED_TYPE`
 - `SANITIZED_OUTPUT_INVALID`
 - `SANITIZED_OUTPUT_REJECTED`
 - `SANITIZED_OUTPUT_CLEANUP_INCOMPLETE`
+- `PROMOTION_SELECTION_REQUIRED`
 - `SCANNER_STATE_INVALID`
 - `SCANNER_SESSION_MISMATCH`
 - `SCANNER_POLICY_INVALID`
 - `SCANNER_POLICY_CHANGED`
 - `SCANNER_EVIDENCE_UNAVAILABLE`
+- `SCANNER_BOOT_MODE_MISMATCH`
 - `SCANNER_RECEIPT_UNAVAILABLE`
 - `SCANNER_RECEIPT_WRITE_FAILED`
+- `SCANNER_OFFLINE_BOOT_STAGE_FAILED`
+- `SCANNER_OFFLINE_BOOT_STAGE_CLEANUP_INCOMPLETE`
 - `SCANNER_TOOLCHAIN_UNAVAILABLE`
+- `SCANNER_SCRATCH_UNVERIFIED`
 - `SCAN_CANCELLED`
 - `SCAN_TIMEOUT`
 - `SCAN_STREAM_FAILED`
@@ -426,9 +464,13 @@ scanner/report/sanitized-output codes to exit 18. `SCANNER_STATE_INVALID` blocks
 an unsealed source, an out-of-order decision or a non-active scanner.
 `SCANNER_DESTINATION_INVALID` blocks any target other than a fresh workstation
 or the enrolled-USB workflow. `SCAN_PROMOTION_VERIFIED` is emitted only after
-the destination relay and integrity proof succeed; it is not a malware-safety
-claim. Cancellation and timeout remain the canonical `REQUEST_CANCELED` and
-`REQUEST_TIMEOUT`; an absence-audit failure remains `CLEANUP_INCOMPLETE`/exit 24.
+the report-selected reconstructed stream has matching scanner, daemon-relay and
+destination SHA-256 evidence and scanner cleanup completes. Failed workstation
+promotion destroys the unadvertised destination before returning; successful
+workstation output includes only its opaque destination session ID. It is not a
+malware-safety claim. Cancellation and timeout remain the canonical
+`REQUEST_CANCELED` and `REQUEST_TIMEOUT`; an absence-audit failure remains
+`CLEANUP_INCOMPLETE`/exit 24.
 
 ### USB
 
@@ -438,9 +480,35 @@ claim. Cancellation and timeout remain the canonical `REQUEST_CANCELED` and
 - `USB_COMPOSITE_INTERFACE`
 - `USB_HOST_FILESYSTEM`
 - `USB_MOUNTED`
+- `USB_READ_ONLY`
 - `USB_TOO_SMALL`
+- `USB_CONFIRMATION_REQUIRED`
+- `USB_ALREADY_CLAIMED`
 - `USB_WRITE_FAILED`
 - `USB_HASH_MISMATCH`
+- `USB_DISCOVERY_FAILED`
+- `USB_DISCOVERY_LIMIT`
+- `USB_INTEGRATION_UNAVAILABLE`
+- `USB_REQUEST_INVALID`
+- `USB_CLEANUP_INCOMPLETE`
+- `USB_WORKFLOW_UNAVAILABLE`
+- `USB_PREPARE_BEGIN_REQUIRED`
+- `USB_PREPARE_PLAN_INVALID`
+- `USB_PASSPHRASE_STREAM_INVALID`
+- `USB_PASSPHRASE_INVALID`
+- `USB_SECRET_UNAVAILABLE`
+- `USB_EXPORTER_STATE_INVALID`
+- `USB_EXPORTER_IDENTITY_MISMATCH`
+- `USB_TRANSFER_CONTEXT_INVALID`
+- `USB_TRANSFER_DESCRIPTOR_INVALID`
+- `USB_TRANSFER_INVALID`
+- `USB_TRANSFER_INCOMPLETE`
+- `USB_TRANSFER_DIGEST_MISMATCH`
+- `USB_WRITE_EVIDENCE_INCOMPLETE`
+- `USB_FINALIZE_INCOMPLETE`
+- `USB_EXPORT_SELECTION_INVALID`
+- `USB_SCANNER_APPROVAL_REQUIRED`
+- `USB_EXPORT_INCOMPLETE`
 
 ### Workspace
 
@@ -449,16 +517,25 @@ claim. Cancellation and timeout remain the canonical `REQUEST_CANCELED` and
 - `WORKSPACE_UNREACHABLE`
 - `WORKSPACE_UNEXPORTED`
 - `WORKSPACE_CHANGED`
+- `WORKSPACE_REQUEST_INVALID`
+- `WORKSPACE_TRANSFER_FAILED`
+- `WORKSPACE_SELECTION_REQUIRED`
+- `WORKSPACE_DESTINATION_UNAVAILABLE`
+- `WORKSPACE_DESTINATION_FAILED`
+- `WORKSPACE_DESTINATION_CLEANUP_INCOMPLETE`
 - `WORKSPACE_INVENTORY_FAILED`
 - `WORKSPACE_ENTRY_UNSAFE`
 - `WORKSPACE_CAPACITY_EXCEEDED`
 - `WORKSPACE_HASH_FAILED`
 - `WORKSPACE_OUTPUT_NOT_FOUND`
 - `WORKSPACE_OUTPUT_CHANGED`
+- `WORKSPACE_INBOX_CHANGED`
+- `WORKSPACE_EXPORT_CHANGED`
 - `IMPORT_STAGING_CONFLICT`
 - `IMPORT_TARGET_EXISTS`
 - `EXPORT_NOT_STREAMED`
 - `EXPORT_VERIFICATION_MISMATCH`
+- `EXPORT_VERIFICATION_FAILED`
 - `IMPORT_PATH_UNSAFE`
 - `TRANSFER_BEGIN_REQUIRED`
 - `TRANSFER_ID_INVALID`
@@ -467,10 +544,17 @@ claim. Cancellation and timeout remain the canonical `REQUEST_CANCELED` and
 - `TRANSFER_END_INVALID`
 - `TRANSFER_INCOMPLETE`
 - `TRANSFER_CANCELED`
+- `TRANSFER_TIMEOUT`
+- `TRANSFER_CHUNK_INVALID`
+- `TRANSFER_TRAILING_FRAME`
+- `TRANSFER_FRAME_LIMIT`
 - `TRANSFER_SYNC_FAILED`
+- `TRANSFER_DIGEST_MISMATCH`
 - `TRANSFER_SIZE_EXCEEDED`
 - `TRANSFER_OFFSET_INVALID`
 - `TRANSFER_HASH_MISMATCH`
+- `DISPLAY_UNAVAILABLE`
+- `DISPLAY_VIEWER_FAILED`
 
 A hard diagnostic marked “never overridable” in the requirements cannot be
 suppressed by config, environment or CLI flags.

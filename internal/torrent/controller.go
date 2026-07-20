@@ -46,9 +46,10 @@ type Backend interface {
 	Shutdown(context.Context) error
 }
 
-// Quarantine owns only guest-side sync and unmount. The host never mounts or
-// parses this filesystem.
+// Quarantine owns only guest-side capacity evidence, sync and unmount. The
+// host never mounts or parses this filesystem.
 type Quarantine interface {
+	CapacityBytes(context.Context) (uint64, error)
 	SyncAndUnmount(context.Context) error
 }
 
@@ -71,7 +72,6 @@ func (timerWaiter) Wait(ctx context.Context, duration time.Duration) error {
 
 type Config struct {
 	SafePolicy      bool
-	Budget          CapacityBudget
 	MetadataTimeout time.Duration
 	PollInterval    time.Duration
 	StallTimeout    time.Duration
@@ -177,7 +177,7 @@ func (controller *Controller) Metadata() (Metadata, error) {
 	return cloneMetadata(controller.metadata), nil
 }
 
-func (controller *Controller) Select(ctx context.Context, indexes []uint32) (Metadata, CapacityPlan, error) {
+func (controller *Controller) Select(ctx context.Context, indexes []uint32, evidence CapacityEvidence) (Metadata, CapacityPlan, error) {
 	if controller == nil || ctx == nil {
 		return Metadata{}, CapacityPlan{}, invalidRequest()
 	}
@@ -186,12 +186,19 @@ func (controller *Controller) Select(ctx context.Context, indexes []uint32) (Met
 	if controller.closed || (controller.state != StateSelectionRequired && controller.state != StateCapacityVerified) {
 		return Metadata{}, CapacityPlan{}, invalidRequest()
 	}
-	metadata, plan, err := planSelection(controller.metadata, indexes, controller.config.Budget, controller.config.SafePolicy)
+	operationCtx, cancel := boundedContext(ctx, 30*time.Second)
+	defer cancel()
+	quarantineAvailable, err := controller.quarantine.CapacityBytes(operationCtx)
+	if err != nil {
+		if isContextError(err) {
+			return Metadata{}, CapacityPlan{}, err
+		}
+		return Metadata{}, CapacityPlan{}, capacityEvidenceUnavailable()
+	}
+	metadata, plan, err := PlanSelection(controller.metadata, indexes, evidence, quarantineAvailable, controller.config.SafePolicy)
 	if err != nil {
 		return Metadata{}, CapacityPlan{}, err
 	}
-	operationCtx, cancel := boundedContext(ctx, 30*time.Second)
-	defer cancel()
 	if err := controller.backend.SetSelection(operationCtx, controller.handle, indexes, uint32(len(metadata.Files))); err != nil {
 		return Metadata{}, CapacityPlan{}, invalidSelection()
 	}

@@ -47,6 +47,12 @@
     },
     {
       "properties": {
+        "code": { "const": "WORKSPACE_STATUS" },
+        "data": { "$ref": "#/$defs/workspace_status" }
+      }
+    },
+    {
+      "properties": {
         "code": { "const": "TORRENT_STATUS" },
         "data": { "$ref": "#/$defs/torrent_status" }
       }
@@ -55,6 +61,30 @@
       "properties": {
         "code": { "const": "SCANNER_STATUS" },
         "data": { "$ref": "#/$defs/scanner_status" }
+      }
+    },
+    {
+      "properties": {
+        "code": { "const": "USB_DEVICE_STATUS" },
+        "data": { "$ref": "#/$defs/usb_devices" }
+      }
+    },
+    {
+      "properties": {
+        "code": { "const": "USB_ENROLLMENT_STATUS" },
+        "data": { "$ref": "#/$defs/usb_enrollment" }
+      }
+    },
+    {
+      "properties": {
+        "code": { "const": "USB_PREPARED" },
+        "data": { "$ref": "#/$defs/usb_prepared" }
+      }
+    },
+    {
+      "properties": {
+        "code": { "const": "USB_EXPORT_VERIFIED" },
+        "data": { "$ref": "#/$defs/usb_export" }
       }
     }
   ],
@@ -167,6 +197,19 @@
       },
       "required": ["id", "role", "phase"]
     },
+    "workspace_status": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": { "const": 1 },
+        "state": { "enum": ["CLEAN", "READY", "UNEXPORTED", "CHANGED"] },
+        "file_count": { "type": "integer", "minimum": 0, "maximum": 1024 },
+        "exported_count": { "type": "integer", "minimum": 0, "maximum": 1024 },
+        "unexported_count": { "type": "integer", "minimum": 0, "maximum": 1024 },
+        "changed_count": { "type": "integer", "minimum": 0, "maximum": 1024 }
+      },
+      "required": ["schema_version", "state", "file_count", "exported_count", "unexported_count", "changed_count"]
+    },
     "torrent_status": {
       "type": "object",
       "additionalProperties": false,
@@ -189,6 +232,7 @@
       "properties": {
         "schema_version": { "const": 1 },
         "session_id": { "type": "string", "pattern": "^pvm-[a-f0-9]{32}$" },
+        "destination_session_id": { "type": "string", "pattern": "^pvm-[a-f0-9]{32}$" },
         "workflow_state": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]{2,63}$" },
         "report_complete": { "type": "boolean" },
         "decision": { "enum": ["pending", "approved", "rejected"] },
@@ -201,6 +245,97 @@
         "remediation": { "type": "string", "minLength": 1, "maxLength": 512 }
       },
       "required": ["schema_version", "session_id", "workflow_state", "report_complete", "decision", "input_count", "finding_count", "blocking_finding_count", "sanitized_output_count", "sanitized_output_bytes", "code", "remediation"]
+    },
+    "usb_device": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": { "const": 1 },
+        "device_id": { "type": "string", "pattern": "^usbdev-[0-9a-f]{16}$" },
+        "vendor_id": { "type": "string", "pattern": "^[0-9a-f]{4}$" },
+        "product_id": { "type": "string", "pattern": "^[0-9a-f]{4}$" },
+        "model": { "type": "string", "maxLength": 256 },
+        "serial": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "usbguard_hash": { "type": "string", "pattern": "^[A-Za-z0-9+/=_-]{16,256}$" },
+        "block_path": { "type": "string", "pattern": "^/dev/[A-Za-z0-9._-]+$" },
+        "port_path": { "type": "string", "pattern": "^[0-9]+-[0-9]+(?:\\.[0-9]+)*$" },
+        "interfaces": { "type": "array", "minItems": 1, "maxItems": 32, "uniqueItems": true, "items": { "type": "string", "pattern": "^08:[0-9a-f]{2}:[0-9a-f]{2}$" } },
+        "capacity_bytes": { "type": "integer", "minimum": 1 },
+        "mounted": { "type": "boolean" },
+        "read_only": { "type": "boolean" },
+        "host_filesystem": { "type": "boolean" },
+        "selectable": { "type": "boolean" },
+        "identity_fingerprint": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "code": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]{2,63}$" },
+        "remediation": { "type": "string", "minLength": 1, "maxLength": 512 }
+      },
+      "required": ["schema_version", "device_id", "vendor_id", "product_id", "usbguard_hash", "block_path", "port_path", "interfaces", "capacity_bytes", "mounted", "read_only", "host_filesystem", "selectable", "identity_fingerprint", "code", "remediation"]
+    },
+    "usb_devices": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": { "devices": { "type": "array", "maxItems": 256, "items": { "$ref": "#/$defs/usb_device" } } },
+      "required": ["devices"]
+    },
+    "usb_enrollment": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": { "const": 1 },
+        "enrollment_id": { "type": "string", "pattern": "^usb-[0-9a-f]{16}$" },
+        "label": { "type": "string", "pattern": "^[A-Z0-9][A-Z0-9_-]{0,31}$" },
+        "filesystem": { "const": "luks2-ext4" },
+        "vendor_id": { "type": "string", "pattern": "^[0-9a-f]{4}$" },
+        "product_id": { "type": "string", "pattern": "^[0-9a-f]{4}$" },
+        "model": { "type": "string", "maxLength": 256 },
+        "serial": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "usbguard_hash": { "type": "string", "pattern": "^[A-Za-z0-9+/=_-]{16,256}$" },
+        "block_path": { "type": "string", "pattern": "^/dev/[A-Za-z0-9._-]+$" },
+        "port_path": { "type": "string", "pattern": "^[0-9]+-[0-9]+(?:\\.[0-9]+)*$" },
+        "port_bound": { "type": "boolean" },
+        "interfaces": { "type": "array", "minItems": 1, "maxItems": 32, "uniqueItems": true, "items": { "type": "string", "pattern": "^08:[0-9a-f]{2}:[0-9a-f]{2}$" } },
+        "capacity_bytes": { "type": "integer", "minimum": 1 },
+        "identity_fingerprint": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "verified": { "type": "boolean" },
+        "code": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]{2,63}$" },
+        "remediation": { "type": "string", "minLength": 1, "maxLength": 512 }
+      },
+      "required": ["schema_version", "enrollment_id", "label", "filesystem", "vendor_id", "product_id", "usbguard_hash", "port_path", "port_bound", "interfaces", "capacity_bytes", "identity_fingerprint", "verified", "code", "remediation"]
+    },
+    "usb_prepared": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": { "const": 1 },
+        "exporter_session_id": { "type": "string", "pattern": "^pvm-[a-f0-9]{32}$" },
+        "claim_id": { "type": "string", "pattern": "^usbclaim-[a-f0-9]{32}$" },
+        "enrollment_id": { "type": "string", "pattern": "^usb-[a-f0-9]{16}$" },
+        "filesystem": { "const": "luks2-ext4" },
+        "capacity_bytes": { "type": "integer", "minimum": 1 },
+        "identity_fingerprint": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "state": { "const": "DESTINATION_PREPARED" }
+      },
+      "required": ["schema_version", "exporter_session_id", "claim_id", "enrollment_id", "filesystem", "capacity_bytes", "identity_fingerprint", "state"]
+    },
+    "usb_export": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": { "const": 1 },
+        "enrollment_id": { "type": "string", "pattern": "^usb-[a-f0-9]{16}$" },
+        "bytes_written": { "type": "integer", "minimum": 1 },
+        "source_relay_hash_equal": { "const": true },
+        "relay_exporter_hash_equal": { "const": true },
+        "exporter_reread_hash_equal": { "const": true },
+        "file_synced": { "const": true },
+        "filesystem_synced": { "const": true },
+        "atomic_rename": { "const": true },
+        "usb_unmounted": { "const": true },
+        "usb_detached": { "const": true },
+        "exporter_stopped": { "const": true },
+        "cleanup_complete": { "const": true }
+      },
+      "required": ["schema_version", "enrollment_id", "bytes_written", "source_relay_hash_equal", "relay_exporter_hash_equal", "exporter_reread_hash_equal", "file_synced", "filesystem_synced", "atomic_rename", "usb_unmounted", "usb_detached", "exporter_stopped", "cleanup_complete"]
     }
   }
 }

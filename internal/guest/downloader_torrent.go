@@ -95,11 +95,40 @@ func (server *DownloaderVPNServer) SelectTorrentFiles(ctx context.Context, reque
 	if server == nil || server.torrentController == nil || request == nil || len(request.GetIndexes()) == 0 {
 		return nil, torrentRPCError(torrent.ErrInvalidSelection)
 	}
-	metadata, _, err := server.torrentController.Select(ctx, slices.Clone(request.GetIndexes()))
+	evidence, err := torrentCapacityEvidence(request.GetCapacity())
+	if err != nil {
+		return nil, torrentRPCError(err)
+	}
+	metadata, _, err := server.torrentController.Select(ctx, slices.Clone(request.GetIndexes()), evidence)
 	if err != nil {
 		return nil, torrentRPCError(err)
 	}
 	return torrentMetadataToProto(metadata), nil
+}
+
+func torrentCapacityEvidence(receipt *privatevmv1.TorrentCapacityReceipt) (torrent.CapacityEvidence, error) {
+	if receipt == nil || receipt.GetSchemaVersion() != 1 {
+		return torrent.CapacityEvidence{}, torrent.ErrCapacityEvidence
+	}
+	var destination torrent.Destination
+	switch receipt.GetDestination() {
+	case privatevmv1.TorrentDestination_TORRENT_DESTINATION_WORKSTATION:
+		destination = torrent.DestinationWorkstation
+	case privatevmv1.TorrentDestination_TORRENT_DESTINATION_USB:
+		destination = torrent.DestinationUSB
+	default:
+		return torrent.CapacityEvidence{}, torrent.ErrCapacityEvidence
+	}
+	return torrent.CapacityEvidence{
+		Destination: destination, ScanAvailableBytes: receipt.GetScanAvailableBytes(),
+		ReconstructionAvailable: receipt.GetReconstructionAvailableBytes(),
+		DestinationAvailable:    receipt.GetDestinationAvailableBytes(),
+		RootOverlayBudgetBytes:  receipt.GetRootOverlayBudgetBytes(),
+		ArchiveExpansionBytes:   receipt.GetArchiveExpansionBytes(),
+		ReconstructionBytes:     receipt.GetReconstructionBytes(),
+		MaximumOutputBytes:      receipt.GetMaximumOutputBytes(),
+		MaximumSelectedBytes:    receipt.GetMaximumSelectedBytes(),
+	}, nil
 }
 
 func (server *DownloaderVPNServer) StartDownload(request *privatevmv1.TorrentRequest, stream privatevmv1.DownloaderGuestService_StartDownloadServer) error {
@@ -230,6 +259,8 @@ func torrentRPCError(err error) error {
 		grpcCode = codes.InvalidArgument
 	case errors.Is(err, torrent.ErrInputTooLarge), errors.Is(err, torrent.ErrCapacity):
 		grpcCode = codes.ResourceExhausted
+	case errors.Is(err, torrent.ErrCapacityEvidence):
+		grpcCode = codes.FailedPrecondition
 	case errors.Is(err, torrent.ErrCleanupIncomplete):
 		grpcCode = codes.Unavailable
 	}

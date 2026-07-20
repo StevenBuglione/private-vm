@@ -109,14 +109,37 @@ No guest should contain user credentials at image-build time.
 The workstation guestd is the only process that receives host-import frames or
 enumerates `~/Export`. It accepts one flat logical filename, stages it under an
 exclusive `.<transfer-id>.partial` file in `~/Inbox`, verifies the declared and
-received SHA-256 values, synchronizes it, and uses a no-replace rename. Links,
-directories, traversal names, reordered chunks, extra bytes, hash mismatch,
-cancellation and timeout all remove the partial file.
+received SHA-256 values, synchronizes it, and uses a no-replace rename. Guestd
+pins `Inbox` and `Export` directory descriptors at composition and performs
+create, open, list, rename, unlink, and fsync operations relative to leased
+copies. Device/inode checks reject pathname replacement before publication or
+completion. The initial fixed endpoints may be systemd's two declared
+`ReadWritePaths` bind mounts; all resolution below either pinned endpoint
+refuses further mount crossings. Links, directories, traversal names,
+reordered, empty or oversized
+chunks, excessive frame counts, extra bytes, hash mismatch, cancellation,
+timeout, directory replacement, and receipt failure remove the staged or newly
+published import.
 
-The host opens a trusted import once through a no-follow descriptor. Preflight
-hashing and transfer reuse that descriptor, and the transfer hash plus final
-file identity must still equal the preflight descriptor. Parent or final path
-symlinks are rejected.
+The guestd sandbox keeps `openat2` available as required by ADR 0021 and denies
+all path-based chmod-family syscalls explicitly. Its sole fd-only `fchmod` sets
+a new anonymous secret memfd to fixed mode `0600`. This replaces systemd's coarse
+`RestrictSUIDSGID` filter, whose seccomp implementation rejects `openat2`,
+without adding a pathname-based fallback.
+
+The private user's home remains mode `0700`. Only workstation guestd receives
+`CAP_DAC_OVERRIDE` so it can traverse that home; `ProtectSystem=strict` and the
+two exact `ReadWritePaths` continue to confine writes to `Inbox` and `Export`.
+Other role capability sets are unchanged.
+
+The host atomically opens a trusted import's parent and file with `openat2` and
+no-symlink resolution, then retains both descriptors. Preflight hashing and
+transfer reuse the selected file descriptor even if its pathname is replaced.
+Parent or final path symlinks are rejected.
+
+Every transfer has one begin frame, bounded non-empty chunks of at most 1 MiB,
+and one end frame; the next read must be EOF. The host relay does not commit or
+forward the end frame until that EOF is proven.
 
 `~/Export` is a flat, bounded regular-file set. Guestd hashes every entry and
 returns boot-random HMAC-derived output identifiers rather than filenames in
@@ -162,16 +185,18 @@ Applications are intentionally limited:
 
 The scanner is one immutable image with two boot configurations over the same
 per-session root overlay. The default `definitions-update` configuration enables
-NetworkManager and `freshclam` but declares quarantine attachment forbidden. The
-`scan-offline` specialization disables NetworkManager, DHCP, resolved and the
-FreshClam service/timer. The daemon must also render the scan launch with no NIC;
+NetworkManager and installs FreshClam, but has no automatic updater service or
+timer and declares quarantine attachment forbidden. The fixed non-wanted
+definitions oneshot is reserved for guestd after authenticated Proton
+verification; the production adapter composition is tracked independently.
+The `scan-offline` specialization disables NetworkManager, DHCP, resolved and
+that oneshot. The daemon must also render the scan launch with no NIC;
 disabling guest services is not accepted as evidence that a network device is
 absent.
 
-The image task does not claim that the update phase has the production Proton
-kill switch. SCAN-001 and the NET tasks must install that policy before any
-external definition update is allowed; the Nix image gate uses only a local,
-non-secret FreshClam fixture and is not VPN-readiness evidence.
+The Nix image gate uses only a local, non-secret FreshClam fixture and is not
+VPN-readiness evidence. Production permits `UpdateDefinitions` only after the
+shared host and guest Proton gates pass; see ADR 0017.
 
 `/etc/private-vm/scanner-toolchain.json` records the exact Nix package name and
 version for ClamAV, file identification, bounded archive primitives, parser
@@ -179,6 +204,10 @@ containment, PDF/Office/image/media reconstruction and metadata inspection.
 It is a closed schema-versioned record validated by
 `schemas/scanner-toolchain.schema.json`; both scanner phase records are
 validated by `schemas/scanner-phase.schema.json`.
+The production reader requires exactly one `clamav`, `file`, `poppler-utils`,
+`ghostscript`, `libreoffice` and `ffmpeg` record and verifies that each contains
+the command names guestd can invoke. Other installed inspection entries do not
+become report evidence unless the production path actually executes them.
 Those same direct tool identities appear in the embedded SPDX 2.3 document at
 `/etc/private-vm/scanner-sbom.spdx.json` and the separate `sbom-scanner` flake
 output. This toolchain SBOM is immutable image identity evidence; release

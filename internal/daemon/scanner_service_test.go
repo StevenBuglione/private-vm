@@ -25,6 +25,7 @@ type fakeScannerOrchestrator struct {
 	cleanupErr error
 	rejected   bool
 	report     scan.ScanReport
+	target     session.Snapshot
 }
 
 func (fake *fakeScannerOrchestrator) record(operation string) error {
@@ -136,7 +137,10 @@ func (fake *fakeScannerOrchestrator) Report(_ context.Context, scanner session.S
 	return ScannerReportEvidence{Report: report}, nil
 }
 
-func (fake *fakeScannerOrchestrator) Promote(_ context.Context, _ session.Snapshot, _ ScannerReportEvidence, destination ScannerDestination) error {
+func (fake *fakeScannerOrchestrator) Promote(_ context.Context, _ session.Snapshot, _ ScannerReportEvidence, destination ScannerDestination, target session.Snapshot) error {
+	fake.mu.Lock()
+	fake.target = target
+	fake.mu.Unlock()
 	return fake.record("promote-" + string(destination))
 }
 
@@ -154,6 +158,7 @@ func TestScannerHostWorkflowOwnsUpdateOfflineReportPromotionAndCleanup(t *testin
 	server, socket, _ := newUnstartedTestServer(t, 0)
 	fake := &fakeScannerOrchestrator{}
 	server.options.Service.Scanners = fake
+	server.options.Service.Roles = newFakeRoleOrchestrator()
 	source := sealedDownloaderSession(t, server.options.Service.Sessions)
 	done := startTestServer(t, server)
 	connection, client := dialTestDaemon(t, socket)
@@ -189,8 +194,12 @@ func TestScannerHostWorkflowOwnsUpdateOfflineReportPromotionAndCleanup(t *testin
 		Context:     validRequestContext(final.GetScannerSessionId()),
 		Destination: privatevmv1.ScannerApprovalDestination_SCANNER_APPROVAL_DESTINATION_WORKSTATION,
 	})
-	if err != nil || approved.GetWorkflowState() != "SCAN_VM_STOPPED" || !approved.GetPolicyApproved() {
+	if err != nil || approved.GetWorkflowState() != "SCAN_VM_STOPPED" || !approved.GetPolicyApproved() || approved.GetDestinationSessionId() == "" {
 		t.Fatalf("approval=%+v err=%v", approved, err)
+	}
+	destination, err := server.options.Service.Sessions.Get(approved.GetDestinationSessionId(), uint32(os.Geteuid()))
+	if err != nil || destination.Role != session.RoleWorkstation || destination.Phase != session.PhaseActive || destination.WorkflowState != "WORKING" || fake.target.ID != destination.ID {
+		t.Fatalf("fresh destination=%+v promoted=%+v err=%v", destination, fake.target, err)
 	}
 	cleaned, err := server.options.Service.Sessions.Get(final.GetScannerSessionId(), uint32(os.Geteuid()))
 	if err != nil || cleaned.Phase != session.PhaseDestroyed {
@@ -204,6 +213,105 @@ func TestScannerHostWorkflowOwnsUpdateOfflineReportPromotionAndCleanup(t *testin
 	}
 	if !slices.Equal(fake.log(), wantPrefix) {
 		t.Fatalf("scanner operations=%v want=%v", fake.log(), wantPrefix)
+	}
+	stopTestServer(t, server, done)
+}
+
+func TestScannerPromotionFailureCancellationAndTimeoutCleanFreshWorkstation(t *testing.T) {
+	for _, test := range []struct {
+		name string
+		err  error
+	}{
+		{name: "failure", err: errors.New("injected promotion failure")},
+		{name: "cancellation", err: context.Canceled},
+		{name: "timeout", err: context.DeadlineExceeded},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			server, socket, _ := newUnstartedTestServer(t, 0)
+			fake := &fakeScannerOrchestrator{failAt: "promote-workstation", failErr: test.err}
+			server.options.Service.Scanners = fake
+			server.options.Service.Roles = newFakeRoleOrchestrator()
+			source := sealedDownloaderSession(t, server.options.Service.Sessions)
+			done := startTestServer(t, server)
+			connection, client := dialTestDaemon(t, socket)
+			defer connection.Close()
+
+			stream, err := client.StartScanner(t.Context(), &privatevmv1.HostScannerStartRequest{Context: validRequestContext(source.ID), PolicyName: "safe"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			var scannerID string
+			for {
+				event, receiveErr := stream.Recv()
+				if event != nil && event.GetStatus() != nil {
+					scannerID = event.GetStatus().GetScannerSessionId()
+				}
+				if errors.Is(receiveErr, io.EOF) {
+					break
+				}
+				if receiveErr != nil {
+					t.Fatal(receiveErr)
+				}
+			}
+			_, err = client.ApproveScanner(t.Context(), &privatevmv1.HostScannerApprovalRequest{
+				Context: validRequestContext(scannerID), Destination: privatevmv1.ScannerApprovalDestination_SCANNER_APPROVAL_DESTINATION_WORKSTATION,
+			})
+			if err == nil {
+				t.Fatal("failed promotion returned success")
+			}
+			fake.mu.Lock()
+			targetID := fake.target.ID
+			fake.mu.Unlock()
+			if targetID == "" {
+				t.Fatal("promotion did not receive a fresh workstation")
+			}
+			workstation, getErr := server.options.Service.Sessions.Get(targetID, uint32(os.Geteuid()))
+			if getErr != nil || workstation.Phase != session.PhaseDestroyed {
+				t.Fatalf("failed promotion workstation=%+v err=%v", workstation, getErr)
+			}
+			stopTestServer(t, server, done)
+		})
+	}
+}
+
+func TestScannerUSBApprovalRetainsAuthenticatedOfflineSourceUntilConsumption(t *testing.T) {
+	server, socket, _ := newUnstartedTestServer(t, 0)
+	fake := &fakeScannerOrchestrator{}
+	server.options.Service.Scanners = fake
+	source := sealedDownloaderSession(t, server.options.Service.Sessions)
+	done := startTestServer(t, server)
+	connection, client := dialTestDaemon(t, socket)
+	defer connection.Close()
+
+	stream, err := client.StartScanner(t.Context(), &privatevmv1.HostScannerStartRequest{Context: validRequestContext(source.ID), PolicyName: "safe"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var scannerID string
+	for {
+		event, receiveErr := stream.Recv()
+		if event != nil && event.GetStatus() != nil {
+			scannerID = event.GetStatus().GetScannerSessionId()
+		}
+		if errors.Is(receiveErr, io.EOF) {
+			break
+		}
+		if receiveErr != nil {
+			t.Fatal(receiveErr)
+		}
+	}
+	approved, err := client.ApproveScanner(t.Context(), &privatevmv1.HostScannerApprovalRequest{
+		Context: validRequestContext(scannerID), Destination: privatevmv1.ScannerApprovalDestination_SCANNER_APPROVAL_DESTINATION_USB,
+	})
+	if err != nil || approved.GetWorkflowState() != "POLICY_APPROVED" || !approved.GetPolicyApproved() {
+		t.Fatalf("approval=%+v err=%v", approved, err)
+	}
+	retained, err := server.options.Service.Sessions.Get(scannerID, uint32(os.Geteuid()))
+	if err != nil || retained.Phase != session.PhaseActive || retained.WorkflowState != "POLICY_APPROVED" {
+		t.Fatalf("retained scanner=%+v err=%v", retained, err)
+	}
+	if slices.Contains(fake.log(), "stop-offline") || slices.Contains(fake.log(), "offline-runtime.cleanup") {
+		t.Fatalf("USB approval destroyed its source: %v", fake.log())
 	}
 	stopTestServer(t, server, done)
 }
@@ -390,6 +498,12 @@ func approvedScannerTestReport(sessionID string) scan.ScanReport {
 			OutputID: "scan-out-" + strings.Repeat("d", 32), LogicalName: "fixture.safe.pdf", SourceSHA256: strings.Repeat("c", 64),
 			SizeBytes: 20, SHA256: strings.Repeat("e", 64), DetectedMIME: "application/pdf", Transformation: "pdf-raster-rebuild-v1", RescanVerdict: "CLAMAV_CLEAN",
 		}},
-		Tools: []scan.ToolEvidence{{Name: "clamav", Version: "1.5.1"}}, Result: "approved", Complete: true,
+		Tools: []scan.ToolEvidence{
+			{Name: "clamav", Version: "1.5.1"},
+			{Name: "file", Version: "5.46"},
+			{Name: "ghostscript", Version: "10.05.1"},
+			{Name: "poppler-utils", Version: "25.06.0"},
+		},
+		Result: "approved", Complete: true,
 	}
 }

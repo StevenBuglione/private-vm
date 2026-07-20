@@ -92,6 +92,10 @@ in
       "vhost_vsock"
       "tun"
     ];
+    # Linux requires the outer namespace's global IPv6 forwarding switch for
+    # routed traffic even when the daemon enables forwarding on its owned
+    # veth. IPv4 remains per-interface and the global IPv4 switch stays off.
+    boot.kernel.sysctl."net.ipv6.conf.all.forwarding" = lib.mkDefault 1;
     services.usbguard.enable = true;
     services.usbguard.implicitPolicyTarget = "block";
     security.polkit.enable = true;
@@ -100,6 +104,7 @@ in
       "d /var/lib/private-vm 0700 root root -"
       "d /var/lib/private-vm/images 0755 root root -"
       "d /var/lib/private-vm/scratch 0700 root root -"
+      "d /var/lib/private-vm/enrollments 0700 root root -"
       "d /run/private-vm 0750 root ${cfg.group} -"
     ]
     ++ lib.optional cfg.scratchBackupExcluded "f /var/lib/private-vm/scratch/.private-vm-no-backup 0600 root root - private-vm-ephemeral-scratch-v1";
@@ -153,6 +158,10 @@ in
       {
         assertion = config.security.polkit.enable;
         message = "services.private-vm requires Polkit for destructive USB authorization";
+      }
+      {
+        assertion = config.boot.kernel.sysctl."net.ipv6.conf.all.forwarding" == 1;
+        message = "services.private-vm requires net.ipv6.conf.all.forwarding=1 for exact dual-stack VPN endpoint routing";
       }
       {
         assertion = lib.all (package: lib.elem package config.systemd.services.private-vmd.path) daemonPath;

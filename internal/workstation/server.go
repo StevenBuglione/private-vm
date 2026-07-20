@@ -26,6 +26,7 @@ const (
 	defaultMaxFileBytes      = uint64(8 << 30)
 	defaultMaxWorkspaceBytes = uint64(16 << 30)
 	maxWorkspaceEntries      = 1024
+	maxWorkspaceFrames       = defaultMaxFileBytes/transfer.DefaultMaxChunk + 2
 )
 
 type Config struct {
@@ -34,13 +35,19 @@ type Config struct {
 	MaxWorkspaceBytes uint64
 }
 
+var (
+	ErrWorkspaceRoot   = errors.New("workspace root must exist without symbolic links")
+	ErrWorkspaceInbox  = errors.New("workspace Inbox must exist without symbolic links")
+	ErrWorkspaceExport = errors.New("workspace Export must exist without symbolic links")
+)
+
 type Server struct {
 	privatevmv1.UnimplementedWorkstationGuestServiceServer
-	inboxDir  string
-	exportDir string
-	maxFile   uint64
-	maxTotal  uint64
-	key       [32]byte
+	inbox    *pinnedDirectory
+	export   *pinnedDirectory
+	maxFile  uint64
+	maxTotal uint64
+	key      [32]byte
 
 	mu       sync.Mutex
 	verified map[string]receipt
@@ -55,9 +62,24 @@ type receipt struct {
 type exportFile struct {
 	id     string
 	name   string
-	path   string
 	size   uint64
 	digest [32]byte
+}
+
+type pinnedDirectory struct {
+	mu     sync.Mutex
+	path   string
+	fd     int
+	device uint64
+	inode  uint64
+	closed bool
+}
+
+type directoryLease struct {
+	path   string
+	fd     int
+	device uint64
+	inode  uint64
 }
 
 func New(config Config) (*Server, error) {
@@ -75,21 +97,39 @@ func New(config Config) (*Server, error) {
 	if maxFile == 0 || maxTotal < maxFile {
 		return nil, errors.New("workspace byte limits are invalid")
 	}
-	inbox := filepath.Join(config.Root, "Inbox")
-	export := filepath.Join(config.Root, "Export")
-	for _, directory := range []string{config.Root, inbox, export} {
-		resolved, err := filepath.EvalSymlinks(directory)
-		info, statErr := os.Lstat(directory)
-		if err != nil || statErr != nil || resolved != directory || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
-			return nil, errors.New("workspace directories must exist without symbolic links")
-		}
+	rootFD, err := openDirectoryPath(config.Root)
+	if err != nil {
+		return nil, errors.Join(ErrWorkspaceRoot, err)
 	}
-	server := &Server{inboxDir: inbox, exportDir: export, maxFile: maxFile, maxTotal: maxTotal,
+	defer unix.Close(rootFD)
+	inbox, err := pinDirectoryAt(rootFD, filepath.Join(config.Root, "Inbox"), "Inbox")
+	if err != nil {
+		return nil, errors.Join(ErrWorkspaceInbox, err)
+	}
+	export, err := pinDirectoryAt(rootFD, filepath.Join(config.Root, "Export"), "Export")
+	if err != nil {
+		_ = inbox.close()
+		return nil, errors.Join(ErrWorkspaceExport, err)
+	}
+	server := &Server{inbox: inbox, export: export, maxFile: maxFile, maxTotal: maxTotal,
 		verified: make(map[string]receipt), sent: make(map[string]receipt)}
 	if _, err := rand.Read(server.key[:]); err != nil {
+		_ = server.Close(context.Background())
 		return nil, errors.New("workspace output identity key could not be generated")
 	}
 	return server, nil
+}
+
+// Close releases the pinned workspace directory descriptors. Guestd calls it
+// only after the gRPC server has stopped accepting role requests.
+func (server *Server) Close(context.Context) error {
+	if server == nil {
+		return nil
+	}
+	server.mu.Lock()
+	defer server.mu.Unlock()
+	clear(server.key[:])
+	return errors.Join(server.inbox.close(), server.export.close())
 }
 
 func (server *Server) ImportFile(stream privatevmv1.WorkstationGuestService_ImportFileServer) (returnedErr error) {
@@ -105,17 +145,32 @@ func (server *Server) ImportFile(stream privatevmv1.WorkstationGuestService_Impo
 	if err != nil {
 		return err
 	}
+	inbox, err := server.inbox.lease()
+	if err == nil {
+		err = inbox.verifyPath()
+	}
+	if err != nil {
+		if inbox != nil {
+			_ = inbox.close()
+		}
+		return workspaceError(codes.FailedPrecondition, "WORKSPACE_INBOX_CHANGED", "The pinned Inbox directory identity changed.", "Restore the original guest Inbox directory or recreate the workstation.", err)
+	}
+	defer inbox.close()
 	partialName := "." + begin.GetTransferId() + ".partial"
-	partialPath := filepath.Join(server.inboxDir, partialName)
-	file, err := openExclusiveAt(server.inboxDir, partialName)
+	file, err := openExclusiveAt(inbox.fd, partialName)
 	if err != nil {
 		return workspaceError(codes.AlreadyExists, "IMPORT_STAGING_CONFLICT", "A volatile import staging name already exists.", "Discard the incomplete import and retry with a fresh transfer identifier.", err)
 	}
-	keep := false
+	keep, published := false, false
 	defer func() {
 		_ = file.Close()
 		if !keep {
-			_ = os.Remove(partialPath)
+			name := partialName
+			if published {
+				name = header.Name
+			}
+			_ = unix.Unlinkat(inbox.fd, name, 0)
+			_ = unix.Fsync(inbox.fd)
 		}
 	}()
 	receiver, err := transfer.NewReceiver(header, server.maxFile, file)
@@ -123,28 +178,47 @@ func (server *Server) ImportFile(stream privatevmv1.WorkstationGuestService_Impo
 		return transferFailure("TRANSFER_DESCRIPTOR_INVALID", err)
 	}
 	var sequence, offset uint64
-	for {
+	for frameCount := uint64(1); frameCount < maxWorkspaceFrames; frameCount++ {
 		if err := stream.Context().Err(); err != nil {
-			return workspaceError(codes.Canceled, "TRANSFER_CANCELED", "The import was canceled before verification.", "Retry the import; partial bytes were removed.", err)
+			return workspaceContextError(err)
 		}
 		frame, err := stream.Recv()
 		if err != nil {
+			if contextErr := stream.Context().Err(); contextErr != nil {
+				return workspaceContextError(contextErr)
+			}
 			return workspaceError(codes.InvalidArgument, "TRANSFER_INCOMPLETE", "The import ended before its verified final frame.", "Retry the complete import; partial bytes were removed.", err)
 		}
 		if chunk := frame.GetChunk(); chunk != nil {
 			if chunk.GetSequence() != sequence {
+				clear(chunk.Data)
 				return transferFailure("TRANSFER_SEQUENCE_INVALID", errors.New("non-monotonic transfer sequence"))
 			}
+			if len(chunk.GetData()) == 0 || len(chunk.GetData()) > transfer.DefaultMaxChunk {
+				clear(chunk.Data)
+				return transferFailure("TRANSFER_CHUNK_INVALID", errors.New("empty or oversized transfer chunk"))
+			}
+			chunkBytes := uint64(len(chunk.GetData()))
 			if err := receiver.WriteChunk(offset, chunk.GetData()); err != nil {
+				clear(chunk.Data)
 				return transferFailure("TRANSFER_CHUNK_INVALID", err)
 			}
-			offset += uint64(len(chunk.GetData()))
+			clear(chunk.Data)
+			offset += chunkBytes
 			sequence++
 			continue
 		}
 		end := frame.GetEnd()
 		if end == nil || end.GetTotalSize() != header.Size || !validHash(end.GetDigest(), header.SHA256) {
 			return transferFailure("TRANSFER_END_INVALID", errors.New("final size or digest does not match descriptor"))
+		}
+		trailing, trailingErr := stream.Recv()
+		clearTransferFrame(trailing)
+		if trailing != nil || !errors.Is(trailingErr, io.EOF) {
+			if contextErr := stream.Context().Err(); contextErr != nil {
+				return workspaceContextError(contextErr)
+			}
+			return transferFailure("TRANSFER_TRAILING_FRAME", errors.New("transfer continued after its final frame"))
 		}
 		if err := receiver.Finish(); err != nil {
 			return transferFailure("TRANSFER_DIGEST_MISMATCH", err)
@@ -155,18 +229,27 @@ func (server *Server) ImportFile(stream privatevmv1.WorkstationGuestService_Impo
 		if err := file.Close(); err != nil {
 			return transferFailure("TRANSFER_SYNC_FAILED", err)
 		}
-		break
+		if err := inbox.verifyPath(); err != nil {
+			return workspaceError(codes.FailedPrecondition, "WORKSPACE_INBOX_CHANGED", "The pinned Inbox directory identity changed.", "Restore the original guest Inbox directory or recreate the workstation.", err)
+		}
+		if err := unix.Renameat2(inbox.fd, partialName, inbox.fd, header.Name, unix.RENAME_NOREPLACE); err != nil {
+			return workspaceError(codes.AlreadyExists, "IMPORT_TARGET_EXISTS", "The Inbox target already exists and was not overwritten.", "Choose a new logical name or discard the existing guest file explicitly.", err)
+		}
+		published = true
+		if err := unix.Fsync(inbox.fd); err != nil {
+			return transferFailure("TRANSFER_SYNC_FAILED", err)
+		}
+		if err := inbox.verifyPath(); err != nil {
+			return workspaceError(codes.FailedPrecondition, "WORKSPACE_INBOX_CHANGED", "The pinned Inbox directory identity changed.", "Restore the original guest Inbox directory or recreate the workstation.", err)
+		}
+		receipt := &privatevmv1.TransferReceipt{TransferId: begin.GetTransferId(), Descriptor_: begin.GetDescriptor_(), ReceiverDigest: protoHash(header.SHA256)}
+		if err := stream.SendAndClose(receipt); err != nil {
+			return err
+		}
+		keep = true
+		return nil
 	}
-	finalPath := filepath.Join(server.inboxDir, header.Name)
-	if err := unix.Renameat2(unix.AT_FDCWD, partialPath, unix.AT_FDCWD, finalPath, unix.RENAME_NOREPLACE); err != nil {
-		return workspaceError(codes.AlreadyExists, "IMPORT_TARGET_EXISTS", "The Inbox target already exists and was not overwritten.", "Choose a new logical name or discard the existing guest file explicitly.", err)
-	}
-	if err := syncDirectory(server.inboxDir); err != nil {
-		_ = os.Remove(finalPath)
-		return transferFailure("TRANSFER_SYNC_FAILED", err)
-	}
-	keep = true
-	return stream.SendAndClose(&privatevmv1.TransferReceipt{TransferId: begin.GetTransferId(), Descriptor_: begin.GetDescriptor_(), ReceiverDigest: protoHash(header.SHA256)})
+	return workspaceError(codes.ResourceExhausted, "TRANSFER_FRAME_LIMIT", "The import exceeded its bounded frame count.", "Retry with the documented chunk size; partial bytes were removed.", nil)
 }
 
 func (server *Server) GetWorkspaceState(ctx context.Context, _ *privatevmv1.WorkspaceStateRequest) (*privatevmv1.WorkspaceState, error) {
@@ -221,7 +304,15 @@ func (server *Server) ExportFile(request *privatevmv1.GuestExportFileRequest, st
 	if selected == nil {
 		return workspaceError(codes.NotFound, "WORKSPACE_OUTPUT_NOT_FOUND", "The selected volatile output no longer exists.", "Refresh the workspace inventory and select one current output.", nil)
 	}
-	file, info, err := openRegularNoFollow(selected.path, int64(server.maxFile))
+	export, err := server.export.lease()
+	if err != nil {
+		return workspaceError(codes.FailedPrecondition, "WORKSPACE_EXPORT_CHANGED", "The pinned Export directory is unavailable.", "Restore the original guest Export directory or recreate the workstation.", err)
+	}
+	defer export.close()
+	if err := export.verifyPath(); err != nil {
+		return workspaceError(codes.FailedPrecondition, "WORKSPACE_EXPORT_CHANGED", "The pinned Export directory identity changed.", "Restore the original guest Export directory or recreate the workstation.", err)
+	}
+	file, info, err := openRegularAt(export.fd, selected.name, int64(server.maxFile))
 	if err != nil || uint64(info.Size()) != selected.size {
 		return workspaceError(codes.FailedPrecondition, "WORKSPACE_OUTPUT_CHANGED", "The output changed before export began.", "Refresh the inventory and review the changed output.", err)
 	}
@@ -253,6 +344,9 @@ func (server *Server) ExportFile(request *privatevmv1.GuestExportFileRequest, st
 	}
 	if err := stream.Send(&privatevmv1.TransferFrame{Frame: &privatevmv1.TransferFrame_End{End: &privatevmv1.TransferEnd{TotalSize: selected.size, Digest: protoHash(selected.digest)}}}); err != nil {
 		return err
+	}
+	if err := export.verifyPath(); err != nil {
+		return workspaceError(codes.FailedPrecondition, "WORKSPACE_EXPORT_CHANGED", "The pinned Export directory identity changed during export.", "Restore the original guest Export directory or recreate the workstation.", err)
 	}
 	server.mu.Lock()
 	server.sent[selected.id] = receipt{digest: selected.digest, size: selected.size}
@@ -291,7 +385,15 @@ func (server *Server) ShowNetworkWarning(context.Context, *privatevmv1.NetworkWa
 }
 
 func (server *Server) inventory(ctx context.Context) ([]exportFile, error) {
-	entries, err := os.ReadDir(server.exportDir)
+	export, err := server.export.lease()
+	if err != nil {
+		return nil, workspaceError(codes.FailedPrecondition, "WORKSPACE_EXPORT_CHANGED", "The pinned Export directory is unavailable.", "Restore the original guest Export directory or recreate the workstation.", err)
+	}
+	defer export.close()
+	if err := export.verifyPath(); err != nil {
+		return nil, workspaceError(codes.FailedPrecondition, "WORKSPACE_EXPORT_CHANGED", "The pinned Export directory identity changed.", "Restore the original guest Export directory or recreate the workstation.", err)
+	}
+	entries, err := readDirectoryEntries(export.fd)
 	if err != nil || len(entries) > maxWorkspaceEntries {
 		return nil, workspaceError(codes.FailedPrecondition, "WORKSPACE_INVENTORY_FAILED", "The Export directory could not be inventoried within its bounds.", "Remove unsupported entries inside the guest and retry.", err)
 	}
@@ -306,8 +408,7 @@ func (server *Server) inventory(ctx context.Context) ([]exportFile, error) {
 		if entry.IsDir() || entry.Type()&os.ModeSymlink != 0 || header.Validate(server.maxFile) != nil {
 			return nil, workspaceError(codes.FailedPrecondition, "WORKSPACE_ENTRY_UNSAFE", "Export contains a directory, link, or unsafe name.", "Keep only bounded regular files directly inside Export.", nil)
 		}
-		path := filepath.Join(server.exportDir, entry.Name())
-		file, info, err := openRegularNoFollow(path, int64(server.maxFile))
+		file, info, err := openRegularAt(export.fd, entry.Name(), int64(server.maxFile))
 		if err != nil {
 			return nil, workspaceError(codes.FailedPrecondition, "WORKSPACE_ENTRY_UNSAFE", "Export contains a non-regular or oversized entry.", "Keep only bounded regular files directly inside Export.", err)
 		}
@@ -321,7 +422,10 @@ func (server *Server) inventory(ctx context.Context) ([]exportFile, error) {
 			return nil, workspaceError(codes.ResourceExhausted, "WORKSPACE_CAPACITY_EXCEEDED", "Export exceeds the bounded workspace capacity.", "Remove unneeded guest outputs before retrying.", nil)
 		}
 		total += size
-		files = append(files, exportFile{id: server.outputID(entry.Name()), name: entry.Name(), path: path, size: size, digest: digest})
+		files = append(files, exportFile{id: server.outputID(entry.Name()), name: entry.Name(), size: size, digest: digest})
+	}
+	if err := export.verifyPath(); err != nil {
+		return nil, workspaceError(codes.FailedPrecondition, "WORKSPACE_EXPORT_CHANGED", "The pinned Export directory identity changed during inventory.", "Restore the original guest Export directory or recreate the workstation.", err)
 	}
 	return files, nil
 }
@@ -365,31 +469,135 @@ func validOpaqueID(value string) bool {
 	return true
 }
 
-func openExclusiveAt(directory, name string) (*os.File, error) {
-	dir, err := unix.Open(directory, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0)
+func openDirectoryPath(path string) (int, error) {
+	return unix.Openat2(unix.AT_FDCWD, path, &unix.OpenHow{
+		Flags:   unix.O_RDONLY | unix.O_DIRECTORY | unix.O_CLOEXEC | unix.O_NOFOLLOW,
+		Resolve: unix.RESOLVE_NO_SYMLINKS | unix.RESOLVE_NO_MAGICLINKS,
+	})
+}
+
+func pinDirectoryAt(parentFD int, path, name string) (*pinnedDirectory, error) {
+	fd, err := unix.Openat2(parentFD, name, &unix.OpenHow{
+		Flags: unix.O_RDONLY | unix.O_DIRECTORY | unix.O_CLOEXEC | unix.O_NOFOLLOW,
+		// systemd implements the unit's narrow ReadWritePaths with bind mounts,
+		// so each explicitly configured endpoint may be a mount boundary. Pin
+		// that endpoint once, then keep RESOLVE_NO_XDEV on every operation below
+		// its dirfd to prevent later traversal across another filesystem.
+		Resolve: unix.RESOLVE_BENEATH | unix.RESOLVE_NO_SYMLINKS | unix.RESOLVE_NO_MAGICLINKS,
+	})
 	if err != nil {
 		return nil, err
 	}
-	defer unix.Close(dir)
-	fd, err := unix.Openat(dir, name, unix.O_WRONLY|unix.O_CREAT|unix.O_EXCL|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0o600)
+	var identity unix.Stat_t
+	if err := unix.Fstat(fd, &identity); err != nil || identity.Mode&unix.S_IFMT != unix.S_IFDIR {
+		_ = unix.Close(fd)
+		return nil, errors.Join(err, errors.New("workspace directory identity is invalid"))
+	}
+	return &pinnedDirectory{path: path, fd: fd, device: uint64(identity.Dev), inode: identity.Ino}, nil
+}
+
+func (directory *pinnedDirectory) lease() (*directoryLease, error) {
+	if directory == nil {
+		return nil, errors.New("workspace directory is unavailable")
+	}
+	directory.mu.Lock()
+	defer directory.mu.Unlock()
+	if directory.closed || directory.fd < 0 {
+		return nil, errors.New("workspace directory is closed")
+	}
+	fd, err := unix.Openat2(directory.fd, ".", &unix.OpenHow{
+		Flags:   unix.O_RDONLY | unix.O_DIRECTORY | unix.O_CLOEXEC | unix.O_NOFOLLOW,
+		Resolve: unix.RESOLVE_BENEATH | unix.RESOLVE_NO_SYMLINKS | unix.RESOLVE_NO_MAGICLINKS | unix.RESOLVE_NO_XDEV,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &directoryLease{path: directory.path, fd: fd, device: directory.device, inode: directory.inode}, nil
+}
+
+func (directory *pinnedDirectory) close() error {
+	if directory == nil {
+		return nil
+	}
+	directory.mu.Lock()
+	defer directory.mu.Unlock()
+	if directory.closed {
+		return nil
+	}
+	directory.closed = true
+	err := unix.Close(directory.fd)
+	directory.fd = -1
+	return err
+}
+
+func (lease *directoryLease) close() error {
+	if lease == nil || lease.fd < 0 {
+		return nil
+	}
+	err := unix.Close(lease.fd)
+	lease.fd = -1
+	return err
+}
+
+func (lease *directoryLease) verifyPath() error {
+	if lease == nil || lease.fd < 0 {
+		return errors.New("workspace directory lease is unavailable")
+	}
+	current, err := openDirectoryPath(lease.path)
+	if err != nil {
+		return err
+	}
+	defer unix.Close(current)
+	var identity unix.Stat_t
+	if err := unix.Fstat(current, &identity); err != nil {
+		return err
+	}
+	if uint64(identity.Dev) != lease.device || identity.Ino != lease.inode {
+		return errors.New("workspace directory path was replaced")
+	}
+	return nil
+}
+
+func openExclusiveAt(directoryFD int, name string) (*os.File, error) {
+	fd, err := unix.Openat2(directoryFD, name, &unix.OpenHow{
+		Flags:   unix.O_WRONLY | unix.O_CREAT | unix.O_EXCL | unix.O_CLOEXEC | unix.O_NOFOLLOW,
+		Mode:    0o600,
+		Resolve: unix.RESOLVE_BENEATH | unix.RESOLVE_NO_SYMLINKS | unix.RESOLVE_NO_MAGICLINKS | unix.RESOLVE_NO_XDEV,
+	})
 	if err != nil {
 		return nil, err
 	}
 	return os.NewFile(uintptr(fd), name), nil
 }
 
-func openRegularNoFollow(path string, maximum int64) (*os.File, os.FileInfo, error) {
-	fd, err := unix.Open(path, unix.O_RDONLY|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0)
+func openRegularAt(directoryFD int, name string, maximum int64) (*os.File, os.FileInfo, error) {
+	fd, err := unix.Openat2(directoryFD, name, &unix.OpenHow{
+		Flags:   unix.O_RDONLY | unix.O_CLOEXEC | unix.O_NOFOLLOW,
+		Resolve: unix.RESOLVE_BENEATH | unix.RESOLVE_NO_SYMLINKS | unix.RESOLVE_NO_MAGICLINKS | unix.RESOLVE_NO_XDEV,
+	})
 	if err != nil {
 		return nil, nil, err
 	}
-	file := os.NewFile(uintptr(fd), filepath.Base(path))
+	file := os.NewFile(uintptr(fd), name)
 	info, err := file.Stat()
 	if err != nil || !info.Mode().IsRegular() || info.Size() < 0 || info.Size() > maximum {
 		_ = file.Close()
 		return nil, nil, errors.Join(err, errors.New("unsafe regular file"))
 	}
 	return file, info, nil
+}
+
+func readDirectoryEntries(directoryFD int) ([]os.DirEntry, error) {
+	fd, err := unix.Openat2(directoryFD, ".", &unix.OpenHow{
+		Flags:   unix.O_RDONLY | unix.O_DIRECTORY | unix.O_CLOEXEC | unix.O_NOFOLLOW,
+		Resolve: unix.RESOLVE_BENEATH | unix.RESOLVE_NO_SYMLINKS | unix.RESOLVE_NO_MAGICLINKS | unix.RESOLVE_NO_XDEV,
+	})
+	if err != nil {
+		return nil, err
+	}
+	directory := os.NewFile(uintptr(fd), "workspace-directory")
+	entries, readErr := directory.ReadDir(-1)
+	return entries, errors.Join(readErr, directory.Close())
 }
 
 func hashFile(ctx context.Context, file *os.File, maximum uint64) ([sha256.Size]byte, error) {
@@ -420,13 +628,17 @@ func hashFile(ctx context.Context, file *os.File, maximum uint64) ([sha256.Size]
 	return result, nil
 }
 
-func syncDirectory(path string) error {
-	directory, err := os.Open(path)
-	if err != nil {
-		return err
+func clearTransferFrame(frame *privatevmv1.TransferFrame) {
+	if frame != nil && frame.GetChunk() != nil {
+		clear(frame.GetChunk().Data)
 	}
-	defer directory.Close()
-	return directory.Sync()
+}
+
+func workspaceContextError(err error) error {
+	if errors.Is(err, context.DeadlineExceeded) {
+		return workspaceError(codes.DeadlineExceeded, "TRANSFER_TIMEOUT", "The import timed out before verification.", "Retry the import; partial bytes were removed.", err)
+	}
+	return workspaceError(codes.Canceled, "TRANSFER_CANCELED", "The import was canceled before verification.", "Retry the import; partial bytes were removed.", err)
 }
 
 func transferFailure(code string, cause error) error {

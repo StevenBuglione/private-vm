@@ -79,10 +79,10 @@ func TestMetadataFirstSelectionDownloadSealAndDestroy(t *testing.T) {
 	if metadata.Files[1].SuspectedType != "executable" || len(metadata.Files[1].HazardCodes) == 0 {
 		t.Fatalf("executable was not highlighted: %+v", metadata.Files[1])
 	}
-	if _, _, err := controller.Select(t.Context(), []uint32{1}); !errors.Is(err, ErrInvalidSelection) {
+	if _, _, err := controller.Select(t.Context(), []uint32{1}, testCapacityEvidence()); !errors.Is(err, ErrInvalidSelection) {
 		t.Fatalf("safe executable selection error = %v", err)
 	}
-	selected, plan, err := controller.Select(t.Context(), []uint32{0})
+	selected, plan, err := controller.Select(t.Context(), []uint32{0}, testCapacityEvidence())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -136,14 +136,13 @@ func TestCapacityPathAndMetadataFailuresBlockBeforePayload(t *testing.T) {
 		})
 	}
 	backend := &fakeBackend{metadata: []RawMetadata{{Available: true, DisplayName: "fixture", Files: []RawFile{{Index: 0, Path: "large.pdf", Size: 10 << 30}}}}}
-	controller := testController(t, backend, &fakeQuarantine{}, true)
-	controller.config.Budget.QuarantineAvailableBytes = 1
+	controller := testController(t, backend, &fakeQuarantine{capacity: 1}, true)
 	input := mustInput(t)
 	defer input.Destroy()
 	if _, err := controller.Add(t.Context(), input); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := controller.Select(t.Context(), []uint32{0}); !errors.Is(err, ErrCapacity) {
+	if _, _, err := controller.Select(t.Context(), []uint32{0}, testCapacityEvidence()); !errors.Is(err, ErrCapacity) {
 		t.Fatalf("capacity error = %v", err)
 	}
 	if err := controller.Start(t.Context()); !errors.Is(err, ErrNotApproved) || backend.started {
@@ -159,7 +158,7 @@ func TestCancellationTimeoutVPNLossAndCleanupRemainPaused(t *testing.T) {
 	if _, err := controller.Add(t.Context(), input); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := controller.Select(t.Context(), []uint32{0}); err != nil {
+	if _, _, err := controller.Select(t.Context(), []uint32{0}, testCapacityEvidence()); err != nil {
 		t.Fatal(err)
 	}
 	if err := controller.Start(t.Context()); err != nil {
@@ -225,7 +224,7 @@ func TestCoordinatorRetriesDestroyAuditWithoutResealing(t *testing.T) {
 	if _, err := controller.Add(t.Context(), input); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := controller.Select(t.Context(), []uint32{0}); err != nil {
+	if _, _, err := controller.Select(t.Context(), []uint32{0}, testCapacityEvidence()); err != nil {
 		t.Fatal(err)
 	}
 	if err := controller.Start(t.Context()); err != nil {
@@ -259,7 +258,7 @@ func TestSealRetriesUnmountWithoutRestartingStoppedClient(t *testing.T) {
 	if _, err := controller.Add(t.Context(), input); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := controller.Select(t.Context(), []uint32{0}); err != nil {
+	if _, _, err := controller.Select(t.Context(), []uint32{0}, testCapacityEvidence()); err != nil {
 		t.Fatal(err)
 	}
 	if err := controller.Start(t.Context()); err != nil {
@@ -285,16 +284,19 @@ func testController(t *testing.T, backend *fakeBackend, quarantine *fakeQuaranti
 	t.Helper()
 	controller, err := newController(backend, quarantine, instantWaiter{}, Config{
 		SafePolicy: safe, MetadataTimeout: time.Minute, PollInterval: time.Millisecond, StallTimeout: time.Minute,
-		Budget: CapacityBudget{
-			QuarantineAvailableBytes: 64 << 30, ScanAvailableBytes: 64 << 30, ReconstructionAvailable: 64 << 30,
-			DestinationAvailable: 64 << 30, RootOverlayBudgetBytes: 8 << 30, ArchiveExpansionBytes: 4 << 30,
-			ReconstructionBytes: 1 << 30, MaximumSelectedBytes: 32 << 30,
-		},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	return controller
+}
+
+func testCapacityEvidence() CapacityEvidence {
+	return CapacityEvidence{
+		Destination: DestinationWorkstation, ScanAvailableBytes: 64 << 30, ReconstructionAvailable: 64 << 30,
+		DestinationAvailable: 64 << 30, RootOverlayBudgetBytes: 8 << 30, ArchiveExpansionBytes: 4 << 30,
+		ReconstructionBytes: 1 << 30, MaximumOutputBytes: 512 << 20, MaximumSelectedBytes: 32 << 30,
+	}
 }
 
 func mustInput(t *testing.T) *Input {
@@ -373,9 +375,71 @@ func (backend *fakeBackend) Shutdown(context.Context) error {
 }
 
 type fakeQuarantine struct {
-	unmounted bool
-	calls     int
-	failOnce  bool
+	unmounted      bool
+	calls          int
+	failOnce       bool
+	capacity       uint64
+	capacityErr    error
+	capacityCalls  int
+	waitForContext bool
+}
+
+func (quarantine *fakeQuarantine) CapacityBytes(ctx context.Context) (uint64, error) {
+	quarantine.capacityCalls++
+	if quarantine.waitForContext {
+		<-ctx.Done()
+		return 0, ctx.Err()
+	}
+	if err := ctx.Err(); err != nil {
+		return 0, err
+	}
+	if quarantine.capacityErr != nil {
+		return 0, quarantine.capacityErr
+	}
+	if quarantine.capacity == 0 {
+		return 64 << 30, nil
+	}
+	return quarantine.capacity, nil
+}
+
+func TestSelectionReprobesChangedCapacityAndHonorsCancellation(t *testing.T) {
+	backend := &fakeBackend{metadata: []RawMetadata{{Available: true, DisplayName: "fixture", Files: []RawFile{{Index: 0, Path: "ok.pdf", Size: 128 << 20}}}}}
+	quarantine := &fakeQuarantine{capacity: 64 << 30}
+	controller := testController(t, backend, quarantine, true)
+	input := mustInput(t)
+	defer input.Destroy()
+	if _, err := controller.Add(t.Context(), input); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := controller.Select(t.Context(), []uint32{0}, testCapacityEvidence()); err != nil {
+		t.Fatal(err)
+	}
+	quarantine.capacity = 1
+	if _, _, err := controller.Select(t.Context(), []uint32{0}, testCapacityEvidence()); !errors.Is(err, ErrCapacity) {
+		t.Fatalf("changed quarantine capacity error = %v", err)
+	}
+	if quarantine.capacityCalls != 2 {
+		t.Fatalf("capacity probes = %d, want 2", quarantine.capacityCalls)
+	}
+
+	quarantine.capacity = 64 << 30
+	evidence := testCapacityEvidence()
+	evidence.DestinationAvailable = 1
+	if _, _, err := controller.Select(t.Context(), []uint32{0}, evidence); !errors.Is(err, ErrCapacity) {
+		t.Fatalf("changed destination capacity error = %v", err)
+	}
+
+	quarantine.waitForContext = true
+	deadline, cancel := context.WithTimeout(t.Context(), 10*time.Millisecond)
+	defer cancel()
+	if _, _, err := controller.Select(deadline, []uint32{0}, testCapacityEvidence()); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("capacity timeout error = %v", err)
+	}
+	cancelled, cancelNow := context.WithCancel(t.Context())
+	cancelNow()
+	if _, _, err := controller.Select(cancelled, []uint32{0}, testCapacityEvidence()); !errors.Is(err, context.Canceled) {
+		t.Fatalf("capacity cancellation error = %v", err)
+	}
 }
 
 func (quarantine *fakeQuarantine) SyncAndUnmount(context.Context) error {
@@ -403,7 +467,7 @@ func (destroyer *fakeDestroyer) DestroyAndAudit(context.Context) error {
 
 func TestStableTorrentErrorsNeverContainInput(t *testing.T) {
 	fixture := testMagnetPrefix + testHash
-	for _, err := range []error{invalidInput(), inputTooLarge(), unsafeMetadata(), invalidSelection(), insufficientCapacity(), downloadFailed(), sealFailed(), cleanupIncomplete()} {
+	for _, err := range []error{invalidInput(), inputTooLarge(), unsafeMetadata(), invalidSelection(), insufficientCapacity(), capacityEvidenceUnavailable(), downloadFailed(), sealFailed(), cleanupIncomplete()} {
 		application := apperror.From(err)
 		if application.Code == "" || application.Remediation == "" || strings.Contains(application.Error()+application.Remediation, fixture) {
 			t.Fatalf("unsafe torrent error = %+v", application)

@@ -130,6 +130,16 @@ receive only a scoped duplicate through an inherited file descriptor; it never
 receives the TAP or namespace name. The QEMU process owner stops the child
 before network cleanup.
 
+Linux requires `net.ipv6.conf.all.forwarding=1` in the outer host namespace for
+the routed IPv6 path; enabling forwarding only on the owned host veth is not
+sufficient. The host module declares this global prerequisite and Doctor checks
+it read-only before planning. The daemon continues to enable only the owned
+host-veth IPv4 forwarding switch and the namespace-local IPv4/IPv6 switches;
+it never mutates a host-global sysctl. Global IPv4 forwarding remains disabled.
+Enabling host-global IPv6 forwarding can change Router Advertisement handling,
+so the operator must keep host uplink configuration under NetworkManager or
+equivalent declarative control and verify IPv6 connectivity after activation.
+
 The namespace owns an nftables table whose policy:
 
 - default drop
@@ -158,6 +168,17 @@ the network becomes ready. Endpoint values never appear in argv or environment
 and never leave the adapter through returned errors, status or captured output;
 the transient stdin rule buffer is cleared after every result.
 
+Each owned table also has a later, default-drop forward audit hook. Exact Proton
+tuples are exempted again; IPv4, IPv6, direct DNS, private/special-range and
+unrelated egress that unexpectedly survives the primary hook is counted and
+dropped. Readiness requires fresh `nft -j list table inet <owned-table>` evidence
+for both the host and namespace tables while the current-plan lifecycle lease is
+held. The bounded parser requires the exact private-vm owner marker, table,
+primary/audit chains and one zero-valued instance of every counter. Missing,
+duplicate, malformed, nonzero, stale or unowned evidence fails closed. Raw JSON,
+object names, endpoints and counter values are destroyed after parsing; only a
+three-boolean aggregate reaches orchestration.
+
 Provisioning, TAP/configuration handoffs and cleanup have one serialized
 lifecycle owner. Once cleanup is accepted it continues in an independent
 bounded context even if the initiating client disconnects. It first disables
@@ -185,13 +206,13 @@ adapters fail construction. The role matrix admits workstation, downloader,
 and scanner-update policies; scanner-scan and exporter networking fail closed.
 
 The host-selected point-to-point addresses and controlled leak-test fixtures
-cross authenticated VSOCK in typed protobuf fields defined by ADRs 0013 and
-0014. The host loads the explicit non-secret fixtures from the immutable
+cross authenticated VSOCK in typed protobuf fields defined by ADRs 0013 through
+0017. The host loads the explicit non-secret fixtures from the immutable
 configuration snapshot and validates a bounded DNS name plus public
-global-unicast IPv4 and IPv6 address/port values before daemon startup. Both
-online role services expose the same named configure/verify methods,
-but exact role registration keeps workstation and downloader capabilities
-separate. The guest accepts only exact `/30` IPv4 and `/126` IPv6 underlays and validated
+global-unicast IPv4 and IPv6 address/port values before daemon startup. All
+three online roles expose the same named configure/verify methods, but exact
+role registration keeps workstation, downloader and scanner capabilities
+separate. Scanner scan boot still has no NIC. The guest accepts only exact `/30` IPv4 and `/126` IPv6 underlays and validated
 public probe endpoints. It never derives, defaults, logs or persists these
 values, and no machine status contains them.
 
@@ -272,16 +293,18 @@ and it adds state and inbound exposure.
 The downloader image boots with a default-drop `inet` table. It contains
 separate IPv4 and IPv6 runtime templates whose only underlay egress is UDP to a
 typed, validated Proton endpoint; NET-003 renders and applies one complete
-transaction after profile validation. qBittorrent runs as a hardened system
-service with no install target. Only guestd's serialized VPN controller starts
-the fixed system unit, after the kill switch and `proton0` are configured and
-the guest-owned quarantine is mounted. Failed startup or initial verification
-stops the unit in an independent bounded cleanup context. The profile and logs
-are volatile, the Web API binds to `127.0.0.1`, and the immutable image contains
-no reusable API credential. The generated password is absent from argv,
-environment, the immutable image and journald. The fixed unit is also
-`PartOf=private-vm-guestd.service`, so a guestd stop or restart propagates a
-process stop instead of leaving qBittorrent outside its lifecycle owner.
+transaction after profile validation. Only guestd's serialized VPN controller
+starts the package-pinned qBittorrent child, after the kill switch and `proton0`
+are configured and the guest-owned quarantine is mounted. The child shares
+guestd's hardened mount namespace, inherits its systemd sandbox, drops to the
+fixed private user and is owned through pidfd plus bounded TERM/KILL cleanup.
+Failed startup or initial verification stops and reaps the child in an
+independent bounded cleanup context. The profile and logs are volatile, the Web
+API binds to `127.0.0.1`, and the immutable image contains no reusable API
+credential. The generated password is absent from argv, environment, the
+immutable image and journald. A guestd stop or restart triggers parent-death and
+serialized process cleanup instead of leaving qBittorrent outside its lifecycle
+owner. See ADR 0018.
 
 Workstation guestd composes the same fixed Linux WireGuard, systemd-resolved
 and controlled-probe adapters with workstation policy and no torrent binding
@@ -315,9 +338,11 @@ command output. The concrete bounded adapters use fixed `wg` arguments,
 interface-bound Go sockets, systemd-resolved's private D-Bus connection and the
 loopback-only qBittorrent preferences API. The host orchestrator then requires
 the verified guest result and a boolean-only host/namespace counter proof before
-starting continuous monitoring. Controlled mock-peer packet tests, production
-namespace counters, image composition and live Proton smoke proof remain
-image/acceptance work; none is reported as passed by the source suite.
+starting continuous monitoring. The source suite exercises the production
+bounded nft JSON parser with synthetic owned-table evidence; controlled
+mock-peer packets, live namespace counters, image composition and the live
+Proton smoke proof remain image/acceptance work and are not reported as passed
+by source tests.
 
 ## VPN loss
 

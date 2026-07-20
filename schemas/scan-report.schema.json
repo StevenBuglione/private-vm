@@ -28,6 +28,30 @@
         "version": { "type": "string", "minLength": 1, "maxLength": 256 }
       },
       "required": ["name", "version"]
+    },
+    "requiresClamav": {
+      "properties": { "tools": { "contains": { "properties": { "name": { "const": "clamav" } }, "required": ["name"] }, "minContains": 1, "maxContains": 1 } }
+    },
+    "requiresFile": {
+      "properties": { "tools": { "contains": { "properties": { "name": { "const": "file" } }, "required": ["name"] }, "minContains": 1, "maxContains": 1 } }
+    },
+    "requiresGhostscript": {
+      "properties": { "tools": { "contains": { "properties": { "name": { "const": "ghostscript" } }, "required": ["name"] }, "minContains": 1, "maxContains": 1 } }
+    },
+    "requiresPoppler": {
+      "properties": { "tools": { "contains": { "properties": { "name": { "const": "poppler-utils" } }, "required": ["name"] }, "minContains": 1, "maxContains": 1 } }
+    },
+    "requiresLibreOffice": {
+      "properties": { "tools": { "contains": { "properties": { "name": { "const": "libreoffice" } }, "required": ["name"] }, "minContains": 1, "maxContains": 1 } }
+    },
+    "requiresFFmpeg": {
+      "properties": { "tools": { "contains": { "properties": { "name": { "const": "ffmpeg" } }, "required": ["name"] }, "minContains": 1, "maxContains": 1 } }
+    },
+    "requiresGoImage": {
+      "properties": { "tools": { "contains": { "properties": { "name": { "const": "go-image-png" } }, "required": ["name"] }, "minContains": 1, "maxContains": 1 } }
+    },
+    "requiresTextNormalizer": {
+      "properties": { "tools": { "contains": { "properties": { "name": { "const": "private-vm-text-normalizer" } }, "required": ["name"] }, "minContains": 1, "maxContains": 1 } }
     }
   },
   "properties": {
@@ -150,12 +174,34 @@
         "required": ["output_id", "logical_name", "source_sha256", "size_bytes", "sha256", "detected_mime", "transformation", "rescan_verdict"]
       }
     },
-    "tools": { "type": "array", "minItems": 1, "maxItems": 256, "items": { "$ref": "#/$defs/tool" } },
+    "tools": { "type": "array", "minItems": 1, "maxItems": 256, "uniqueItems": true, "items": { "$ref": "#/$defs/tool" } },
     "result": { "enum": ["approved", "rejected", "error"] },
     "complete": { "type": "boolean" }
   },
   "required": ["schema_version", "session_id", "policy", "started_at", "completed_at", "duration_millis", "scanner", "definitions", "isolation", "phases", "inputs", "archives", "findings", "sanitized_outputs", "tools", "result", "complete"],
   "allOf": [
+    { "$ref": "#/$defs/requiresClamav" },
+    { "$ref": "#/$defs/requiresFile" },
+    {
+      "if": { "properties": { "sanitized_outputs": { "contains": { "properties": { "transformation": { "const": "pdf-raster-rebuild-v1" } }, "required": ["transformation"] } } } },
+      "then": { "allOf": [{ "$ref": "#/$defs/requiresGhostscript" }, { "$ref": "#/$defs/requiresPoppler" }] }
+    },
+    {
+      "if": { "properties": { "sanitized_outputs": { "contains": { "properties": { "transformation": { "const": "office-render-pdf-raster-rebuild-v1" } }, "required": ["transformation"] } } } },
+      "then": { "allOf": [{ "$ref": "#/$defs/requiresGhostscript" }, { "$ref": "#/$defs/requiresPoppler" }, { "$ref": "#/$defs/requiresLibreOffice" }] }
+    },
+    {
+      "if": { "properties": { "sanitized_outputs": { "contains": { "properties": { "transformation": { "enum": ["media-full-decode-aac-v1", "media-full-decode-h264-aac-v1"] } }, "required": ["transformation"] } } } },
+      "then": { "$ref": "#/$defs/requiresFFmpeg" }
+    },
+    {
+      "if": { "properties": { "sanitized_outputs": { "contains": { "properties": { "transformation": { "const": "image-decode-strip-reencode-png-v1" } }, "required": ["transformation"] } } } },
+      "then": { "$ref": "#/$defs/requiresGoImage" }
+    },
+    {
+      "if": { "properties": { "sanitized_outputs": { "contains": { "properties": { "transformation": { "const": "text-utf8-line-normalize-v1" } }, "required": ["transformation"] } } } },
+      "then": { "$ref": "#/$defs/requiresTextNormalizer" }
+    },
     {
       "if": { "properties": { "result": { "const": "approved" } }, "required": ["result"] },
       "then": {
