@@ -1166,6 +1166,7 @@
         assert builtins.elem "pvm-custom" host.config.users.users.pvm-test-user.extraGroups;
         assert builtins.length integrations == 1;
         assert builtins.elem (builtins.head integrations) host.config.services.udev.packages;
+        assert host.config.boot.kernel.sysctl."net.ipv6.conf.all.forwarding" == 1;
         assert nixpkgs.lib.all (package: nixpkgs.lib.elem package service.path) requiredPath;
         assert builtins.length (nixpkgs.lib.splitString "<action id=" policySource) == 2;
         assert nixpkgs.lib.hasInfix "<action id=\"org.private-vm.usb.prepare\">" policySource;

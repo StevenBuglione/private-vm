@@ -130,6 +130,16 @@ receive only a scoped duplicate through an inherited file descriptor; it never
 receives the TAP or namespace name. The QEMU process owner stops the child
 before network cleanup.
 
+Linux requires `net.ipv6.conf.all.forwarding=1` in the outer host namespace for
+the routed IPv6 path; enabling forwarding only on the owned host veth is not
+sufficient. The host module declares this global prerequisite and Doctor checks
+it read-only before planning. The daemon continues to enable only the owned
+host-veth IPv4 forwarding switch and the namespace-local IPv4/IPv6 switches;
+it never mutates a host-global sysctl. Global IPv4 forwarding remains disabled.
+Enabling host-global IPv6 forwarding can change Router Advertisement handling,
+so the operator must keep host uplink configuration under NetworkManager or
+equivalent declarative control and verify IPv6 connectivity after activation.
+
 The namespace owns an nftables table whose policy:
 
 - default drop

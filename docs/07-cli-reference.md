@@ -100,6 +100,12 @@ private-vm doctor [--strict] [--repair-safe] [--json]
 state. It must not change firewall, format disks, enable hibernation settings, or
 enroll USB devices.
 
+The read-only report blocks online-role planning when
+`net.ipv6.conf.all.forwarding` is not exactly `1`. The NixOS module declares
+this prerequisite; distribution packages must install an equivalent sysctl
+fragment. Doctor never changes it. Global IPv4 forwarding is neither required
+nor enabled because the daemon confines IPv4 forwarding to its owned veth.
+
 ### `private-vm plan`
 
 ```bash
