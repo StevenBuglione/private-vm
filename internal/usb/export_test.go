@@ -161,6 +161,10 @@ func TestExportOperationStreamsVerifiesAndCleans(t *testing.T) {
 	if err := receipt.Validate(); err != nil {
 		t.Fatal(err)
 	}
+	reread, ok := fixture.operation.VerifiedRereadDigest()
+	if !ok || !reread.Equal(fixture.source.output.SourceDigest) {
+		t.Fatal("successful operation did not retain internal reread evidence")
+	}
 	wantOrder := []string{"boundaries", "boot", "offline", "attach", "inspect", "detach", "stop", "audit"}
 	if !equalStrings(fixture.lifecycle.order, wantOrder) {
 		t.Fatalf("lifecycle order %v, want %v", fixture.lifecycle.order, wantOrder)

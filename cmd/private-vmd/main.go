@@ -147,6 +147,9 @@ func run() error {
 		Profiles: hostServices.profiles, VPNResolver: hostServices.resolver,
 		Roles: hostServices.roles, Torrents: hostServices.roles, Scanners: hostServices.scanners,
 	}
+	if err := service.ConfigureWorkspaceUSBDestination(); err != nil {
+		return err
+	}
 	server, err := daemon.NewServer(daemon.ServerOptions{
 		SocketPath: filepath.Join(runtimeConfig.Directory(), "control.sock"),
 		OwnerUID:   0,
