@@ -9,7 +9,7 @@ documentation, completions and a closed `manifest.json`.
 
 `manifest.json` is schema version 1 and binds every allowed source to one fixed
 absolute destination, byte count, mode and SHA-256. The Go decoder is bounded,
-rejects unknown/duplicate/trailing fields and requires the exact sixteen-entry
+rejects unknown/duplicate/trailing fields and requires the exact seventeen-entry
 mapping. Installation hashes every regular non-symlink input before mutation
 and again while copying it. A caller cannot add a destination, request a mount,
 run a command or select arbitrary systemd units.
@@ -63,7 +63,9 @@ VMs:
 
 1. build the archive and verify its release digest, SPDX and provenance;
 2. extract as an unprivileged user and run root `--dry-run` then `--accept`;
-3. verify group, files/modes, daemon/socket and `doctor --strict --json`;
+3. apply the static sysctl through the distribution mechanism, configure and
+   start USBGuard safely, then verify group, files/modes, daemon/socket and
+   `doctor --strict --json`;
 4. prove an active daemon blocks an upgrade;
 5. stop/clean sessions, upgrade, and prove configuration/cache hashes unchanged;
 6. run uninstall dry-run/accept and prove no daemon/process/unit remains; and

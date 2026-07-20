@@ -82,6 +82,7 @@ def main() -> int:
         "/usr/lib/systemd/system/private-vmd.service",
         "/usr/lib/tmpfiles.d/private-vm.conf",
         "/usr/lib/sysusers.d/private-vm.conf",
+        "/usr/lib/sysctl.d/90-private-vm.conf",
         "/usr/lib/udev/rules.d/90-private-vm.rules",
         "/usr/share/polkit-1/actions/org.private-vm.policy",
         "/usr/share/man/man1/private-vm.1",
@@ -126,6 +127,10 @@ def main() -> int:
         fail("udev integration must only tag candidates")
     if (ROOT / "packaging/sysusers/private-vm.conf").read_text(encoding="utf-8").strip() != "g private-vm - -":
         fail("sysusers integration must create only the authorization group")
+    sysctl = (ROOT / "packaging/sysctl/90-private-vm.conf").read_text(encoding="utf-8")
+    settings = [line.strip() for line in sysctl.splitlines() if line.strip() and not line.lstrip().startswith("#")]
+    if settings != ["net.ipv6.conf.all.forwarding = 1"]:
+        fail("sysctl integration must declare only the reviewed IPv6 forwarding prerequisite")
 
     print("packaging asset contract: ok")
     return 0

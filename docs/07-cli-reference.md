@@ -100,6 +100,14 @@ private-vm doctor [--strict] [--repair-safe] [--json]
 state. It must not change firewall, format disks, enable hibernation settings, or
 enroll USB devices.
 
+Strict mode makes an inactive `private-vmd` or USBGuard service, an invalid
+control socket or daemon configuration, a missing `systemctl`, and a missing or
+expanded Polkit policy blocking installation diagnostics. Compatibility mode
+reports those installation defects as overridable warnings; it never weakens
+the always-blocking kernel, device, swap, resume, capacity, networking or image
+checks. An unencrypted host root remains an explicit defense-in-depth warning
+because writable session state is independently tmpfs-backed or encrypted.
+
 The read-only report blocks online-role planning when
 `net.ipv6.conf.all.forwarding` is not exactly `1`. The NixOS module declares
 this prerequisite; distribution packages must install an equivalent sysctl

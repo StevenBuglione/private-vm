@@ -43,9 +43,11 @@ For each row, the verifier must record redacted JUnit/JSON evidence for:
 2. declared dependency resolution from the clean distribution repositories;
 3. exact regular-file destinations, owners and modes, with no unexpected path;
 4. one `private-vm` sysusers group, tmpfiles modes, candidate-only udev rule and
-   exactly one Polkit action (`org.private-vm.usb.prepare`);
+   exactly one Polkit action (`org.private-vm.usb.prepare`), plus the exact
+   one-setting static sysctl fragment;
 5. completions and both manual pages;
-6. daemon start, socket owner/group/mode and `doctor --strict --json`;
+6. reviewed USBGuard first-activation policy, active USBGuard and daemon units,
+   active IPv6 forwarding, socket owner/group/mode and `doctor --strict --json`;
 7. upgrade from the previous supported release while a sentinel configuration
    and image-cache file retain their hashes;
 8. cleanup, service stop/disable and package removal, followed by proof that no

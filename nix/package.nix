@@ -39,6 +39,9 @@ pkgs.buildGoModule {
       ${../packaging/sysusers/private-vm.conf} \
       "$out/lib/sysusers.d/private-vm.conf"
     install -Dm0444 \
+      ${../packaging/sysctl/90-private-vm.conf} \
+      "$out/lib/sysctl.d/90-private-vm.conf"
+    install -Dm0444 \
       ${../packaging/udev/90-private-vm.rules} \
       "$out/lib/udev/rules.d/90-private-vm.rules"
     install -Dm0444 \

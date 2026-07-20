@@ -27,6 +27,7 @@ let
   installedHostIntegration = lib.hiPrio hostIntegration;
   daemonPath = with pkgs; [
     config.security.polkit.package.bin
+    systemd
     qemu
     cryptsetup
     nftables
@@ -117,6 +118,15 @@ in
     boot.kernel.sysctl."net.ipv6.conf.all.forwarding" = lib.mkDefault 1;
     services.usbguard.enable = true;
     services.usbguard.implicitPolicyTarget = "block";
+    # First activation must not disconnect a present USB keyboard or recovery
+    # device merely because the existing host policy file is empty. Preserve
+    # present authorization state, block every newly inserted device, and
+    # restore controller state when the service stops. Operators with a
+    # reviewed complete rule set may override presentDevicePolicy to
+    # "apply-policy" in their host configuration.
+    services.usbguard.presentDevicePolicy = lib.mkDefault "keep";
+    services.usbguard.insertedDevicePolicy = lib.mkDefault "block";
+    services.usbguard.restoreControllerDeviceState = lib.mkDefault true;
     services.udev.packages = [ installedHostIntegration ];
     security.polkit.enable = true;
 
@@ -182,6 +192,10 @@ in
       {
         assertion = config.boot.kernel.sysctl."net.ipv6.conf.all.forwarding" == 1;
         message = "services.private-vm requires net.ipv6.conf.all.forwarding=1 for exact dual-stack VPN endpoint routing";
+      }
+      {
+        assertion = config.services.usbguard.enable;
+        message = "services.private-vm requires USBGuard to remain enabled";
       }
       {
         assertion = lib.all (package: lib.elem package config.systemd.services.private-vmd.path) daemonPath;

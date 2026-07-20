@@ -44,10 +44,11 @@ nix build .#generic-archive --no-link
 ```
 
 Record the exact output path through `nix path-info`, artifact filename, byte
-count and SHA-256. Generate and validate one SPDX 2.3 document and build
-manifest per artifact. This gate remains incomplete until the package release
-producer and schemas bind those files and the protected workflow attests their
-exact digests.
+count and SHA-256. This gate proves only the three raw package bytes. The
+protected `private-vm-release prepare` invocation in gate 5 generates and binds
+the SPDX 2.3 document and build manifest for each exact artifact before the
+workflow attests those digests; do not claim that evidence at this earlier
+gate.
 
 ## 3. Clean distribution gate
 
@@ -60,9 +61,12 @@ For every native-package row:
 
 1. verify digest, SPDX and provenance before package-manager invocation;
 2. install with `apt` or `dnf` and record resolved dependency versions;
-3. explicitly enable/start `private-vmd.service` and re-login the test user;
-4. verify exact installed paths, owners/modes, sysusers/tmpfiles, candidate-only
-   udev rule, one Polkit action, completions and man pages;
+3. preserve/review the USBGuard rule file, apply the documented safe
+   first-activation policy, apply the static sysctl fragment, explicitly
+   enable/start USBGuard and `private-vmd.service`, then re-login the test user;
+4. verify exact installed paths, owners/modes, sysusers/tmpfiles, the one-setting
+   sysctl fragment and active value, candidate-only udev rule, one Polkit
+   action, completions and man pages;
 5. verify `/run/private-vm/control.sock` is `root:private-vm` mode `0660` and no
    product TCP listener exists;
 6. run `private-vm doctor --strict --json` and require no unresolved blocking

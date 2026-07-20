@@ -61,6 +61,7 @@ var fileTemplates = []fileTemplate{
 	{"completions/zsh/_private-vm", "/usr/share/zsh/site-functions/_private-vm", 0o444, false},
 	{"config.toml", "/etc/private-vm/config.toml", 0o600, true},
 	{"integration/90-private-vm.rules", "/usr/lib/udev/rules.d/90-private-vm.rules", 0o444, false},
+	{"integration/90-private-vm.sysctl", "/usr/lib/sysctl.d/90-private-vm.conf", 0o444, false},
 	{"integration/org.private-vm.policy", "/usr/share/polkit-1/actions/org.private-vm.policy", 0o444, false},
 	{"integration/private-vm.conf.example", "/usr/share/private-vm/usbguard/private-vm.conf.example", 0o444, false},
 	{"integration/private-vm.sysusers", "/usr/lib/sysusers.d/private-vm.conf", 0o444, false},

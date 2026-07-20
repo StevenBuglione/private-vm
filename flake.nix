@@ -1146,6 +1146,7 @@
           ) host.config.environment.systemPackages;
           requiredPath = with pkgs; [
             host.config.security.polkit.package.bin
+            systemd
             qemu
             cryptsetup
             nftables
@@ -1167,6 +1168,11 @@
         assert builtins.length integrations == 1;
         assert builtins.elem (builtins.head integrations) host.config.services.udev.packages;
         assert host.config.boot.kernel.sysctl."net.ipv6.conf.all.forwarding" == 1;
+        assert host.config.services.usbguard.enable;
+        assert host.config.services.usbguard.implicitPolicyTarget == "block";
+        assert host.config.services.usbguard.presentDevicePolicy == "keep";
+        assert host.config.services.usbguard.insertedDevicePolicy == "block";
+        assert host.config.services.usbguard.restoreControllerDeviceState;
         assert nixpkgs.lib.all (package: nixpkgs.lib.elem package service.path) requiredPath;
         assert builtins.length (nixpkgs.lib.splitString "<action id=" policySource) == 2;
         assert nixpkgs.lib.hasInfix "<action id=\"org.private-vm.usb.prepare\">" policySource;
@@ -1180,6 +1186,9 @@
             runtime_mode = service.serviceConfig.RuntimeDirectoryMode;
             state_mode = service.serviceConfig.StateDirectoryMode;
             authorized_users = host.config.services.private-vm.authorizedUsers;
+            usbguard_present_policy = host.config.services.usbguard.presentDevicePolicy;
+            usbguard_inserted_policy = host.config.services.usbguard.insertedDevicePolicy;
+            usbguard_restore_controller_state = host.config.services.usbguard.restoreControllerDeviceState;
             daemon_path = map (package: package.name) service.path;
             policy_sha256 = builtins.hashString "sha256" policySource;
           }

@@ -25,6 +25,13 @@ It must report machine-readable status for:
 - orphaned private-vm resources
 - installation/package consistency
 
+With strict policy, installed-host consistency includes active `private-vmd`
+and USBGuard units, exact runtime-directory/control-socket ownership and modes,
+a root-owned mode `0600` daemon configuration, and exactly the one packaged
+`org.private-vm.usb.prepare` Polkit action. Compatibility mode may downgrade
+only these installation defects to warnings; it cannot downgrade a hard host
+security diagnostic.
+
 ### FR-002: immutable image management
 
 The CLI must pull, verify, cache, inspect, and prune role-specific images. It

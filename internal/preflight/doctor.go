@@ -11,6 +11,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"golang.org/x/sys/unix"
@@ -22,7 +23,23 @@ const (
 )
 
 type Doctor struct {
-	Strict bool
+	Strict       bool
+	installation *installationProbe
+}
+
+type probeCommand func(context.Context, string, ...string) ([]byte, error)
+
+// installationProbe is injectable only for deterministic same-package tests.
+// Production callers always receive the closed default paths and bounded
+// command runner below.
+type installationProbe struct {
+	runtimeDirectory string
+	controlSocket    string
+	configFile       string
+	policyFiles      []string
+	systemctl        string
+	ownerUID         uint32
+	run              probeCommand
 }
 
 func (d Doctor) Run() Report {
@@ -73,6 +90,7 @@ func (d Doctor) RunContext(ctx context.Context) Report {
 		{"qemu-system-x86_64", "QEMU_UNSUPPORTED"}, {"qemu-img", "QEMU_IMG_MISSING"},
 		{"cryptsetup", "CRYPTSETUP_MISSING"}, {"nft", "NFTABLES_MISSING"}, {"ip", "IPROUTE2_MISSING"},
 		{"mkfs.ext4", "EXT4_TOOLS_MISSING"}, {"remote-viewer", "SPICE_VIEWER_MISSING"}, {"usbguard", "USBGUARD_MISSING"},
+		{"pkcheck", "POLKIT_CHECK_MISSING"},
 	}
 	paths := make(map[string]string, len(required))
 	for _, item := range required {
@@ -94,8 +112,147 @@ func (d Doctor) RunContext(ctx context.Context) Report {
 	if qemu := paths["qemu-system-x86_64"]; qemu != "" {
 		checkQEMU(ctx, add, qemu)
 	}
+	checkInstalledIntegration(ctx, d.Strict, add, d.installation)
 
 	return report
+}
+
+func defaultInstallationProbe() *installationProbe {
+	return &installationProbe{
+		runtimeDirectory: "/run/private-vm",
+		controlSocket:    "/run/private-vm/control.sock",
+		configFile:       "/etc/private-vm/config.toml",
+		policyFiles: []string{
+			"/run/current-system/sw/share/polkit-1/actions/org.private-vm.policy",
+			"/usr/share/polkit-1/actions/org.private-vm.policy",
+		},
+		ownerUID: 0,
+		run:      boundedOutput,
+	}
+}
+
+func checkInstalledIntegration(ctx context.Context, strict bool, add func(Diagnostic), probe *installationProbe) {
+	if probe == nil {
+		probe = defaultInstallationProbe()
+	}
+	run := probe.run
+	if run == nil {
+		run = boundedOutput
+	}
+	systemctl := probe.systemctl
+	if systemctl == "" {
+		resolved, err := exec.LookPath("systemctl")
+		if err != nil {
+			add(integrationFailure(strict, "SYSTEMCTL_MISSING", "systemctl is unavailable for installed-host verification.", "Install the complete host integration and rerun Doctor."))
+		} else {
+			systemctl, err = filepath.Abs(resolved)
+			if err != nil {
+				add(integrationFailure(strict, "SYSTEMCTL_MISSING", "systemctl could not be resolved safely.", "Reinstall the complete host integration and rerun Doctor."))
+				systemctl = ""
+			}
+		}
+	}
+	if systemctl != "" {
+		checkActiveUnit(ctx, strict, add, run, systemctl, "private-vmd.service", "PRIVATE_VMD_SERVICE_INACTIVE", "PRIVATE_VMD_SERVICE_ACTIVE")
+		checkActiveUnit(ctx, strict, add, run, systemctl, "usbguard.service", "USBGUARD_SERVICE_INACTIVE", "USBGUARD_SERVICE_ACTIVE")
+	}
+
+	if err := verifyControlSocket(probe); err != nil {
+		add(integrationFailure(strict, "CONTROL_SOCKET_INVALID", "The installed daemon control socket contract is not satisfied.", "Start private-vmd and verify /run/private-vm ownership and modes."))
+	} else {
+		add(info("CONTROL_SOCKET_VERIFIED", "The installed daemon control socket ownership and modes are valid."))
+	}
+	if err := verifyDaemonConfig(probe.configFile, probe.ownerUID); err != nil {
+		add(integrationFailure(strict, "DAEMON_CONFIG_INVALID", "The installed daemon configuration ownership or mode is invalid.", "Reinstall the root-owned mode 0600 configuration and restart private-vmd."))
+	} else {
+		add(info("DAEMON_CONFIG_VERIFIED", "The installed daemon configuration ownership and mode are valid."))
+	}
+	if err := verifyPolkitPolicy(probe.policyFiles, probe.ownerUID); err != nil {
+		add(integrationFailure(strict, "POLKIT_POLICY_INVALID", "The installed Polkit policy is missing, unsafe, or outside the one-action contract.", "Reinstall the host integration containing only org.private-vm.usb.prepare."))
+	} else {
+		add(info("POLKIT_POLICY_VERIFIED", "The installed Polkit policy contains only the USB prepare action."))
+	}
+}
+
+func checkActiveUnit(ctx context.Context, strict bool, add func(Diagnostic), run probeCommand, systemctl, unit, failureCode, successCode string) {
+	operation, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	if _, err := run(operation, systemctl, "is-active", "--quiet", unit); err != nil {
+		add(integrationFailure(strict, failureCode, "A required installed host service is inactive.", "Enable and start "+unit+", then rerun Doctor."))
+		return
+	}
+	add(info(successCode, unit+" is active."))
+}
+
+func verifyControlSocket(probe *installationProbe) error {
+	directory, err := os.Lstat(probe.runtimeDirectory)
+	if err != nil || !directory.IsDir() || directory.Mode().Perm() != 0o750 || !ownedBy(directory, probe.ownerUID) {
+		return errors.New("runtime directory contract mismatch")
+	}
+	socket, err := os.Lstat(probe.controlSocket)
+	if err != nil || socket.Mode()&os.ModeSocket == 0 || socket.Mode().Perm() != 0o660 || !ownedBy(socket, probe.ownerUID) {
+		return errors.New("control socket contract mismatch")
+	}
+	directoryStat, directoryOK := directory.Sys().(*syscall.Stat_t)
+	socketStat, socketOK := socket.Sys().(*syscall.Stat_t)
+	if !directoryOK || !socketOK || directoryStat.Gid != socketStat.Gid {
+		return errors.New("control socket group mismatch")
+	}
+	return nil
+}
+
+func verifyDaemonConfig(path string, ownerUID uint32) error {
+	info, err := os.Lstat(path)
+	if err != nil || !info.Mode().IsRegular() || info.Mode().Perm() != 0o600 || !ownedBy(info, ownerUID) {
+		return errors.New("daemon configuration contract mismatch")
+	}
+	return nil
+}
+
+func verifyPolkitPolicy(candidates []string, ownerUID uint32) error {
+	var selected string
+	for _, candidate := range candidates {
+		if _, err := os.Lstat(candidate); err == nil {
+			selected = candidate
+			break
+		} else if !errors.Is(err, os.ErrNotExist) {
+			return errors.New("polkit policy inspection failed")
+		}
+	}
+	if selected == "" {
+		return errors.New("polkit policy is absent")
+	}
+	info, err := os.Lstat(selected)
+	if err != nil {
+		return err
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		resolved, resolveErr := filepath.EvalSymlinks(selected)
+		if resolveErr != nil || !strings.HasPrefix(resolved, "/nix/store/") {
+			return errors.New("polkit policy symlink is outside the Nix store")
+		}
+		info, err = os.Stat(selected)
+	}
+	if err != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0o022 != 0 || !ownedBy(info, ownerUID) || info.Size() <= 0 || info.Size() > 1<<20 {
+		return errors.New("polkit policy metadata is unsafe")
+	}
+	data, err := os.ReadFile(selected)
+	if err != nil || bytes.Count(data, []byte("<action id=")) != 1 || !bytes.Contains(data, []byte(`<action id="org.private-vm.usb.prepare">`)) {
+		return errors.New("polkit policy action contract mismatch")
+	}
+	return nil
+}
+
+func ownedBy(info os.FileInfo, ownerUID uint32) bool {
+	stat, ok := info.Sys().(*syscall.Stat_t)
+	return ok && stat.Uid == ownerUID
+}
+
+func integrationFailure(strict bool, code, summary, remediation string) Diagnostic {
+	if strict {
+		return blocking(code, summary, remediation)
+	}
+	return warning(code, summary, remediation)
 }
 
 func checkIPv6Forwarding(add func(Diagnostic), path string) {

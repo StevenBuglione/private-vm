@@ -15,6 +15,7 @@
     { "source": "lib/systemd/system/private-vmd.service", "destination": "/usr/lib/systemd/system/private-vmd.service", "mode": 292 },
     { "source": "lib/tmpfiles.d/private-vm.conf", "destination": "/usr/lib/tmpfiles.d/private-vm.conf", "mode": 292 },
     { "source": "lib/sysusers.d/private-vm.conf", "destination": "/usr/lib/sysusers.d/private-vm.conf", "mode": 292 },
+    { "source": "lib/sysctl.d/90-private-vm.conf", "destination": "/usr/lib/sysctl.d/90-private-vm.conf", "mode": 292 },
     { "source": "lib/udev/rules.d/90-private-vm.rules", "destination": "/usr/lib/udev/rules.d/90-private-vm.rules", "mode": 292 },
     { "source": "share/polkit-1/actions/org.private-vm.policy", "destination": "/usr/share/polkit-1/actions/org.private-vm.policy", "mode": 292 },
     { "source": "share/private-vm/usbguard/private-vm.conf.example", "destination": "/usr/share/private-vm/usbguard/private-vm.conf.example", "mode": 292 },

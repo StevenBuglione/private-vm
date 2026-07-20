@@ -249,6 +249,7 @@ ordinary, detailed and structural `fmt` verbs cannot reveal that cause.
 - `KVM_UNAVAILABLE`
 - `KVM_PERMISSION_DENIED`
 - `QEMU_UNSUPPORTED`
+- `POLKIT_CHECK_MISSING`
 - `RUNTIME_NOT_TMPFS`
 - `HOST_IPV6_FORWARDING_STATUS_UNKNOWN`
 - `HOST_IPV6_FORWARDING_DISABLED`
@@ -257,6 +258,17 @@ ordinary, detailed and structural `fmt` verbs cannot reveal that cause.
 - `INSUFFICIENT_MEMORY`
 - `INSUFFICIENT_SCRATCH`
 - `ORPHAN_CLEANUP_FAILED`
+
+The following installed-host consistency diagnostics are blocking in strict
+mode and overridable warnings in compatibility mode. Compatibility mode does
+not change any hard diagnostic above.
+
+- `SYSTEMCTL_MISSING`
+- `PRIVATE_VMD_SERVICE_INACTIVE`
+- `USBGUARD_SERVICE_INACTIVE`
+- `CONTROL_SOCKET_INVALID`
+- `DAEMON_CONFIG_INVALID`
+- `POLKIT_POLICY_INVALID`
 
 ### Supply chain
 
