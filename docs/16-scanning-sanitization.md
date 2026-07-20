@@ -65,7 +65,7 @@ Use a configured `clamd` Unix socket or one-time `clamscan`. `clamd` is preferre
 after definitions load, but guestd submits and accounts for one regular file at
 a time; recursive directory and multi-file batch submissions are forbidden.
 
-Explicitly configure:
+The safe policy explicitly configures:
 
 - official database only where required
 - a 4 GiB ClamAV file-size ceiling matched exactly by
@@ -86,6 +86,12 @@ ClamAV invocation, including process/RPC completion; the same ceiling is set as
 ClamAV's internal per-file limit. The complete inventory, reconstruction and
 report workflow has a separate bounded orchestration deadline and cannot
 reinterpret this field as an unbounded session allowance.
+
+Those policy values are upper bounds, not a promise that every deployment can
+admit them. The frozen 16 GiB production profile uses a 512 MiB reconstruction
+tmpfs and therefore clamps downloader admission, scanner inventory and ClamAV
+submission to 128 MiB total input. The same runtime contract caps one sanitized
+output at 96 MiB and cumulative archive expansion at 128 MiB.
 
 The report parser treats:
 
@@ -119,8 +125,9 @@ Before extraction, list archive entries and reject:
 - unsupported encryption
 
 The sum of all expanded archive members and temporary archive work is bounded
-to `limits.max_expanded_bytes`, which is at most 4 GiB in v1 even when the
-encrypted quarantine contains a larger cumulative selection.
+to the smaller of `limits.max_expanded_bytes` and the production scratch
+contract (128 MiB on the frozen 512 MiB profile), even when the encrypted
+quarantine contains a larger cumulative selection.
 
 After extraction:
 

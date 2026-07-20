@@ -39,7 +39,35 @@ const (
 	productionScannerOfflineUnit    = "private-vm-scanner-stage-offline.service"
 	maximumScannerMetadataBytes     = 256 << 10
 	maximumScannerScratchBytes      = 512 << 20
+	maximumScannerInputBytes        = 128 << 20
+	maximumScannerArchiveBytes      = 128 << 20
+	maximumScannerOutputBytes       = 96 << 20
+	maximumScannerWorkingBytes      = 2 * maximumScannerOutputBytes
 )
+
+// ProductionScannerCapacity is the immutable resource contract shared by the
+// scanner runtime and the host's pre-download capacity receipt. Working bytes
+// cover one bounded intermediate plus one final output; archive bytes are
+// cumulative across nested extraction.
+type ProductionScannerCapacity struct {
+	ScratchBytes            uint64
+	ReadOnlyScanBytes       uint64
+	MaximumInputBytes       uint64
+	ArchiveExpansionBytes   uint64
+	ReconstructionWorkBytes uint64
+	MaximumOutputBytes      uint64
+}
+
+func DefaultProductionScannerCapacity() ProductionScannerCapacity {
+	return ProductionScannerCapacity{
+		ScratchBytes:            maximumScannerScratchBytes,
+		ReadOnlyScanBytes:       maximumScannerInputBytes + (64 << 20),
+		MaximumInputBytes:       maximumScannerInputBytes,
+		ArchiveExpansionBytes:   maximumScannerArchiveBytes,
+		ReconstructionWorkBytes: maximumScannerWorkingBytes,
+		MaximumOutputBytes:      maximumScannerOutputBytes,
+	}
+}
 
 var (
 	clamVersionPattern          = regexp.MustCompile(`^ClamAV ([A-Za-z0-9._+-]{1,128})/([0-9]{1,20})/`)
@@ -182,7 +210,8 @@ func NewProductionScannerService(identity Identity, reportKey *Token, configurat
 	if err != nil {
 		return nil, err
 	}
-	clamd := scan.ClamdClient{Dial: dialer, MaxInputBytes: selectedPolicy.Limits().MaxSingleFileBytes()}
+	capacity := DefaultProductionScannerCapacity()
+	clamd := scan.ClamdClient{Dial: dialer, MaxInputBytes: min(selectedPolicy.Limits().MaxSingleFileBytes(), capacity.MaximumInputBytes)}
 	probe := &productionScannerBootProbe{
 		phasePath: configuration.PhasePath, bootModePath: configuration.BootModePath,
 		stateDirectory: configuration.StateDirectory,
@@ -237,7 +266,7 @@ func NewProductionScannerService(identity Identity, reportKey *Token, configurat
 	return NewScannerService(ScannerServiceConfig{
 		Identity: identity, Definitions: definitions,
 		Isolation:      CoreScannerIsolation{Manager: definitions.Manager, Probe: probe},
-		Inventory:      CoreScannerInventory{RootPath: configuration.QuarantineRoot, Classifier: classifier},
+		Inventory:      CoreScannerInventory{RootPath: configuration.QuarantineRoot, Classifier: classifier, MaximumInputBytes: capacity.MaximumInputBytes},
 		Malware:        CoreScannerMalware{RootPath: configuration.QuarantineRoot, Scanner: clamd},
 		Reconstruction: reconstruction,
 		Policies: ScannerPolicyResolverFunc(func(name string) (policy.Policy, error) {
@@ -318,7 +347,7 @@ func validateProductionScannerConfig(configuration ProductionScannerConfig) erro
 		}
 	}
 	if filepath.Dir(configuration.SandboxRoot) != configuration.SandboxMount || filepath.Base(configuration.SandboxRoot) != "worker" ||
-		configuration.SandboxMaxBytes == 0 || configuration.SandboxMaxBytes > maximumScannerScratchBytes {
+		configuration.SandboxMaxBytes != DefaultProductionScannerCapacity().ScratchBytes {
 		return scannerScratchUnverified()
 	}
 	if os.Geteuid() <= 0 || os.Getegid() <= 0 {
@@ -1003,25 +1032,17 @@ func (adapter *productionScannerReconstruction) Reconstruct(ctx context.Context,
 	for _, finding := range summary.Findings {
 		clean[finding.RelativePath] = finding.Code == "CLAMAV_CLEAN" && finding.Severity == scan.SeverityInfo
 	}
-	limits := selected.Limits()
+	reconstructionLimits, archiveLimits := productionScannerRuntimeLimits(selected.Limits())
 	reconstructor := scan.Reconstructor{
 		Policy: selected, Sandbox: adapter.sandbox, Classifier: adapter.classifier, Rescanner: adapter.scanner,
 		PDF: adapter.pdf, OfficeRenderer: adapter.office, Media: adapter.media,
 		DocumentProbe: adapter.documentProbe, MediaProbe: adapter.mediaProbe,
-		Limits: scan.ReconstructionLimits{
-			MaxOutputBytes: limits.MaxSingleFileBytes(), MaxImagePixels: 100_000_000,
-			MaxDocumentPages: 2000, MaxDimension: 32768, MaxMediaDuration: 24 * 60 * 60,
-			MaxMediaStreams: 32, MaxTextBytes: min(limits.MaxSingleFileBytes(), 64<<20),
-		},
+		Limits: reconstructionLimits,
 	}
 	run := &productionReconstructionRun{
 		adapter: adapter, result: &result, reconstructor: reconstructor,
-		archiveLimits: scan.ArchiveLimits{
-			MaxDepth: limits.MaxArchiveDepth(), MaxEntries: limits.MaxFiles(),
-			MaxPathBytes: scan.MaximumInventoryPathBytes, MaxFileBytes: limits.MaxSingleFileBytes(),
-			MaxExpandedBytes: limits.MaxExpandedBytes(), MaxExpansionRatio: limits.MaxExpansionRatio(),
-		},
-		reported: make(map[string]struct{}),
+		archiveLimits: archiveLimits,
+		reported:      make(map[string]struct{}),
 	}
 	for _, entry := range inventory.Entries {
 		if err := ctx.Err(); err != nil {
@@ -1040,6 +1061,19 @@ func (adapter *productionScannerReconstruction) Reconstruct(ctx context.Context,
 		result.Findings = append(result.Findings, productionBlockingFinding("PROMOTION_SELECTION_REQUIRED", "", "The safe v1 workflow requires exactly one reconstructed output."))
 	}
 	return result, nil
+}
+
+func productionScannerRuntimeLimits(limits policy.Limits) (scan.ReconstructionLimits, scan.ArchiveLimits) {
+	capacity := DefaultProductionScannerCapacity()
+	return scan.ReconstructionLimits{
+			MaxOutputBytes: min(limits.MaxSingleFileBytes(), capacity.MaximumOutputBytes), MaxImagePixels: 100_000_000,
+			MaxDocumentPages: 2000, MaxDimension: 32768, MaxMediaDuration: 24 * 60 * 60,
+			MaxMediaStreams: 32, MaxTextBytes: min(limits.MaxSingleFileBytes(), 64<<20),
+		}, scan.ArchiveLimits{
+			MaxDepth: limits.MaxArchiveDepth(), MaxEntries: limits.MaxFiles(),
+			MaxPathBytes: scan.MaximumInventoryPathBytes, MaxFileBytes: min(limits.MaxSingleFileBytes(), capacity.MaximumInputBytes),
+			MaxExpandedBytes: min(limits.MaxExpandedBytes(), capacity.ArchiveExpansionBytes), MaxExpansionRatio: limits.MaxExpansionRatio(),
+		}
 }
 
 func (toolchain productionScannerToolchain) reconstructionEvidence(transformation string, observed []scan.ToolEvidence) ([]scan.ToolEvidence, error) {
@@ -1118,6 +1152,10 @@ func (run *productionReconstructionRun) processEntry(ctx context.Context, root s
 			return nil
 		}
 		return err
+	}
+	if len(run.result.Outputs) != 0 {
+		run.result.Findings = append(run.result.Findings, productionBlockingFinding("PROMOTION_SELECTION_REQUIRED", reportPath, "The safe v1 workflow permits reconstruction of exactly one output."))
+		return nil
 	}
 	reader, err := scan.OpenInventoryEntry(ctx, root, entry)
 	if err != nil {

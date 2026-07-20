@@ -11,8 +11,8 @@ import (
 
 func TestPlannedTorrentCapacitySourceUsesIndependentRoleEvidence(t *testing.T) {
 	source := PlannedTorrentCapacitySource{
-		ScannerScratchBytes: 9 << 30, WorkstationDestinationBytes: 10 << 30,
-		ArchiveExpansionBytes: 4 << 30, ReconstructionBytes: 1 << 30, MaximumSelectedBytes: 12 << 30,
+		ScannerReadOnlyBytes: 7 << 30, ScannerScratchBytes: 9 << 30, WorkstationDestinationBytes: 10 << 30,
+		ArchiveExpansionBytes: 4 << 30, ReconstructionBytes: 1 << 30, MaximumOutputBytes: 512 << 20, MaximumSelectedBytes: 12 << 30,
 	}
 	snapshot := session.Snapshot{ID: hostRoleSessionID, Role: session.RoleDownloader}
 	plan := session.LaunchPlan{Role: session.RoleDownloader, RootBytes: 7 << 30, ScratchBytes: 8 << 30}
@@ -20,7 +20,7 @@ func TestPlannedTorrentCapacitySourceUsesIndependentRoleEvidence(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if evidence.ScanAvailableBytes != 8<<30 || evidence.ReconstructionAvailable != 9<<30 ||
+	if evidence.ScanAvailableBytes != 7<<30 || evidence.ReconstructionAvailable != 9<<30 ||
 		evidence.DestinationAvailable != 10<<30 || evidence.RootOverlayBudgetBytes != 7<<30 ||
 		evidence.MaximumSelectedBytes != 8<<30 {
 		t.Fatalf("independent evidence = %+v", evidence)
@@ -28,21 +28,22 @@ func TestPlannedTorrentCapacitySourceUsesIndependentRoleEvidence(t *testing.T) {
 
 	changed := source
 	changed.ScannerScratchBytes = 6 << 30
+	changed.ScannerReadOnlyBytes = 3 << 30
 	changed.WorkstationDestinationBytes = 5 << 30
 	plan.ScratchBytes = 4 << 30
 	updated, err := changed.Evidence(t.Context(), snapshot, plan, torrent.DestinationWorkstation)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if updated.ScanAvailableBytes != 4<<30 || updated.ReconstructionAvailable != 6<<30 || updated.DestinationAvailable != 5<<30 || updated.MaximumSelectedBytes != 4<<30 {
+	if updated.ScanAvailableBytes != 3<<30 || updated.ReconstructionAvailable != 6<<30 || updated.DestinationAvailable != 5<<30 || updated.MaximumSelectedBytes != 4<<30 {
 		t.Fatalf("recalculated evidence = %+v", updated)
 	}
 }
 
 func TestPlannedTorrentCapacitySourceFailsWithoutDeclaredAvailableDestination(t *testing.T) {
 	source := PlannedTorrentCapacitySource{
-		ScannerScratchBytes: 9 << 30, WorkstationDestinationBytes: 10 << 30,
-		ArchiveExpansionBytes: 4 << 30, ReconstructionBytes: 1 << 30, MaximumSelectedBytes: 12 << 30,
+		ScannerReadOnlyBytes: 7 << 30, ScannerScratchBytes: 9 << 30, WorkstationDestinationBytes: 10 << 30,
+		ArchiveExpansionBytes: 4 << 30, ReconstructionBytes: 1 << 30, MaximumOutputBytes: 512 << 20, MaximumSelectedBytes: 12 << 30,
 	}
 	snapshot := session.Snapshot{ID: hostRoleSessionID, Role: session.RoleDownloader}
 	plan := session.LaunchPlan{Role: session.RoleDownloader, RootBytes: 7 << 30, ScratchBytes: 8 << 30}
@@ -65,6 +66,7 @@ func TestTorrentCapacityReceiptPreservesIndependentFields(t *testing.T) {
 		Destination:        torrent.DestinationWorkstation,
 		ScanAvailableBytes: 7, ReconstructionAvailable: 11, DestinationAvailable: 13,
 		RootOverlayBudgetBytes: 17, ArchiveExpansionBytes: 19, ReconstructionBytes: 23, MaximumSelectedBytes: 29,
+		MaximumOutputBytes: 31,
 	}
 	receipt, err := torrentCapacityReceipt(evidence)
 	if err != nil {
@@ -73,7 +75,7 @@ func TestTorrentCapacityReceiptPreservesIndependentFields(t *testing.T) {
 	if receipt.GetSchemaVersion() != 1 || receipt.GetScanAvailableBytes() != 7 ||
 		receipt.GetReconstructionAvailableBytes() != 11 || receipt.GetDestinationAvailableBytes() != 13 ||
 		receipt.GetRootOverlayBudgetBytes() != 17 || receipt.GetArchiveExpansionBytes() != 19 ||
-		receipt.GetReconstructionBytes() != 23 || receipt.GetMaximumSelectedBytes() != 29 {
+		receipt.GetReconstructionBytes() != 23 || receipt.GetMaximumSelectedBytes() != 29 || receipt.GetMaximumOutputBytes() != 31 {
 		t.Fatalf("receipt = %+v", receipt)
 	}
 	evidence.DestinationAvailable = 0

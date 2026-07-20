@@ -372,7 +372,9 @@ The host selection request carries a closed `TorrentDestination` enum. The
 daemon derives a schema-v1 `TorrentCapacityReceipt` from immutable role plans
 for scanner handoff, scanner reconstruction scratch and the declared receiver;
 the authenticated guest request contains only that numeric receipt and file
-indexes. The downloader re-probes quarantine free bytes inside the guest for
+indexes. The receipt distinguishes read-only scan capacity, cumulative archive
+expansion, reconstruction working bytes, maximum reconstructed output and
+destination capacity. The downloader re-probes quarantine free bytes inside the guest for
 every selection attempt. Capacity RPCs contain no paths, mounts, device nodes,
 endpoints or QEMU selectors, and absent/zero/unsupported evidence fails with
 `TORRENT_CAPACITY_EVIDENCE_UNAVAILABLE` before qBittorrent selection changes.

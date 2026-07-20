@@ -264,6 +264,7 @@ type TorrentCapacityReceipt struct {
 	ArchiveExpansionBytes        uint64                 `protobuf:"varint,7,opt,name=archive_expansion_bytes,json=archiveExpansionBytes,proto3" json:"archive_expansion_bytes,omitempty"`
 	ReconstructionBytes          uint64                 `protobuf:"varint,8,opt,name=reconstruction_bytes,json=reconstructionBytes,proto3" json:"reconstruction_bytes,omitempty"`
 	MaximumSelectedBytes         uint64                 `protobuf:"varint,9,opt,name=maximum_selected_bytes,json=maximumSelectedBytes,proto3" json:"maximum_selected_bytes,omitempty"`
+	MaximumOutputBytes           uint64                 `protobuf:"varint,10,opt,name=maximum_output_bytes,json=maximumOutputBytes,proto3" json:"maximum_output_bytes,omitempty"`
 	unknownFields                protoimpl.UnknownFields
 	sizeCache                    protoimpl.SizeCache
 }
@@ -357,6 +358,13 @@ func (x *TorrentCapacityReceipt) GetReconstructionBytes() uint64 {
 func (x *TorrentCapacityReceipt) GetMaximumSelectedBytes() uint64 {
 	if x != nil {
 		return x.MaximumSelectedBytes
+	}
+	return 0
+}
+
+func (x *TorrentCapacityReceipt) GetMaximumOutputBytes() uint64 {
+	if x != nil {
+		return x.MaximumOutputBytes
 	}
 	return 0
 }
@@ -1235,7 +1243,7 @@ var File_privatevm_v1_common_proto protoreflect.FileDescriptor
 
 const file_privatevm_v1_common_proto_rawDesc = "" +
 	"\n" +
-	"\x19privatevm/v1/common.proto\x12\fprivatevm.v1\"\x97\x04\n" +
+	"\x19privatevm/v1/common.proto\x12\fprivatevm.v1\"\xc9\x04\n" +
 	"\x16TorrentCapacityReceipt\x12%\n" +
 	"\x0eschema_version\x18\x01 \x01(\rR\rschemaVersion\x12B\n" +
 	"\vdestination\x18\x02 \x01(\x0e2 .privatevm.v1.TorrentDestinationR\vdestination\x120\n" +
@@ -1245,7 +1253,9 @@ const file_privatevm_v1_common_proto_rawDesc = "" +
 	"\x19root_overlay_budget_bytes\x18\x06 \x01(\x04R\x16rootOverlayBudgetBytes\x126\n" +
 	"\x17archive_expansion_bytes\x18\a \x01(\x04R\x15archiveExpansionBytes\x121\n" +
 	"\x14reconstruction_bytes\x18\b \x01(\x04R\x13reconstructionBytes\x124\n" +
-	"\x16maximum_selected_bytes\x18\t \x01(\x04R\x14maximumSelectedBytes\"8\n" +
+	"\x16maximum_selected_bytes\x18\t \x01(\x04R\x14maximumSelectedBytes\x120\n" +
+	"\x14maximum_output_bytes\x18\n" +
+	" \x01(\x04R\x12maximumOutputBytes\"8\n" +
 	"\n" +
 	"ApiVersion\x12\x14\n" +
 	"\x05major\x18\x01 \x01(\rR\x05major\x12\x14\n" +

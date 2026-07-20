@@ -297,7 +297,7 @@ func torrentCapacityReceipt(evidence torrent.CapacityEvidence) (*privatevmv1.Tor
 		return nil, torrent.ErrCapacityEvidence
 	}
 	if evidence.ScanAvailableBytes == 0 || evidence.ReconstructionAvailable == 0 || evidence.DestinationAvailable == 0 ||
-		evidence.RootOverlayBudgetBytes == 0 || evidence.ReconstructionBytes == 0 || evidence.MaximumSelectedBytes == 0 {
+		evidence.RootOverlayBudgetBytes == 0 || evidence.ReconstructionBytes == 0 || evidence.MaximumOutputBytes == 0 || evidence.MaximumSelectedBytes == 0 {
 		return nil, torrent.ErrCapacityEvidence
 	}
 	return &privatevmv1.TorrentCapacityReceipt{
@@ -308,6 +308,7 @@ func torrentCapacityReceipt(evidence torrent.CapacityEvidence) (*privatevmv1.Tor
 		RootOverlayBudgetBytes:       evidence.RootOverlayBudgetBytes,
 		ArchiveExpansionBytes:        evidence.ArchiveExpansionBytes,
 		ReconstructionBytes:          evidence.ReconstructionBytes,
+		MaximumOutputBytes:           evidence.MaximumOutputBytes,
 		MaximumSelectedBytes:         evidence.MaximumSelectedBytes,
 	}, nil
 }
