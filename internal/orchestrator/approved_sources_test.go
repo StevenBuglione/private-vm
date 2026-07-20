@@ -227,7 +227,13 @@ func approvedSourceScanReport(sessionID string, digest [sha256.Size]byte, size u
 		Inputs:      []scan.ReportInput{{LogicalName: "fixture.pdf", SizeBytes: 12, SHA256: strings.Repeat("c", 64), DetectedMIME: "application/pdf", ExtensionMIME: "application/pdf", ExtensionAgreement: true, ClamAVVerdict: "CLAMAV_CLEAN"}},
 		Archives:    []scan.ReportArchive{}, Findings: []scan.Finding{},
 		SanitizedOutputs: []scan.ReportSanitizedOutput{{OutputID: "scan-out-" + strings.Repeat("d", 32), LogicalName: "fixture.safe.pdf", SourceSHA256: strings.Repeat("c", 64), SizeBytes: size, SHA256: hexDigest(digest), DetectedMIME: "application/pdf", Transformation: "pdf-raster-rebuild-v1", RescanVerdict: "CLAMAV_CLEAN"}},
-		Tools:            []scan.ToolEvidence{{Name: "clamav", Version: "1.5.1"}}, Result: "approved", Complete: true,
+		Tools: []scan.ToolEvidence{
+			{Name: "clamav", Version: "1.5.1"},
+			{Name: "file", Version: "5.46"},
+			{Name: "ghostscript", Version: "10.05.1"},
+			{Name: "poppler-utils", Version: "25.06.0"},
+		},
+		Result: "approved", Complete: true,
 	}
 }
 
