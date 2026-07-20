@@ -372,6 +372,7 @@ their eventual boundary.
 | `TORRENT_SELECTION_INVALID` | 17 | Explicit indexes are absent, duplicate or outside metadata. |
 | `TORRENT_EXECUTABLE_BLOCKED` | 17 | Safe policy blocks the selected executable-like type. |
 | `TORRENT_CAPACITY_INSUFFICIENT` | 14 | A required encrypted workflow stage lacks conservative capacity. |
+| `TORRENT_CAPACITY_EVIDENCE_UNAVAILABLE` | 14 | A declared destination lacks independent scanner, reconstruction or receiver evidence. |
 | `TORRENT_PAYLOAD_NOT_APPROVED` | 17 | Payload start was requested before selection/capacity approval. |
 | `TORRENT_DOWNLOAD_STALLED` | 17 | No bounded progress occurred before the stall ceiling. |
 | `TORRENT_DOWNLOAD_FAILED` | 17 | qBittorrent reported invalid state, progress or an operation failure. |

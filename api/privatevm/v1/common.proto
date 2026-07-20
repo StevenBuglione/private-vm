@@ -12,6 +12,30 @@ enum GuestRole {
   GUEST_ROLE_EXPORTER = 4;
 }
 
+// TorrentDestination is selected before payload transfer so capacity can be
+// proven for the complete workflow. It is semantic and cannot identify a host
+// path, mount, device node, guest endpoint or QEMU argument.
+enum TorrentDestination {
+  TORRENT_DESTINATION_UNSPECIFIED = 0;
+  TORRENT_DESTINATION_WORKSTATION = 1;
+  TORRENT_DESTINATION_USB = 2;
+}
+
+// TorrentCapacityReceipt is daemon-owned, bounded evidence for the stages
+// after quarantine download. The downloader independently measures the live
+// quarantine filesystem; no path or device selector crosses this boundary.
+message TorrentCapacityReceipt {
+  uint32 schema_version = 1;
+  TorrentDestination destination = 2;
+  uint64 scan_available_bytes = 3;
+  uint64 reconstruction_available_bytes = 4;
+  uint64 destination_available_bytes = 5;
+  uint64 root_overlay_budget_bytes = 6;
+  uint64 archive_expansion_bytes = 7;
+  uint64 reconstruction_bytes = 8;
+  uint64 maximum_selected_bytes = 9;
+}
+
 enum SessionPhase {
   SESSION_PHASE_UNSPECIFIED = 0;
   SESSION_PHASE_CREATED = 1;

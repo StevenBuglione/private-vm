@@ -262,14 +262,18 @@ func (factory commandFactory) torrent() *cobra.Command {
 	add.Flags().BoolVar(&magnetStdin, "magnet-stdin", false, "read one bounded magnet from standard input")
 	add.Flags().StringVar(&torrentFile, "torrent-file", "", "stream one bounded .torrent file")
 
-	var files string
+	var files, destination string
 	selectFiles := factory.operation("select", "Select torrent file indexes", CommandTorrentSelect, noArgs, func(*cobra.Command) error {
-		return validateFileSelection(files)
+		if err := validateFileSelection(files); err != nil {
+			return err
+		}
+		return enum(destination, "destination", "workstation", "usb")
 	}, func([]string) Intent {
 		indexes, _ := parseFileSelection(files)
-		return TorrentSelectionIntent{Files: indexes}
+		return TorrentSelectionIntent{Files: indexes, Destination: destination}
 	})
 	selectFiles.Flags().StringVar(&files, "files", "", "comma-separated file indexes")
+	selectFiles.Flags().StringVar(&destination, "destination", "", "required downstream destination: workstation or usb")
 
 	children := []*cobra.Command{start, add, factory.simple("metadata", CommandTorrentMetadata), selectFiles}
 	children = append(children,

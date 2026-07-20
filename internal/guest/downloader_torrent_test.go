@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"strings"
 	"testing"
 	"time"
 
@@ -22,11 +23,6 @@ func TestDownloaderTorrentRPCBoundsClearsAndCompletesWorkflow(t *testing.T) {
 	backend := &guestTorrentBackend{}
 	controller, err := torrent.NewController(backend, guestQuarantine{}, torrent.Config{
 		SafePolicy: true, MetadataTimeout: time.Second, PollInterval: time.Millisecond, StallTimeout: time.Second,
-		Budget: torrent.CapacityBudget{
-			QuarantineAvailableBytes: 8 << 30, ScanAvailableBytes: 8 << 30, ReconstructionAvailable: 8 << 30,
-			DestinationAvailable: 8 << 30, RootOverlayBudgetBytes: 1 << 30, ArchiveExpansionBytes: 1 << 30,
-			ReconstructionBytes: 128 << 20, MaximumSelectedBytes: 1 << 30,
-		},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -45,7 +41,7 @@ func TestDownloaderTorrentRPCBoundsClearsAndCompletesWorkflow(t *testing.T) {
 		t.Fatalf("add response=%+v frameReachable=%t cleared=%t", stream.response, frame.Frame != nil, allZeroGuestBytes(raw))
 	}
 	requestContext := helloRequest(session.RoleDownloader, APIMajor, APIMinor).GetContext()
-	selected, err := handler.SelectTorrentFiles(t.Context(), &privatevmv1.SelectTorrentFilesRequest{Context: requestContext, Indexes: []uint32{0}})
+	selected, err := handler.SelectTorrentFiles(t.Context(), &privatevmv1.SelectTorrentFilesRequest{Context: requestContext, Indexes: []uint32{0}, Capacity: guestCapacityReceipt()})
 	if err != nil || selected.GetSelectedSizeBytes() != 128<<20 {
 		t.Fatalf("selection=%+v err=%v", selected, err)
 	}
@@ -58,6 +54,29 @@ func TestDownloaderTorrentRPCBoundsClearsAndCompletesWorkflow(t *testing.T) {
 	}
 	if _, err := handler.SealQuarantine(t.Context(), &privatevmv1.TorrentRequest{Context: requestContext}); err != nil || !backend.shutdown {
 		t.Fatalf("seal err=%v shutdown=%t", err, backend.shutdown)
+	}
+}
+
+func TestDownloaderCapacityReceiptFailsClosedAndHasNoSelectors(t *testing.T) {
+	if _, err := torrentCapacityEvidence(nil); !errors.Is(err, torrent.ErrCapacityEvidence) {
+		t.Fatalf("missing receipt error = %v", err)
+	}
+	receipt := guestCapacityReceipt()
+	fields := receipt.ProtoReflect().Descriptor().Fields()
+	for index := 0; index < fields.Len(); index++ {
+		name := string(fields.Get(index).Name())
+		for _, forbidden := range []string{"path", "device", "mount", "endpoint", "name", "hash"} {
+			if strings.Contains(name, forbidden) {
+				t.Fatalf("capacity receipt exposes forbidden selector field %q", name)
+			}
+		}
+	}
+	receipt.ScanAvailableBytes = 7 << 30
+	receipt.ReconstructionAvailableBytes = 6 << 30
+	receipt.DestinationAvailableBytes = 5 << 30
+	evidence, err := torrentCapacityEvidence(receipt)
+	if err != nil || evidence.ScanAvailableBytes != 7<<30 || evidence.ReconstructionAvailable != 6<<30 || evidence.DestinationAvailable != 5<<30 {
+		t.Fatalf("typed capacity evidence = %+v, %v", evidence, err)
 	}
 }
 
@@ -91,7 +110,6 @@ func guestTorrentController(t *testing.T, backend *guestTorrentBackend) *torrent
 	t.Helper()
 	controller, err := torrent.NewController(backend, guestQuarantine{}, torrent.Config{
 		SafePolicy: true, MetadataTimeout: time.Second, PollInterval: time.Millisecond, StallTimeout: time.Second,
-		Budget: torrent.CapacityBudget{QuarantineAvailableBytes: 8 << 30, ScanAvailableBytes: 8 << 30, ReconstructionAvailable: 8 << 30, DestinationAvailable: 8 << 30, RootOverlayBudgetBytes: 1 << 30, ArchiveExpansionBytes: 1 << 30, ReconstructionBytes: 128 << 20, MaximumSelectedBytes: 1 << 30},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -136,7 +154,17 @@ func (backend *guestTorrentBackend) Shutdown(context.Context) error {
 
 type guestQuarantine struct{}
 
-func (guestQuarantine) SyncAndUnmount(context.Context) error { return nil }
+func (guestQuarantine) CapacityBytes(context.Context) (uint64, error) { return 8 << 30, nil }
+func (guestQuarantine) SyncAndUnmount(context.Context) error          { return nil }
+
+func guestCapacityReceipt() *privatevmv1.TorrentCapacityReceipt {
+	return &privatevmv1.TorrentCapacityReceipt{
+		SchemaVersion: 1, Destination: privatevmv1.TorrentDestination_TORRENT_DESTINATION_WORKSTATION,
+		ScanAvailableBytes: 8 << 30, ReconstructionAvailableBytes: 8 << 30,
+		DestinationAvailableBytes: 8 << 30, RootOverlayBudgetBytes: 1 << 30,
+		ArchiveExpansionBytes: 1 << 30, ReconstructionBytes: 128 << 20, MaximumSelectedBytes: 1 << 30,
+	}
+}
 
 type torrentAddStream struct {
 	ctx      context.Context

@@ -205,8 +205,17 @@ func (invoker *ProductionInvoker) invokeTorrent(ctx context.Context, id CommandI
 		if !ok || len(selection.Files) == 0 {
 			return Result{}, invalidTorrentIntent()
 		}
+		var destination privatevmv1.TorrentDestination
+		switch selection.Destination {
+		case "workstation":
+			destination = privatevmv1.TorrentDestination_TORRENT_DESTINATION_WORKSTATION
+		case "usb":
+			destination = privatevmv1.TorrentDestination_TORRENT_DESTINATION_USB
+		default:
+			return Result{}, invalidTorrentIntent()
+		}
 		metadata, err := client.SelectTorrentFiles(ctx, &privatevmv1.HostSelectTorrentFilesRequest{
-			Context: request.Context, Indexes: append([]uint32(nil), selection.Files...),
+			Context: request.Context, Indexes: append([]uint32(nil), selection.Files...), Destination: destination,
 		})
 		if err != nil {
 			return Result{}, daemonRPCError(err)

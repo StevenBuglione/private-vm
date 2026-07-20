@@ -144,7 +144,8 @@ type TorrentInputIntent struct {
 func (TorrentInputIntent) privateVMIntent() {}
 
 type TorrentSelectionIntent struct {
-	Files []uint32
+	Files       []uint32
+	Destination string
 }
 
 func (TorrentSelectionIntent) privateVMIntent() {}

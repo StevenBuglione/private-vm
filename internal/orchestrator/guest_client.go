@@ -272,12 +272,44 @@ func (connection *vsockGuestConnection) Metadata(ctx context.Context) (*privatev
 	return connection.downloader.GetTorrentMetadata(ctx, request)
 }
 
-func (connection *vsockGuestConnection) Select(ctx context.Context, indexes []uint32) (*privatevmv1.TorrentMetadata, error) {
+func (connection *vsockGuestConnection) Select(ctx context.Context, indexes []uint32, evidence torrent.CapacityEvidence) (*privatevmv1.TorrentMetadata, error) {
 	request, err := connection.guestContext()
 	if err != nil {
 		return nil, err
 	}
-	return connection.downloader.SelectTorrentFiles(ctx, &privatevmv1.SelectTorrentFilesRequest{Context: request, Indexes: append([]uint32(nil), indexes...)})
+	receipt, err := torrentCapacityReceipt(evidence)
+	if err != nil {
+		return nil, err
+	}
+	return connection.downloader.SelectTorrentFiles(ctx, &privatevmv1.SelectTorrentFilesRequest{
+		Context: request, Indexes: append([]uint32(nil), indexes...), Capacity: receipt,
+	})
+}
+
+func torrentCapacityReceipt(evidence torrent.CapacityEvidence) (*privatevmv1.TorrentCapacityReceipt, error) {
+	var destination privatevmv1.TorrentDestination
+	switch evidence.Destination {
+	case torrent.DestinationWorkstation:
+		destination = privatevmv1.TorrentDestination_TORRENT_DESTINATION_WORKSTATION
+	case torrent.DestinationUSB:
+		destination = privatevmv1.TorrentDestination_TORRENT_DESTINATION_USB
+	default:
+		return nil, torrent.ErrCapacityEvidence
+	}
+	if evidence.ScanAvailableBytes == 0 || evidence.ReconstructionAvailable == 0 || evidence.DestinationAvailable == 0 ||
+		evidence.RootOverlayBudgetBytes == 0 || evidence.ReconstructionBytes == 0 || evidence.MaximumSelectedBytes == 0 {
+		return nil, torrent.ErrCapacityEvidence
+	}
+	return &privatevmv1.TorrentCapacityReceipt{
+		SchemaVersion: 1, Destination: destination,
+		ScanAvailableBytes:           evidence.ScanAvailableBytes,
+		ReconstructionAvailableBytes: evidence.ReconstructionAvailable,
+		DestinationAvailableBytes:    evidence.DestinationAvailable,
+		RootOverlayBudgetBytes:       evidence.RootOverlayBudgetBytes,
+		ArchiveExpansionBytes:        evidence.ArchiveExpansionBytes,
+		ReconstructionBytes:          evidence.ReconstructionBytes,
+		MaximumSelectedBytes:         evidence.MaximumSelectedBytes,
+	}, nil
 }
 
 func (connection *vsockGuestConnection) Start(ctx context.Context, emit func(*privatevmv1.TorrentEvent) error) error {

@@ -167,6 +167,7 @@ message TorrentControlRequest { RequestContext context = 1; }
 message HostSelectTorrentFilesRequest {
   RequestContext context = 1;
   repeated uint32 indexes = 2;
+  TorrentDestination destination = 3;
 }
 
 // Scanner host requests are semantic. The source session in StartScanner must
