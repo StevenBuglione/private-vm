@@ -13,6 +13,8 @@ It must report machine-readable status for:
 - QEMU, QMP, SPICE, virtio-vsock, virtio-net, virtio-blk, and USB-host support
 - `/dev/net/tun`, `/dev/kvm`, `/dev/vhost-vsock`, and device-mapper support
 - nftables and network-namespace support
+- the host-global IPv6 forwarding prerequisite used by the owned dual-stack
+  namespace path (global IPv4 forwarding remains disabled)
 - cryptsetup, loop devices, ext4 tooling, and sparse-file support
 - remote-viewer availability
 - USBGuard status

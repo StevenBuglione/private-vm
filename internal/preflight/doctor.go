@@ -60,6 +60,7 @@ func (d Doctor) RunContext(ctx context.Context) Report {
 	checkDevice(add, "/dev/net/tun", true, "TUN_UNAVAILABLE", "TUN_PERMISSION_DENIED")
 	checkDevice(add, "/dev/vhost-vsock", false, "VSOCK_UNAVAILABLE", "VSOCK_PERMISSION_DENIED")
 	checkRuntimeFS(add)
+	checkIPv6Forwarding(add, "/proc/sys/net/ipv6/conf/all/forwarding")
 	checkSwapAndResume(add)
 	checkRootEncryption(add)
 	checkCapacity(add)
@@ -95,6 +96,27 @@ func (d Doctor) RunContext(ctx context.Context) Report {
 	}
 
 	return report
+}
+
+func checkIPv6Forwarding(add func(Diagnostic), path string) {
+	value, err := os.ReadFile(path)
+	if err != nil {
+		add(blocking(
+			"HOST_IPV6_FORWARDING_STATUS_UNKNOWN",
+			"The host IPv6 forwarding prerequisite could not be inspected.",
+			"Install the private-vm host integration, apply its sysctl configuration, and retry.",
+		))
+		return
+	}
+	if strings.TrimSpace(string(value)) != "1" {
+		add(blocking(
+			"HOST_IPV6_FORWARDING_DISABLED",
+			"Host IPv6 forwarding is disabled.",
+			"Enable net.ipv6.conf.all.forwarding through the private-vm host integration, reboot or apply the declarative configuration, and retry.",
+		))
+		return
+	}
+	add(info("HOST_IPV6_FORWARDING_VERIFIED", "The host IPv6 forwarding prerequisite is enabled."))
 }
 
 func checkFile(add func(Diagnostic), path, code, summary, remediation string) {

@@ -1136,6 +1136,7 @@
         assert nixpkgs.lib.hasInfix "--group pvm-custom" service.serviceConfig.ExecStart;
         assert service.serviceConfig.RuntimeDirectoryMode == "0750";
         assert service.serviceConfig.StateDirectoryMode == "0700";
+        assert host.config.boot.kernel.sysctl."net.ipv6.conf.all.forwarding" == 1;
         assert builtins.length policies == 1;
         assert nixpkgs.lib.all (package: nixpkgs.lib.elem package service.path) requiredPath;
         assert builtins.length (nixpkgs.lib.splitString "<action id=" policySource) == 2;

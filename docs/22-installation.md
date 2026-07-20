@@ -80,6 +80,13 @@ e2fsprogs, virt-viewer, USBGuard and util-linux). The
 package override to prove these integration invariants without building an
 entire host closure.
 
+Online roles also require `net.ipv6.conf.all.forwarding=1` in the outer host
+namespace. The NixOS module declares and asserts this value. Other packages
+must install an equivalent static sysctl fragment and activate it through the
+distribution's normal mechanism or a reboot before starting the daemon. Doctor
+reports a blocking diagnostic until the kernel value is exactly `1`; the daemon
+does not change this global setting dynamically.
+
 The daemon configuration is `/etc/private-vm/config.toml`. It must be a
 root-owned regular local file with no group/world write or executable bits; the
 packaged example is `examples/config.example.toml`. The daemon reads it once at
