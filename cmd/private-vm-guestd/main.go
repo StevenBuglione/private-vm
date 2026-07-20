@@ -142,11 +142,12 @@ func composeGuestServerConfig(identity guest.Identity, token *guest.Token) (gues
 	case session.RoleWorkstation:
 		workspace, err := workstation.New(workstation.Config{Root: "/home/private"})
 		if err != nil {
-			return guest.ServerConfig{}, nil, err
+			return guest.ServerConfig{}, nil, compositionError(workstationCompositionFailure(err))
 		}
 		network, err := guest.NewWorkstationVPNServer(workspace, productionVPNFactory(session.RoleWorkstation, nil))
 		if err != nil {
-			return guest.ServerConfig{}, nil, err
+			_ = workspace.Close(context.Background())
+			return guest.ServerConfig{}, nil, compositionError("the workstation authenticated service failed")
 		}
 		config.Workstation = network
 		return config, network, nil
@@ -162,11 +163,11 @@ func composeGuestServerConfig(identity guest.Identity, token *guest.Token) (gues
 	case session.RoleExporter:
 		adapter, err := newFixedExporterAdapter()
 		if err != nil {
-			return guest.ServerConfig{}, nil, err
+			return guest.ServerConfig{}, nil, compositionError("the exporter fixed toolchain failed")
 		}
 		exporter, err := guest.NewExporterService(guest.ExporterServiceConfig{Identity: identity, Adapter: adapter})
 		if err != nil {
-			return guest.ServerConfig{}, nil, err
+			return guest.ServerConfig{}, nil, compositionError("the exporter authenticated service failed")
 		}
 		config.Exporter = exporter
 		return config, exporter, nil
@@ -183,6 +184,43 @@ func composeGuestServerConfig(identity guest.Identity, token *guest.Token) (gues
 	}
 	config.Scanner = scannerNetwork
 	return config, scannerNetwork, nil
+}
+
+func workstationCompositionFailure(err error) string {
+	if err == nil {
+		return "the workstation workspace boundary failed"
+	}
+	stage := ""
+	switch {
+	case errors.Is(err, workstation.ErrWorkspaceRoot):
+		stage = "workspace root"
+	case errors.Is(err, workstation.ErrWorkspaceInbox):
+		stage = "Inbox boundary"
+	case errors.Is(err, workstation.ErrWorkspaceExport):
+		stage = "Export boundary"
+	}
+	if stage == "" {
+		return "the workstation workspace boundary failed"
+	}
+	if errors.Is(err, syscall.ENOENT) {
+		return "the workstation " + stage + " is unavailable"
+	}
+	if errors.Is(err, syscall.ELOOP) {
+		return "the workstation " + stage + " contains a symbolic link"
+	}
+	if errors.Is(err, syscall.EXDEV) {
+		return "the workstation " + stage + " crossed an untrusted mount boundary"
+	}
+	if errors.Is(err, syscall.EACCES) || errors.Is(err, syscall.EPERM) {
+		return "the workstation " + stage + " is inaccessible"
+	}
+	if errors.Is(err, syscall.ENOSYS) {
+		return "the workstation kernel does not provide the workspace boundary"
+	}
+	if errors.Is(err, syscall.EINVAL) {
+		return "the workstation kernel rejected the workspace boundary flags"
+	}
+	return "the workstation " + stage + " failed"
 }
 
 type downloaderCleanup struct {

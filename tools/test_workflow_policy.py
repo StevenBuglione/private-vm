@@ -72,6 +72,11 @@ def ci_workflow() -> str:
     return (root / ".github" / "workflows" / "ci.yml").read_text()
 
 
+def ci_workflow() -> str:
+    root = Path(__file__).resolve().parents[1]
+    return (root / ".github" / "workflows" / "ci.yml").read_text()
+
+
 def workflow(
     *, trigger: str = "pull_request:", permissions: str = "contents: read", step: str
 ) -> str:

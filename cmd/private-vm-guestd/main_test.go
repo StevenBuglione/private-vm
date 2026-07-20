@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"syscall"
 	"testing"
 
 	"github.com/StevenBuglione/private-vm/internal/guest"
@@ -14,6 +15,7 @@ import (
 	"github.com/StevenBuglione/private-vm/internal/session"
 	"github.com/StevenBuglione/private-vm/internal/torrent"
 	"github.com/StevenBuglione/private-vm/internal/transfer"
+	"github.com/StevenBuglione/private-vm/internal/workstation"
 )
 
 func TestGuestCompositionMessageExposesOnlyFixedStage(t *testing.T) {
@@ -26,6 +28,12 @@ func TestGuestCompositionMessageExposesOnlyFixedStage(t *testing.T) {
 	}
 	if got := downloaderQuarantineFailure(errors.New("PrivateKey=must-not-leak")); got != "the downloader quarantine initialization failed" {
 		t.Fatalf("untrusted quarantine error leaked: %q", got)
+	}
+	if got := workstationCompositionFailure(errors.New("PrivateKey=must-not-leak")); got != "the workstation workspace boundary failed" {
+		t.Fatalf("untrusted workstation error leaked: %q", got)
+	}
+	if got := workstationCompositionFailure(errors.Join(workstation.ErrWorkspaceInbox, syscall.ENOENT)); got != "the workstation Inbox boundary is unavailable" {
+		t.Fatalf("workstation stage classification = %q", got)
 	}
 }
 

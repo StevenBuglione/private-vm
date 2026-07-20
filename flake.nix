@@ -325,6 +325,7 @@
               loopbackVSOCKTestModule
             ];
             users.users.root.hashedPasswordFile = lib.mkForce null;
+            environment.systemPackages = [ (guestSmokeFor system "workstation") ];
             virtualisation.memorySize = 2048;
             virtualisation.cores = 2;
             virtualisation.vlans = [ ];
