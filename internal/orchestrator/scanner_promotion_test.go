@@ -231,7 +231,13 @@ func promotionReport(payload []byte) scan.ScanReport {
 		Inputs:      []scan.ReportInput{{LogicalName: "input.pdf", SizeBytes: 12, SHA256: strings.Repeat("c", 64), DetectedMIME: "application/pdf", ExtensionMIME: "application/pdf", ExtensionAgreement: true, ClamAVVerdict: "CLAMAV_CLEAN"}},
 		Archives:    []scan.ReportArchive{}, Findings: []scan.Finding{},
 		SanitizedOutputs: []scan.ReportSanitizedOutput{{OutputID: "scan-out-11111111111111111111111111111111", LogicalName: "input.safe.pdf", SourceSHA256: strings.Repeat("c", 64), SizeBytes: uint64(len(payload)), SHA256: hex.EncodeToString(digest[:]), DetectedMIME: "application/pdf", Transformation: "pdf-raster-rebuild-v1", RescanVerdict: "CLAMAV_CLEAN"}},
-		Tools:            []scan.ToolEvidence{{Name: "clamav", Version: "1.5.1"}}, Result: "approved", Complete: true,
+		Tools: []scan.ToolEvidence{
+			{Name: "clamav", Version: "1.5.1"},
+			{Name: "file", Version: "5.46"},
+			{Name: "ghostscript", Version: "10.05.1"},
+			{Name: "poppler-utils", Version: "25.06.0"},
+		},
+		Result: "approved", Complete: true,
 	}
 }
 
