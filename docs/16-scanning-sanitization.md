@@ -102,7 +102,10 @@ Never use automatic delete.
 ## Archive extraction
 
 Extraction runs as a dedicated unprivileged user inside a private mount namespace
-and bounded tmpfs.
+and a service-private tmpfs capped at 512 MiB. The production guest verifies
+the exact mount relationship, `nosuid,nodev,noexec` flags, finite capacity and
+root/worker ownership before reconstruction; missing or malformed evidence is
+blocking.
 
 Before extraction, list archive entries and reject:
 

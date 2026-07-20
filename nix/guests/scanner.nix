@@ -76,6 +76,16 @@ in
   systemd.services.private-vm-guestd.serviceConfig.Group = lib.mkForce "private-vm-scanner";
   systemd.services.private-vm-guestd.serviceConfig.StateDirectory = "private-vm/scanner";
   systemd.services.private-vm-guestd.serviceConfig.StateDirectoryMode = "0700";
+  # systemd creates this tmpfs inside guestd's private mount namespace before
+  # running the fixed privileged preparation command. guestd itself remains
+  # unprivileged and can use only the 0700 child owned by its worker account.
+  systemd.services.private-vm-guestd.serviceConfig.TemporaryFileSystem = [
+    "/run/private-vm/scanner-scratch:rw,nosuid,nodev,noexec,size=512M,mode=0711,uid=0,gid=0"
+  ];
+  systemd.services.private-vm-guestd.serviceConfig.ExecStartPre = [
+    "+${pkgs.coreutils}/bin/install -d -m 0700 -o private-vm-scanner -g private-vm-scanner /run/private-vm/scanner-scratch/worker"
+  ];
+  systemd.services.private-vm-guestd.serviceConfig.MemoryMax = "3G";
 
   environment.etc."private-vm/scanner-toolchain.json" = {
     mode = "0444";
@@ -124,7 +134,7 @@ in
 
   systemd.services.clamav-daemon.serviceConfig = {
     LimitCORE = 0;
-    MemoryMax = "6G";
+    MemoryMax = "2G";
     NoNewPrivileges = true;
     ProtectClock = true;
     ProtectControlGroups = true;
@@ -229,6 +239,17 @@ in
     {
       assertion = config.services.clamav.updater.enable == false;
       message = "private-vm scanner definitions must not update before authenticated VPN verification";
+    }
+    {
+      assertion =
+        config.systemd.services.private-vm-guestd.serviceConfig.TemporaryFileSystem == [
+          "/run/private-vm/scanner-scratch:rw,nosuid,nodev,noexec,size=512M,mode=0711,uid=0,gid=0"
+        ];
+      message = "private-vm scanner scratch must be an exact 512 MiB non-executable private tmpfs";
+    }
+    {
+      assertion = config.systemd.services.private-vm-guestd.serviceConfig.MemoryMax == "3G";
+      message = "private-vm scanner guestd memory limit must remain below its 4 GiB VM limit";
     }
   ];
 

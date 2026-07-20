@@ -554,7 +554,12 @@ python3 tools/validate_examples.py
 It generates ZIP/TAR fixtures in memory and proves traversal, absolute path,
 symlink, hardlink, FIFO, encrypted archive, nesting, expansion-ratio and output
 replacement failures. A local `net.Pipe` implements the ClamAV protocol fixture;
-the PDF probe fixture proves fixed stdin-only all-page arguments, maximum
+the production scratch fixtures prove the exact private-tmpfs relationship,
+flags, ownership and 512 MiB ceiling, including missing, malformed, oversized
+and cancelled verification plus reconstruction cleanup. A Nix source contract
+and flake assertion keep those runtime expectations synchronized with the
+scanner service unit. The PDF probe fixture proves fixed stdin-only all-page
+arguments, maximum
 dimensions across heterogeneous pages, and rejection of missing, duplicate,
 out-of-range, inconsistent, over-limit and oversized-output evidence while
 preserving cancellation and timeout codes. No daemon, definitions download or

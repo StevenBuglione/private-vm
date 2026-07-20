@@ -727,6 +727,12 @@
         assert
           scannerConfiguration.config.systemd.services.private-vm-guestd.serviceConfig.StateDirectory
           == "private-vm/scanner";
+        assert
+          scannerConfiguration.config.systemd.services.private-vm-guestd.serviceConfig.TemporaryFileSystem
+          == [ "/run/private-vm/scanner-scratch:rw,nosuid,nodev,noexec,size=512M,mode=0711,uid=0,gid=0" ];
+        assert
+          scannerConfiguration.config.systemd.services.private-vm-guestd.serviceConfig.MemoryMax == "3G";
+        assert scannerConfiguration.config.systemd.services.clamav-daemon.serviceConfig.MemoryMax == "2G";
         assert scannerConfiguration.config.security.polkit.enable;
         assert builtins.hasAttr "private-vm/policy.safe.toml" scannerConfiguration.config.environment.etc;
         assert !offlineConfiguration.networking.networkmanager.enable;
