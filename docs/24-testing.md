@@ -502,7 +502,10 @@ The public image workflow maps the six canonical image outputs to these exact
 TCG gates in six independent standard-runner jobs. It builds no two canonical
 images in one workspace. A scanner job is the sole exception to one boot per
 job: its update and offline phase tests execute serially because both phases
-belong to the same scanner image contract.
+belong to the same scanner image contract. Each row requires its canonical build
+to emit exactly one existing direct `/nix/store` path and reports closure size
+from that captured path, so closure reporting cannot select a different target
+or trigger a second flake evaluation.
 
 ### KVM acceptance
 
