@@ -1113,9 +1113,10 @@ func (x *TorrentMetadata) GetPayloadPaused() bool {
 }
 
 type SelectTorrentFilesRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Context       *GuestContext          `protobuf:"bytes,1,opt,name=context,proto3" json:"context,omitempty"`
-	Indexes       []uint32               `protobuf:"varint,2,rep,packed,name=indexes,proto3" json:"indexes,omitempty"`
+	state         protoimpl.MessageState  `protogen:"open.v1"`
+	Context       *GuestContext           `protobuf:"bytes,1,opt,name=context,proto3" json:"context,omitempty"`
+	Indexes       []uint32                `protobuf:"varint,2,rep,packed,name=indexes,proto3" json:"indexes,omitempty"`
+	Capacity      *TorrentCapacityReceipt `protobuf:"bytes,3,opt,name=capacity,proto3" json:"capacity,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1160,6 +1161,13 @@ func (x *SelectTorrentFilesRequest) GetContext() *GuestContext {
 func (x *SelectTorrentFilesRequest) GetIndexes() []uint32 {
 	if x != nil {
 		return x.Indexes
+	}
+	return nil
+}
+
+func (x *SelectTorrentFilesRequest) GetCapacity() *TorrentCapacityReceipt {
+	if x != nil {
+		return x.Capacity
 	}
 	return nil
 }
@@ -2673,10 +2681,11 @@ const file_privatevm_v1_guest_proto_rawDesc = "" +
 	"\fdisplay_name\x18\x01 \x01(\tR\vdisplayName\x12/\n" +
 	"\x05files\x18\x02 \x03(\v2\x19.privatevm.v1.TorrentFileR\x05files\x12.\n" +
 	"\x13selected_size_bytes\x18\x03 \x01(\x04R\x11selectedSizeBytes\x12%\n" +
-	"\x0epayload_paused\x18\x04 \x01(\bR\rpayloadPaused\"k\n" +
+	"\x0epayload_paused\x18\x04 \x01(\bR\rpayloadPaused\"\xad\x01\n" +
 	"\x19SelectTorrentFilesRequest\x124\n" +
 	"\acontext\x18\x01 \x01(\v2\x1a.privatevm.v1.GuestContextR\acontext\x12\x18\n" +
-	"\aindexes\x18\x02 \x03(\rR\aindexes\"\x98\x01\n" +
+	"\aindexes\x18\x02 \x03(\rR\aindexes\x12@\n" +
+	"\bcapacity\x18\x03 \x01(\v2$.privatevm.v1.TorrentCapacityReceiptR\bcapacity\"\x98\x01\n" +
 	"\fTorrentEvent\x122\n" +
 	"\bprogress\x18\x01 \x01(\v2\x16.privatevm.v1.ProgressR\bprogress\x128\n" +
 	"\n" +
@@ -2894,11 +2903,12 @@ var file_privatevm_v1_guest_proto_goTypes = []any{
 	(*ApiVersion)(nil),                // 42: privatevm.v1.ApiVersion
 	(*Diagnostic)(nil),                // 43: privatevm.v1.Diagnostic
 	(*Progress)(nil),                  // 44: privatevm.v1.Progress
-	(*Hash)(nil),                      // 45: privatevm.v1.Hash
-	(*FileDescriptor)(nil),            // 46: privatevm.v1.FileDescriptor
-	(*TransferFrame)(nil),             // 47: privatevm.v1.TransferFrame
-	(*Empty)(nil),                     // 48: privatevm.v1.Empty
-	(*TransferReceipt)(nil),           // 49: privatevm.v1.TransferReceipt
+	(*TorrentCapacityReceipt)(nil),    // 45: privatevm.v1.TorrentCapacityReceipt
+	(*Hash)(nil),                      // 46: privatevm.v1.Hash
+	(*FileDescriptor)(nil),            // 47: privatevm.v1.FileDescriptor
+	(*TransferFrame)(nil),             // 48: privatevm.v1.TransferFrame
+	(*Empty)(nil),                     // 49: privatevm.v1.Empty
+	(*TransferReceipt)(nil),           // 50: privatevm.v1.TransferReceipt
 }
 var file_privatevm_v1_guest_proto_depIdxs = []int32{
 	40, // 0: privatevm.v1.GuestContext.context:type_name -> privatevm.v1.RequestContext
@@ -2920,117 +2930,118 @@ var file_privatevm_v1_guest_proto_depIdxs = []int32{
 	0,  // 16: privatevm.v1.TorrentRequest.context:type_name -> privatevm.v1.GuestContext
 	14, // 17: privatevm.v1.TorrentMetadata.files:type_name -> privatevm.v1.TorrentFile
 	0,  // 18: privatevm.v1.SelectTorrentFilesRequest.context:type_name -> privatevm.v1.GuestContext
-	44, // 19: privatevm.v1.TorrentEvent.progress:type_name -> privatevm.v1.Progress
-	43, // 20: privatevm.v1.TorrentEvent.diagnostic:type_name -> privatevm.v1.Diagnostic
-	44, // 21: privatevm.v1.TorrentStatus.progress:type_name -> privatevm.v1.Progress
-	43, // 22: privatevm.v1.TorrentStatus.diagnostics:type_name -> privatevm.v1.Diagnostic
-	0,  // 23: privatevm.v1.ScannerRequest.context:type_name -> privatevm.v1.GuestContext
-	43, // 24: privatevm.v1.DefinitionsStatus.diagnostics:type_name -> privatevm.v1.Diagnostic
-	43, // 25: privatevm.v1.OfflineStatus.diagnostics:type_name -> privatevm.v1.Diagnostic
-	44, // 26: privatevm.v1.ScanEvent.progress:type_name -> privatevm.v1.Progress
-	43, // 27: privatevm.v1.ScanEvent.finding:type_name -> privatevm.v1.Diagnostic
-	0,  // 28: privatevm.v1.ExportApprovedFileRequest.context:type_name -> privatevm.v1.GuestContext
-	0,  // 29: privatevm.v1.WorkspaceStateRequest.context:type_name -> privatevm.v1.GuestContext
-	26, // 30: privatevm.v1.WorkspaceState.entries:type_name -> privatevm.v1.WorkspaceEntry
-	0,  // 31: privatevm.v1.GuestExportFileRequest.context:type_name -> privatevm.v1.GuestContext
-	0,  // 32: privatevm.v1.MarkExportVerifiedRequest.context:type_name -> privatevm.v1.GuestContext
-	45, // 33: privatevm.v1.MarkExportVerifiedRequest.digest:type_name -> privatevm.v1.Hash
-	0,  // 34: privatevm.v1.NetworkWarningRequest.context:type_name -> privatevm.v1.GuestContext
-	0,  // 35: privatevm.v1.ExporterRequest.context:type_name -> privatevm.v1.GuestContext
-	31, // 36: privatevm.v1.ExporterRequest.expected_device:type_name -> privatevm.v1.USBDeviceExpectation
-	0,  // 37: privatevm.v1.PrepareUSBBegin.context:type_name -> privatevm.v1.GuestContext
-	31, // 38: privatevm.v1.PrepareUSBBegin.expected_device:type_name -> privatevm.v1.USBDeviceExpectation
-	33, // 39: privatevm.v1.PrepareUSBFrame.begin:type_name -> privatevm.v1.PrepareUSBBegin
-	34, // 40: privatevm.v1.PrepareUSBFrame.passphrase_chunk:type_name -> privatevm.v1.PrepareUSBSecretChunk
-	0,  // 41: privatevm.v1.PrepareUSBRequest.context:type_name -> privatevm.v1.GuestContext
-	0,  // 42: privatevm.v1.VerifyExportRequest.context:type_name -> privatevm.v1.GuestContext
-	46, // 43: privatevm.v1.USBTransferReceipt.descriptor:type_name -> privatevm.v1.FileDescriptor
-	45, // 44: privatevm.v1.USBTransferReceipt.receiver_digest:type_name -> privatevm.v1.Hash
-	45, // 45: privatevm.v1.USBTransferReceipt.reread_digest:type_name -> privatevm.v1.Hash
-	43, // 46: privatevm.v1.USBStatus.diagnostics:type_name -> privatevm.v1.Diagnostic
-	1,  // 47: privatevm.v1.GuestCommonService.Hello:input_type -> privatevm.v1.GuestHelloRequest
-	3,  // 48: privatevm.v1.GuestCommonService.GetStatus:input_type -> privatevm.v1.GuestStatusRequest
-	3,  // 49: privatevm.v1.GuestCommonService.StreamEvents:input_type -> privatevm.v1.GuestStatusRequest
-	6,  // 50: privatevm.v1.GuestCommonService.Shutdown:input_type -> privatevm.v1.ShutdownRequest
-	9,  // 51: privatevm.v1.WorkstationGuestService.ConfigureWireGuard:input_type -> privatevm.v1.ConfigureWireGuardRequest
-	10, // 52: privatevm.v1.WorkstationGuestService.VerifyVPN:input_type -> privatevm.v1.VerifyVPNRequest
-	25, // 53: privatevm.v1.WorkstationGuestService.GetWorkspaceState:input_type -> privatevm.v1.WorkspaceStateRequest
-	47, // 54: privatevm.v1.WorkstationGuestService.ImportFile:input_type -> privatevm.v1.TransferFrame
-	25, // 55: privatevm.v1.WorkstationGuestService.ListExportFiles:input_type -> privatevm.v1.WorkspaceStateRequest
-	28, // 56: privatevm.v1.WorkstationGuestService.ExportFile:input_type -> privatevm.v1.GuestExportFileRequest
-	29, // 57: privatevm.v1.WorkstationGuestService.MarkExportVerified:input_type -> privatevm.v1.MarkExportVerifiedRequest
-	30, // 58: privatevm.v1.WorkstationGuestService.ShowNetworkWarning:input_type -> privatevm.v1.NetworkWarningRequest
-	9,  // 59: privatevm.v1.DownloaderGuestService.ConfigureWireGuard:input_type -> privatevm.v1.ConfigureWireGuardRequest
-	10, // 60: privatevm.v1.DownloaderGuestService.VerifyVPN:input_type -> privatevm.v1.VerifyVPNRequest
-	12, // 61: privatevm.v1.DownloaderGuestService.AddTorrent:input_type -> privatevm.v1.TorrentInputFrame
-	13, // 62: privatevm.v1.DownloaderGuestService.GetTorrentMetadata:input_type -> privatevm.v1.TorrentRequest
-	16, // 63: privatevm.v1.DownloaderGuestService.SelectTorrentFiles:input_type -> privatevm.v1.SelectTorrentFilesRequest
-	13, // 64: privatevm.v1.DownloaderGuestService.StartDownload:input_type -> privatevm.v1.TorrentRequest
-	13, // 65: privatevm.v1.DownloaderGuestService.PauseDownload:input_type -> privatevm.v1.TorrentRequest
-	13, // 66: privatevm.v1.DownloaderGuestService.GetDownloadStatus:input_type -> privatevm.v1.TorrentRequest
-	13, // 67: privatevm.v1.DownloaderGuestService.SealQuarantine:input_type -> privatevm.v1.TorrentRequest
-	9,  // 68: privatevm.v1.ScannerGuestService.ConfigureWireGuard:input_type -> privatevm.v1.ConfigureWireGuardRequest
-	10, // 69: privatevm.v1.ScannerGuestService.VerifyVPN:input_type -> privatevm.v1.VerifyVPNRequest
-	19, // 70: privatevm.v1.ScannerGuestService.UpdateDefinitions:input_type -> privatevm.v1.ScannerRequest
-	19, // 71: privatevm.v1.ScannerGuestService.GetDefinitionsStatus:input_type -> privatevm.v1.ScannerRequest
-	19, // 72: privatevm.v1.ScannerGuestService.VerifyOfflineMode:input_type -> privatevm.v1.ScannerRequest
-	19, // 73: privatevm.v1.ScannerGuestService.Inventory:input_type -> privatevm.v1.ScannerRequest
-	19, // 74: privatevm.v1.ScannerGuestService.Scan:input_type -> privatevm.v1.ScannerRequest
-	19, // 75: privatevm.v1.ScannerGuestService.Reconstruct:input_type -> privatevm.v1.ScannerRequest
-	19, // 76: privatevm.v1.ScannerGuestService.GetScanReport:input_type -> privatevm.v1.ScannerRequest
-	24, // 77: privatevm.v1.ScannerGuestService.ExportApprovedFile:input_type -> privatevm.v1.ExportApprovedFileRequest
-	32, // 78: privatevm.v1.ExporterGuestService.InspectUSB:input_type -> privatevm.v1.ExporterRequest
-	36, // 79: privatevm.v1.ExporterGuestService.PrepareUSB:input_type -> privatevm.v1.PrepareUSBRequest
-	47, // 80: privatevm.v1.ExporterGuestService.WriteFile:input_type -> privatevm.v1.TransferFrame
-	37, // 81: privatevm.v1.ExporterGuestService.VerifyFile:input_type -> privatevm.v1.VerifyExportRequest
-	32, // 82: privatevm.v1.ExporterGuestService.FinalizeUSB:input_type -> privatevm.v1.ExporterRequest
-	35, // 83: privatevm.v1.ExporterGuestService.PrepareExactUSB:input_type -> privatevm.v1.PrepareUSBFrame
-	47, // 84: privatevm.v1.ExporterGuestService.WriteVerifiedFile:input_type -> privatevm.v1.TransferFrame
-	37, // 85: privatevm.v1.ExporterGuestService.VerifyWrittenFile:input_type -> privatevm.v1.VerifyExportRequest
-	2,  // 86: privatevm.v1.GuestCommonService.Hello:output_type -> privatevm.v1.GuestHelloResponse
-	4,  // 87: privatevm.v1.GuestCommonService.GetStatus:output_type -> privatevm.v1.GuestStatus
-	5,  // 88: privatevm.v1.GuestCommonService.StreamEvents:output_type -> privatevm.v1.GuestEvent
-	48, // 89: privatevm.v1.GuestCommonService.Shutdown:output_type -> privatevm.v1.Empty
-	11, // 90: privatevm.v1.WorkstationGuestService.ConfigureWireGuard:output_type -> privatevm.v1.VPNStatus
-	11, // 91: privatevm.v1.WorkstationGuestService.VerifyVPN:output_type -> privatevm.v1.VPNStatus
-	27, // 92: privatevm.v1.WorkstationGuestService.GetWorkspaceState:output_type -> privatevm.v1.WorkspaceState
-	49, // 93: privatevm.v1.WorkstationGuestService.ImportFile:output_type -> privatevm.v1.TransferReceipt
-	27, // 94: privatevm.v1.WorkstationGuestService.ListExportFiles:output_type -> privatevm.v1.WorkspaceState
-	47, // 95: privatevm.v1.WorkstationGuestService.ExportFile:output_type -> privatevm.v1.TransferFrame
-	27, // 96: privatevm.v1.WorkstationGuestService.MarkExportVerified:output_type -> privatevm.v1.WorkspaceState
-	48, // 97: privatevm.v1.WorkstationGuestService.ShowNetworkWarning:output_type -> privatevm.v1.Empty
-	11, // 98: privatevm.v1.DownloaderGuestService.ConfigureWireGuard:output_type -> privatevm.v1.VPNStatus
-	11, // 99: privatevm.v1.DownloaderGuestService.VerifyVPN:output_type -> privatevm.v1.VPNStatus
-	15, // 100: privatevm.v1.DownloaderGuestService.AddTorrent:output_type -> privatevm.v1.TorrentMetadata
-	15, // 101: privatevm.v1.DownloaderGuestService.GetTorrentMetadata:output_type -> privatevm.v1.TorrentMetadata
-	15, // 102: privatevm.v1.DownloaderGuestService.SelectTorrentFiles:output_type -> privatevm.v1.TorrentMetadata
-	17, // 103: privatevm.v1.DownloaderGuestService.StartDownload:output_type -> privatevm.v1.TorrentEvent
-	18, // 104: privatevm.v1.DownloaderGuestService.PauseDownload:output_type -> privatevm.v1.TorrentStatus
-	18, // 105: privatevm.v1.DownloaderGuestService.GetDownloadStatus:output_type -> privatevm.v1.TorrentStatus
-	48, // 106: privatevm.v1.DownloaderGuestService.SealQuarantine:output_type -> privatevm.v1.Empty
-	11, // 107: privatevm.v1.ScannerGuestService.ConfigureWireGuard:output_type -> privatevm.v1.VPNStatus
-	11, // 108: privatevm.v1.ScannerGuestService.VerifyVPN:output_type -> privatevm.v1.VPNStatus
-	20, // 109: privatevm.v1.ScannerGuestService.UpdateDefinitions:output_type -> privatevm.v1.DefinitionsStatus
-	20, // 110: privatevm.v1.ScannerGuestService.GetDefinitionsStatus:output_type -> privatevm.v1.DefinitionsStatus
-	21, // 111: privatevm.v1.ScannerGuestService.VerifyOfflineMode:output_type -> privatevm.v1.OfflineStatus
-	22, // 112: privatevm.v1.ScannerGuestService.Inventory:output_type -> privatevm.v1.ScanEvent
-	22, // 113: privatevm.v1.ScannerGuestService.Scan:output_type -> privatevm.v1.ScanEvent
-	22, // 114: privatevm.v1.ScannerGuestService.Reconstruct:output_type -> privatevm.v1.ScanEvent
-	23, // 115: privatevm.v1.ScannerGuestService.GetScanReport:output_type -> privatevm.v1.ScanReportEnvelope
-	47, // 116: privatevm.v1.ScannerGuestService.ExportApprovedFile:output_type -> privatevm.v1.TransferFrame
-	39, // 117: privatevm.v1.ExporterGuestService.InspectUSB:output_type -> privatevm.v1.USBStatus
-	39, // 118: privatevm.v1.ExporterGuestService.PrepareUSB:output_type -> privatevm.v1.USBStatus
-	49, // 119: privatevm.v1.ExporterGuestService.WriteFile:output_type -> privatevm.v1.TransferReceipt
-	49, // 120: privatevm.v1.ExporterGuestService.VerifyFile:output_type -> privatevm.v1.TransferReceipt
-	39, // 121: privatevm.v1.ExporterGuestService.FinalizeUSB:output_type -> privatevm.v1.USBStatus
-	39, // 122: privatevm.v1.ExporterGuestService.PrepareExactUSB:output_type -> privatevm.v1.USBStatus
-	38, // 123: privatevm.v1.ExporterGuestService.WriteVerifiedFile:output_type -> privatevm.v1.USBTransferReceipt
-	38, // 124: privatevm.v1.ExporterGuestService.VerifyWrittenFile:output_type -> privatevm.v1.USBTransferReceipt
-	86, // [86:125] is the sub-list for method output_type
-	47, // [47:86] is the sub-list for method input_type
-	47, // [47:47] is the sub-list for extension type_name
-	47, // [47:47] is the sub-list for extension extendee
-	0,  // [0:47] is the sub-list for field type_name
+	45, // 19: privatevm.v1.SelectTorrentFilesRequest.capacity:type_name -> privatevm.v1.TorrentCapacityReceipt
+	44, // 20: privatevm.v1.TorrentEvent.progress:type_name -> privatevm.v1.Progress
+	43, // 21: privatevm.v1.TorrentEvent.diagnostic:type_name -> privatevm.v1.Diagnostic
+	44, // 22: privatevm.v1.TorrentStatus.progress:type_name -> privatevm.v1.Progress
+	43, // 23: privatevm.v1.TorrentStatus.diagnostics:type_name -> privatevm.v1.Diagnostic
+	0,  // 24: privatevm.v1.ScannerRequest.context:type_name -> privatevm.v1.GuestContext
+	43, // 25: privatevm.v1.DefinitionsStatus.diagnostics:type_name -> privatevm.v1.Diagnostic
+	43, // 26: privatevm.v1.OfflineStatus.diagnostics:type_name -> privatevm.v1.Diagnostic
+	44, // 27: privatevm.v1.ScanEvent.progress:type_name -> privatevm.v1.Progress
+	43, // 28: privatevm.v1.ScanEvent.finding:type_name -> privatevm.v1.Diagnostic
+	0,  // 29: privatevm.v1.ExportApprovedFileRequest.context:type_name -> privatevm.v1.GuestContext
+	0,  // 30: privatevm.v1.WorkspaceStateRequest.context:type_name -> privatevm.v1.GuestContext
+	26, // 31: privatevm.v1.WorkspaceState.entries:type_name -> privatevm.v1.WorkspaceEntry
+	0,  // 32: privatevm.v1.GuestExportFileRequest.context:type_name -> privatevm.v1.GuestContext
+	0,  // 33: privatevm.v1.MarkExportVerifiedRequest.context:type_name -> privatevm.v1.GuestContext
+	46, // 34: privatevm.v1.MarkExportVerifiedRequest.digest:type_name -> privatevm.v1.Hash
+	0,  // 35: privatevm.v1.NetworkWarningRequest.context:type_name -> privatevm.v1.GuestContext
+	0,  // 36: privatevm.v1.ExporterRequest.context:type_name -> privatevm.v1.GuestContext
+	31, // 37: privatevm.v1.ExporterRequest.expected_device:type_name -> privatevm.v1.USBDeviceExpectation
+	0,  // 38: privatevm.v1.PrepareUSBBegin.context:type_name -> privatevm.v1.GuestContext
+	31, // 39: privatevm.v1.PrepareUSBBegin.expected_device:type_name -> privatevm.v1.USBDeviceExpectation
+	33, // 40: privatevm.v1.PrepareUSBFrame.begin:type_name -> privatevm.v1.PrepareUSBBegin
+	34, // 41: privatevm.v1.PrepareUSBFrame.passphrase_chunk:type_name -> privatevm.v1.PrepareUSBSecretChunk
+	0,  // 42: privatevm.v1.PrepareUSBRequest.context:type_name -> privatevm.v1.GuestContext
+	0,  // 43: privatevm.v1.VerifyExportRequest.context:type_name -> privatevm.v1.GuestContext
+	47, // 44: privatevm.v1.USBTransferReceipt.descriptor:type_name -> privatevm.v1.FileDescriptor
+	46, // 45: privatevm.v1.USBTransferReceipt.receiver_digest:type_name -> privatevm.v1.Hash
+	46, // 46: privatevm.v1.USBTransferReceipt.reread_digest:type_name -> privatevm.v1.Hash
+	43, // 47: privatevm.v1.USBStatus.diagnostics:type_name -> privatevm.v1.Diagnostic
+	1,  // 48: privatevm.v1.GuestCommonService.Hello:input_type -> privatevm.v1.GuestHelloRequest
+	3,  // 49: privatevm.v1.GuestCommonService.GetStatus:input_type -> privatevm.v1.GuestStatusRequest
+	3,  // 50: privatevm.v1.GuestCommonService.StreamEvents:input_type -> privatevm.v1.GuestStatusRequest
+	6,  // 51: privatevm.v1.GuestCommonService.Shutdown:input_type -> privatevm.v1.ShutdownRequest
+	9,  // 52: privatevm.v1.WorkstationGuestService.ConfigureWireGuard:input_type -> privatevm.v1.ConfigureWireGuardRequest
+	10, // 53: privatevm.v1.WorkstationGuestService.VerifyVPN:input_type -> privatevm.v1.VerifyVPNRequest
+	25, // 54: privatevm.v1.WorkstationGuestService.GetWorkspaceState:input_type -> privatevm.v1.WorkspaceStateRequest
+	48, // 55: privatevm.v1.WorkstationGuestService.ImportFile:input_type -> privatevm.v1.TransferFrame
+	25, // 56: privatevm.v1.WorkstationGuestService.ListExportFiles:input_type -> privatevm.v1.WorkspaceStateRequest
+	28, // 57: privatevm.v1.WorkstationGuestService.ExportFile:input_type -> privatevm.v1.GuestExportFileRequest
+	29, // 58: privatevm.v1.WorkstationGuestService.MarkExportVerified:input_type -> privatevm.v1.MarkExportVerifiedRequest
+	30, // 59: privatevm.v1.WorkstationGuestService.ShowNetworkWarning:input_type -> privatevm.v1.NetworkWarningRequest
+	9,  // 60: privatevm.v1.DownloaderGuestService.ConfigureWireGuard:input_type -> privatevm.v1.ConfigureWireGuardRequest
+	10, // 61: privatevm.v1.DownloaderGuestService.VerifyVPN:input_type -> privatevm.v1.VerifyVPNRequest
+	12, // 62: privatevm.v1.DownloaderGuestService.AddTorrent:input_type -> privatevm.v1.TorrentInputFrame
+	13, // 63: privatevm.v1.DownloaderGuestService.GetTorrentMetadata:input_type -> privatevm.v1.TorrentRequest
+	16, // 64: privatevm.v1.DownloaderGuestService.SelectTorrentFiles:input_type -> privatevm.v1.SelectTorrentFilesRequest
+	13, // 65: privatevm.v1.DownloaderGuestService.StartDownload:input_type -> privatevm.v1.TorrentRequest
+	13, // 66: privatevm.v1.DownloaderGuestService.PauseDownload:input_type -> privatevm.v1.TorrentRequest
+	13, // 67: privatevm.v1.DownloaderGuestService.GetDownloadStatus:input_type -> privatevm.v1.TorrentRequest
+	13, // 68: privatevm.v1.DownloaderGuestService.SealQuarantine:input_type -> privatevm.v1.TorrentRequest
+	9,  // 69: privatevm.v1.ScannerGuestService.ConfigureWireGuard:input_type -> privatevm.v1.ConfigureWireGuardRequest
+	10, // 70: privatevm.v1.ScannerGuestService.VerifyVPN:input_type -> privatevm.v1.VerifyVPNRequest
+	19, // 71: privatevm.v1.ScannerGuestService.UpdateDefinitions:input_type -> privatevm.v1.ScannerRequest
+	19, // 72: privatevm.v1.ScannerGuestService.GetDefinitionsStatus:input_type -> privatevm.v1.ScannerRequest
+	19, // 73: privatevm.v1.ScannerGuestService.VerifyOfflineMode:input_type -> privatevm.v1.ScannerRequest
+	19, // 74: privatevm.v1.ScannerGuestService.Inventory:input_type -> privatevm.v1.ScannerRequest
+	19, // 75: privatevm.v1.ScannerGuestService.Scan:input_type -> privatevm.v1.ScannerRequest
+	19, // 76: privatevm.v1.ScannerGuestService.Reconstruct:input_type -> privatevm.v1.ScannerRequest
+	19, // 77: privatevm.v1.ScannerGuestService.GetScanReport:input_type -> privatevm.v1.ScannerRequest
+	24, // 78: privatevm.v1.ScannerGuestService.ExportApprovedFile:input_type -> privatevm.v1.ExportApprovedFileRequest
+	32, // 79: privatevm.v1.ExporterGuestService.InspectUSB:input_type -> privatevm.v1.ExporterRequest
+	36, // 80: privatevm.v1.ExporterGuestService.PrepareUSB:input_type -> privatevm.v1.PrepareUSBRequest
+	48, // 81: privatevm.v1.ExporterGuestService.WriteFile:input_type -> privatevm.v1.TransferFrame
+	37, // 82: privatevm.v1.ExporterGuestService.VerifyFile:input_type -> privatevm.v1.VerifyExportRequest
+	32, // 83: privatevm.v1.ExporterGuestService.FinalizeUSB:input_type -> privatevm.v1.ExporterRequest
+	35, // 84: privatevm.v1.ExporterGuestService.PrepareExactUSB:input_type -> privatevm.v1.PrepareUSBFrame
+	48, // 85: privatevm.v1.ExporterGuestService.WriteVerifiedFile:input_type -> privatevm.v1.TransferFrame
+	37, // 86: privatevm.v1.ExporterGuestService.VerifyWrittenFile:input_type -> privatevm.v1.VerifyExportRequest
+	2,  // 87: privatevm.v1.GuestCommonService.Hello:output_type -> privatevm.v1.GuestHelloResponse
+	4,  // 88: privatevm.v1.GuestCommonService.GetStatus:output_type -> privatevm.v1.GuestStatus
+	5,  // 89: privatevm.v1.GuestCommonService.StreamEvents:output_type -> privatevm.v1.GuestEvent
+	49, // 90: privatevm.v1.GuestCommonService.Shutdown:output_type -> privatevm.v1.Empty
+	11, // 91: privatevm.v1.WorkstationGuestService.ConfigureWireGuard:output_type -> privatevm.v1.VPNStatus
+	11, // 92: privatevm.v1.WorkstationGuestService.VerifyVPN:output_type -> privatevm.v1.VPNStatus
+	27, // 93: privatevm.v1.WorkstationGuestService.GetWorkspaceState:output_type -> privatevm.v1.WorkspaceState
+	50, // 94: privatevm.v1.WorkstationGuestService.ImportFile:output_type -> privatevm.v1.TransferReceipt
+	27, // 95: privatevm.v1.WorkstationGuestService.ListExportFiles:output_type -> privatevm.v1.WorkspaceState
+	48, // 96: privatevm.v1.WorkstationGuestService.ExportFile:output_type -> privatevm.v1.TransferFrame
+	27, // 97: privatevm.v1.WorkstationGuestService.MarkExportVerified:output_type -> privatevm.v1.WorkspaceState
+	49, // 98: privatevm.v1.WorkstationGuestService.ShowNetworkWarning:output_type -> privatevm.v1.Empty
+	11, // 99: privatevm.v1.DownloaderGuestService.ConfigureWireGuard:output_type -> privatevm.v1.VPNStatus
+	11, // 100: privatevm.v1.DownloaderGuestService.VerifyVPN:output_type -> privatevm.v1.VPNStatus
+	15, // 101: privatevm.v1.DownloaderGuestService.AddTorrent:output_type -> privatevm.v1.TorrentMetadata
+	15, // 102: privatevm.v1.DownloaderGuestService.GetTorrentMetadata:output_type -> privatevm.v1.TorrentMetadata
+	15, // 103: privatevm.v1.DownloaderGuestService.SelectTorrentFiles:output_type -> privatevm.v1.TorrentMetadata
+	17, // 104: privatevm.v1.DownloaderGuestService.StartDownload:output_type -> privatevm.v1.TorrentEvent
+	18, // 105: privatevm.v1.DownloaderGuestService.PauseDownload:output_type -> privatevm.v1.TorrentStatus
+	18, // 106: privatevm.v1.DownloaderGuestService.GetDownloadStatus:output_type -> privatevm.v1.TorrentStatus
+	49, // 107: privatevm.v1.DownloaderGuestService.SealQuarantine:output_type -> privatevm.v1.Empty
+	11, // 108: privatevm.v1.ScannerGuestService.ConfigureWireGuard:output_type -> privatevm.v1.VPNStatus
+	11, // 109: privatevm.v1.ScannerGuestService.VerifyVPN:output_type -> privatevm.v1.VPNStatus
+	20, // 110: privatevm.v1.ScannerGuestService.UpdateDefinitions:output_type -> privatevm.v1.DefinitionsStatus
+	20, // 111: privatevm.v1.ScannerGuestService.GetDefinitionsStatus:output_type -> privatevm.v1.DefinitionsStatus
+	21, // 112: privatevm.v1.ScannerGuestService.VerifyOfflineMode:output_type -> privatevm.v1.OfflineStatus
+	22, // 113: privatevm.v1.ScannerGuestService.Inventory:output_type -> privatevm.v1.ScanEvent
+	22, // 114: privatevm.v1.ScannerGuestService.Scan:output_type -> privatevm.v1.ScanEvent
+	22, // 115: privatevm.v1.ScannerGuestService.Reconstruct:output_type -> privatevm.v1.ScanEvent
+	23, // 116: privatevm.v1.ScannerGuestService.GetScanReport:output_type -> privatevm.v1.ScanReportEnvelope
+	48, // 117: privatevm.v1.ScannerGuestService.ExportApprovedFile:output_type -> privatevm.v1.TransferFrame
+	39, // 118: privatevm.v1.ExporterGuestService.InspectUSB:output_type -> privatevm.v1.USBStatus
+	39, // 119: privatevm.v1.ExporterGuestService.PrepareUSB:output_type -> privatevm.v1.USBStatus
+	50, // 120: privatevm.v1.ExporterGuestService.WriteFile:output_type -> privatevm.v1.TransferReceipt
+	50, // 121: privatevm.v1.ExporterGuestService.VerifyFile:output_type -> privatevm.v1.TransferReceipt
+	39, // 122: privatevm.v1.ExporterGuestService.FinalizeUSB:output_type -> privatevm.v1.USBStatus
+	39, // 123: privatevm.v1.ExporterGuestService.PrepareExactUSB:output_type -> privatevm.v1.USBStatus
+	38, // 124: privatevm.v1.ExporterGuestService.WriteVerifiedFile:output_type -> privatevm.v1.USBTransferReceipt
+	38, // 125: privatevm.v1.ExporterGuestService.VerifyWrittenFile:output_type -> privatevm.v1.USBTransferReceipt
+	87, // [87:126] is the sub-list for method output_type
+	48, // [48:87] is the sub-list for method input_type
+	48, // [48:48] is the sub-list for extension type_name
+	48, // [48:48] is the sub-list for extension extendee
+	0,  // [0:48] is the sub-list for field type_name
 }
 
 func init() { file_privatevm_v1_guest_proto_init() }

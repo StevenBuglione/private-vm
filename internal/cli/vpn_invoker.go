@@ -324,7 +324,7 @@ func daemonDetailExitCode(code string) int {
 		return exitcode.Cleanup
 	case "DOWNLOADER_CLEANUP_INCOMPLETE":
 		return exitcode.Cleanup
-	case "TORRENT_CAPACITY_INSUFFICIENT":
+	case "TORRENT_CAPACITY_INSUFFICIENT", "TORRENT_CAPACITY_EVIDENCE_UNAVAILABLE":
 		return exitcode.Storage
 	case "ROLE_START_FAILED", "SESSION_TRANSITION_INVALID", "SESSION_NOT_FOUND", "SESSION_SELECTION_REQUIRED":
 		return exitcode.Runtime

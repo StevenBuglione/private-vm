@@ -223,7 +223,7 @@ private-vm torrent add --magnet-tty
 private-vm torrent add --magnet-stdin
 private-vm torrent add --torrent-file FILE
 private-vm torrent metadata
-private-vm torrent select --files 1,2,4
+private-vm torrent select --files 1,2,4 --destination workstation|usb
 private-vm torrent plan
 private-vm torrent download
 private-vm torrent pause
@@ -238,6 +238,13 @@ Unix daemon and its session authorization boundary; the CLI never dials guest
 VSOCK directly. Machine results expose only state, byte/file counts and stable
 remediation. Torrent names, paths, hashes, peer identifiers and input values are
 omitted; exact file review remains inside the isolated downloader display.
+
+`torrent select` requires the downstream destination before any payload can
+start. The value is a closed semantic enum, not a path or device selector.
+Selection fails with `TORRENT_CAPACITY_EVIDENCE_UNAVAILABLE` when that
+destination does not yet have independent scanner, reconstruction and receiver
+capacity evidence; frozen v1 does not substitute the quarantine free-space
+value for a missing stage.
 
 `--magnet STRING` is absent by default. A deliberately unsafe argv flag may be
 added only for debugging builds, never official release UX.

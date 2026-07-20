@@ -251,10 +251,6 @@ func composeDownloaderService() (*guest.DownloaderVPNServer, *downloaderCleanup,
 		_ = quarantine.Close(cleanupCtx)
 		return nil, nil, err
 	}
-	available, err := quarantine.CapacityBytes()
-	if err != nil || available <= 6<<30 {
-		return fail(compositionError("the downloader quarantine capacity check failed"))
-	}
 	client, err := torrent.NewLocalQBittorrentService("/etc/private-vm/qbittorrent", uid, gid)
 	if err != nil {
 		return fail(compositionError("the downloader qBittorrent configuration failed"))
@@ -264,14 +260,8 @@ func composeDownloaderService() (*guest.DownloaderVPNServer, *downloaderCleanup,
 		_ = client.Close(context.Background())
 		return fail(compositionError("the downloader qBittorrent backend failed"))
 	}
-	maximumSelected := (available - (5 << 30)) / 2
 	controller, err := torrent.NewController(backend, quarantine, torrent.Config{
 		SafePolicy: true,
-		Budget: torrent.CapacityBudget{
-			QuarantineAvailableBytes: available, ScanAvailableBytes: available, ReconstructionAvailable: available,
-			DestinationAvailable: available, RootOverlayBudgetBytes: 1 << 30, ArchiveExpansionBytes: 4 << 30,
-			ReconstructionBytes: 1 << 30, MaximumSelectedBytes: maximumSelected,
-		},
 	})
 	if err != nil {
 		_ = client.Close(context.Background())

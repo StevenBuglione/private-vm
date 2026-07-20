@@ -744,6 +744,12 @@ metadata fetch, zero-payload evidence, path/case hazards, safe-policy blocked
 types, explicit selection and all capacity stages; success, error,
 cancellation, timeout/stall pause, VPN-loss pause, exact manifest matching,
 sync/unmount, idempotent cleanup and retryable downloader absence audit.
+Capacity-specific tests use distinct stage values and prove the minimum-stage
+decision, insufficient quarantine/scanner/reconstruction/destination failures,
+checked-arithmetic overflow, a fresh quarantine probe and downstream receipt
+on reselection, cancellation/deadline propagation, stable redacted errors and
+the production role-plan composition. Protobuf descriptor tests prevent paths,
+devices, mounts, endpoints, names or hashes from entering the capacity receipt.
 
 The HTTP contract test proves only loopback API origin, fixed quarantine path,
 paused add and bounded/redacted responses. The Linux file verifier uses

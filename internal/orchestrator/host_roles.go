@@ -78,7 +78,7 @@ type HostRuntimePreparer interface {
 type TorrentRelay interface {
 	Add(context.Context, torrent.InputKind, io.Reader) (*privatevmv1.TorrentMetadata, error)
 	Metadata(context.Context) (*privatevmv1.TorrentMetadata, error)
-	Select(context.Context, []uint32) (*privatevmv1.TorrentMetadata, error)
+	Select(context.Context, []uint32, torrent.CapacityEvidence) (*privatevmv1.TorrentMetadata, error)
 	Start(context.Context, func(*privatevmv1.TorrentEvent) error) error
 	Pause(context.Context) (*privatevmv1.TorrentStatus, error)
 	Status(context.Context) (*privatevmv1.TorrentStatus, error)
@@ -102,6 +102,7 @@ type HostRoles struct {
 	Images          HostImageSelector
 	Storage         HostStorageAllocator
 	Runtime         HostRuntimeStarter
+	Capacities      TorrentCapacitySource
 	approvedSources *usb.ApprovedSourceRegistry
 	states          map[string]*hostRoleState
 }
@@ -354,12 +355,20 @@ func (roles *HostRoles) Metadata(ctx context.Context, snapshot session.Snapshot)
 	return relay.Metadata(ctx)
 }
 
-func (roles *HostRoles) Select(ctx context.Context, snapshot session.Snapshot, indexes []uint32) (*privatevmv1.TorrentMetadata, error) {
+func (roles *HostRoles) Select(ctx context.Context, snapshot session.Snapshot, indexes []uint32, destination torrent.Destination) (*privatevmv1.TorrentMetadata, error) {
+	state, err := roles.state(snapshot)
+	if err != nil || roles.Capacities == nil {
+		return nil, torrent.ErrCapacityEvidence
+	}
+	evidence, err := roles.Capacities.Evidence(ctx, snapshot, state.plan, destination)
+	if err != nil {
+		return nil, err
+	}
 	relay, err := roles.torrent(snapshot)
 	if err != nil {
 		return nil, err
 	}
-	return relay.Select(ctx, append([]uint32(nil), indexes...))
+	return relay.Select(ctx, append([]uint32(nil), indexes...), evidence)
 }
 
 func (roles *HostRoles) Start(ctx context.Context, snapshot session.Snapshot, emit func(*privatevmv1.TorrentEvent) error) error {

@@ -368,6 +368,14 @@ payload-byte evidence is zero and every file priority has been set to zero.
 The downloader controller serializes selection, capacity approval, start,
 pause, progress and seal state. `StartDownload` is unavailable before explicit
 selection and all quarantine/scan/reconstruction/destination capacity gates.
+The host selection request carries a closed `TorrentDestination` enum. The
+daemon derives a schema-v1 `TorrentCapacityReceipt` from immutable role plans
+for scanner handoff, scanner reconstruction scratch and the declared receiver;
+the authenticated guest request contains only that numeric receipt and file
+indexes. The downloader re-probes quarantine free bytes inside the guest for
+every selection attempt. Capacity RPCs contain no paths, mounts, device nodes,
+endpoints or QEMU selectors, and absent/zero/unsupported evidence fails with
+`TORRENT_CAPACITY_EVIDENCE_UNAVAILABLE` before qBittorrent selection changes.
 VPN loss invokes the same bounded pause owner. `SealQuarantine` verifies exact
 selected paths/sizes and hashes, shuts down qBittorrent, syncs and unmounts in
 the guest; the host coordinator must additionally destroy and audit the

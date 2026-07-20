@@ -15,6 +15,7 @@ var (
 	ErrMetadataUnavailable = errors.New("torrent metadata unavailable")
 	ErrUnsafeMetadata      = errors.New("unsafe torrent metadata")
 	ErrInvalidSelection    = errors.New("invalid torrent selection")
+	ErrCapacityEvidence    = errors.New("torrent capacity evidence unavailable")
 	ErrCapacity            = errors.New("insufficient torrent capacity")
 	ErrNotApproved         = errors.New("torrent payload not approved")
 	ErrDownloadStalled     = errors.New("torrent download stalled")
@@ -57,6 +58,10 @@ func blockedType() error {
 
 func insufficientCapacity() error {
 	return apperror.Wrap("TORRENT_CAPACITY_INSUFFICIENT", exitcode.Storage, "The selected torrent cannot fit every required encrypted workflow stage.", "Reduce the selection or provide more encrypted quarantine, scan, reconstruction, and destination capacity.", ErrCapacity)
+}
+
+func capacityEvidenceUnavailable() error {
+	return apperror.Wrap("TORRENT_CAPACITY_EVIDENCE_UNAVAILABLE", exitcode.Storage, "Independent capacity evidence is unavailable for the complete torrent workflow.", "Select a supported downstream destination and retry after its scanner, reconstruction, and destination capacity can be verified.", ErrCapacityEvidence)
 }
 
 func notApproved() error {
@@ -112,6 +117,8 @@ func NormalizeError(err error) error {
 		return invalidSelection()
 	case errors.Is(err, ErrCapacity):
 		return insufficientCapacity()
+	case errors.Is(err, ErrCapacityEvidence):
+		return capacityEvidenceUnavailable()
 	case errors.Is(err, ErrNotApproved):
 		return notApproved()
 	case errors.Is(err, ErrDownloadStalled):

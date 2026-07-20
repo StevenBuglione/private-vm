@@ -119,7 +119,7 @@ func (*fakeTorrentRelay) Add(context.Context, torrent.InputKind, io.Reader) (*pr
 func (*fakeTorrentRelay) Metadata(context.Context) (*privatevmv1.TorrentMetadata, error) {
 	return &privatevmv1.TorrentMetadata{PayloadPaused: true}, nil
 }
-func (*fakeTorrentRelay) Select(context.Context, []uint32) (*privatevmv1.TorrentMetadata, error) {
+func (*fakeTorrentRelay) Select(context.Context, []uint32, torrent.CapacityEvidence) (*privatevmv1.TorrentMetadata, error) {
 	return &privatevmv1.TorrentMetadata{PayloadPaused: true, SelectedSizeBytes: 1}, nil
 }
 func (*fakeTorrentRelay) Start(context.Context, func(*privatevmv1.TorrentEvent) error) error {

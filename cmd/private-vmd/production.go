@@ -127,6 +127,7 @@ func composeProductionHost(ctx context.Context, cfg config.Config) (*productionH
 		profiles.Close()
 		return nil, err
 	}
+	roles.Capacities = productionTorrentCapacitySource()
 	approvedSources := usb.NewApprovedSourceRegistry()
 	if err := roles.ConfigureApprovedSources(approvedSources); err != nil {
 		profiles.Close()
@@ -166,6 +167,16 @@ func composeProductionHost(ctx context.Context, cfg config.Config) (*productionH
 		return nil, err
 	}
 	return &productionHostServices{profiles: profiles, resolver: resolver, roles: roles, scanners: scanners, exporters: exporters, usbSources: approvedSources}, nil
+}
+
+func productionTorrentCapacitySource() orchestrator.PlannedTorrentCapacitySource {
+	return orchestrator.PlannedTorrentCapacitySource{
+		ScannerScratchBytes:         guest.DefaultProductionScannerConfig().SandboxMaxBytes,
+		WorkstationDestinationBytes: 32 << 30,
+		ArchiveExpansionBytes:       4 << 30,
+		ReconstructionBytes:         1 << 30,
+		MaximumSelectedBytes:        500 << 30,
+	}
 }
 
 func productionProbeTargets(configuration config.VPN) (guestvpn.ProbeTargets, error) {

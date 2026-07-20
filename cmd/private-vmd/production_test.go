@@ -6,12 +6,25 @@ import (
 	"testing"
 
 	"github.com/StevenBuglione/private-vm/internal/config"
+	"github.com/StevenBuglione/private-vm/internal/guest"
 	"github.com/StevenBuglione/private-vm/internal/storage"
 )
 
 type versionRunner struct {
 	output []byte
 	err    error
+}
+
+func TestProductionTorrentCapacityUsesIndependentRoleContracts(t *testing.T) {
+	source := productionTorrentCapacitySource()
+	if source.ScannerScratchBytes != guest.DefaultProductionScannerConfig().SandboxMaxBytes ||
+		source.WorkstationDestinationBytes != 32<<30 || source.ArchiveExpansionBytes != 4<<30 ||
+		source.ReconstructionBytes != 1<<30 || source.MaximumSelectedBytes != 500<<30 {
+		t.Fatalf("production capacity source = %+v", source)
+	}
+	if source.USBDestinationBytes != 0 {
+		t.Fatal("USB capacity was invented before an enrolled destination exists")
+	}
 }
 
 func TestProductionProbeTargetsComeFromValidatedConfiguration(t *testing.T) {
