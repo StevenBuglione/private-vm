@@ -60,6 +60,24 @@ evidence.
 
 Do not weaken host nftables to "make it work."
 
+For the opt-in real Linux network-backend proof, run the following from the
+repository root. It stays below the workstation's source-gate memory budget and
+creates networking only inside an unprivileged user-owned network namespace:
+
+```bash
+systemd-run --user --scope --quiet \
+  -p MemoryHigh=1G -p MemoryMax=1536M -p MemorySwapMax=0 \
+  nix develop --offline --command make verify-network-live
+```
+
+The command emits Go's JSON test stream and exactly one redacted
+`NETWORK_NAMESPACE_INTEGRATION_VERIFIED` record. A missing record, skipped test,
+nonzero exit, timeout or cleanup failure is not evidence. This gate does not use
+the Proton profile and does not touch the host network namespace. It enables
+global IPv6 forwarding only inside the disposable outer test namespace. Keep
+the production-host forwarding prerequisite open until the installed module and
+strict doctor prove it or a replacement ADR changes that boundary.
+
 ## Scanner definitions fail
 
 - stop workflow
