@@ -801,6 +801,23 @@ idempotent abort on failure, cancellation, timeout, digest mismatch, and cleanup
 failure. Real USB writes remain the destructive system gate; encrypted bundles
 remain fail closed pending their separate contract.
 
+The workstation image boot gate installs its test-only authenticated VSOCK
+client, starts guestd inside the production `ReadWritePaths` namespace, and
+therefore exercises the two fixed endpoint bind mounts while nested mount
+crossings remain forbidden. The exporter image boot gate starts guestd with an
+explicit service-private PATH containing only its declared fixed tool closure;
+it does not rely on an interactive profile.
+
+`TestSystemdWorkspaceSandbox` is an opt-in service-namespace regression test.
+The image boot gate runs the same boundary with the production syscall filter:
+path-based chmod calls are denied while mandatory `openat2` and the fixed
+anonymous-secret `fchmod(0600)` remain available.
+
+The workstation module asserts the exact three-capability set
+`CAP_DAC_OVERRIDE`, `CAP_IPC_LOCK`, `CAP_NET_ADMIN`; the boot gate retains the
+private home at mode `0700` while proving guestd can authenticate and serve the
+pinned workspace endpoints.
+
 ## Test safety
 
 Tests never:

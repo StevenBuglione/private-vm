@@ -23,7 +23,10 @@ composition. It creates, opens, lists, renames, unlinks, and synchronizes files
 relative to independently leased pinned descriptors. It also compares the
 configured directory pathname's device and inode with the pinned identity
 before publication and after bounded operations. A missing, replaced, linked,
-cross-mount, or non-directory workspace component fails closed.
+or non-directory workspace component fails closed. ADR 0026 refines the
+mount-boundary rule for the two explicit systemd-created `ReadWritePaths`
+endpoint bind mounts; traversal below either pinned endpoint still refuses
+mount crossings.
 
 An import consists of one begin frame, no more than 8,192 non-empty chunks of
 at most 1 MiB, and one end frame. The read immediately after the end frame must

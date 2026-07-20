@@ -43,6 +43,12 @@ in
 
   environment.systemPackages = exporterToolPackages;
 
+  # guestd resolves this fixed allow-list once at startup and retains the
+  # resulting absolute store paths. NixOS service PATHs do not inherit the
+  # interactive system profile, so declare the same minimal tool closure on
+  # the unit instead of relying on an ambient PATH.
+  systemd.services.private-vm-guestd.path = exporterToolPackages;
+
   environment.etc."private-vm/exporter-tools.json" = {
     mode = "0444";
     text = builtins.toJSON exporterToolInventory;

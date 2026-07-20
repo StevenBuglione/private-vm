@@ -113,10 +113,24 @@ received SHA-256 values, synchronizes it, and uses a no-replace rename. Guestd
 pins `Inbox` and `Export` directory descriptors at composition and performs
 create, open, list, rename, unlink, and fsync operations relative to leased
 copies. Device/inode checks reject pathname replacement before publication or
-completion. Links, directories, traversal names, reordered, empty or oversized
+completion. The initial fixed endpoints may be systemd's two declared
+`ReadWritePaths` bind mounts; all resolution below either pinned endpoint
+refuses further mount crossings. Links, directories, traversal names,
+reordered, empty or oversized
 chunks, excessive frame counts, extra bytes, hash mismatch, cancellation,
 timeout, directory replacement, and receipt failure remove the staged or newly
 published import.
+
+The guestd sandbox keeps `openat2` available as required by ADR 0021 and denies
+all path-based chmod-family syscalls explicitly. Its sole fd-only `fchmod` sets
+a new anonymous secret memfd to fixed mode `0600`. This replaces systemd's coarse
+`RestrictSUIDSGID` filter, whose seccomp implementation rejects `openat2`,
+without adding a pathname-based fallback.
+
+The private user's home remains mode `0700`. Only workstation guestd receives
+`CAP_DAC_OVERRIDE` so it can traverse that home; `ProtectSystem=strict` and the
+two exact `ReadWritePaths` continue to confine writes to `Inbox` and `Export`.
+Other role capability sets are unchanged.
 
 The host atomically opens a trusted import's parent and file with `openat2` and
 no-symlink resolution, then retains both descriptors. Preflight hashing and

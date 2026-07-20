@@ -15,6 +15,20 @@ import (
 	"google.golang.org/grpc"
 )
 
+func TestSystemdWorkspaceSandbox(t *testing.T) {
+	root := os.Getenv("PRIVATE_VM_WORKSPACE_SANDBOX_ROOT")
+	if root == "" {
+		t.Skip("set PRIVATE_VM_WORKSPACE_SANDBOX_ROOT inside the hardened service namespace")
+	}
+	server, err := New(Config{Root: root, MaxFileBytes: 1024, MaxWorkspaceBytes: 2048})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := server.Close(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestImportFileSuccessAndFailureCleanup(t *testing.T) {
 	server, root := testServer(t)
 	data := []byte("trusted input")

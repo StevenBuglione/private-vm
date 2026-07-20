@@ -35,6 +35,12 @@ type Config struct {
 	MaxWorkspaceBytes uint64
 }
 
+var (
+	ErrWorkspaceRoot   = errors.New("workspace root must exist without symbolic links")
+	ErrWorkspaceInbox  = errors.New("workspace Inbox must exist without symbolic links")
+	ErrWorkspaceExport = errors.New("workspace Export must exist without symbolic links")
+)
+
 type Server struct {
 	privatevmv1.UnimplementedWorkstationGuestServiceServer
 	inbox    *pinnedDirectory
@@ -93,17 +99,17 @@ func New(config Config) (*Server, error) {
 	}
 	rootFD, err := openDirectoryPath(config.Root)
 	if err != nil {
-		return nil, errors.New("workspace root must exist without symbolic links")
+		return nil, errors.Join(ErrWorkspaceRoot, err)
 	}
 	defer unix.Close(rootFD)
 	inbox, err := pinDirectoryAt(rootFD, filepath.Join(config.Root, "Inbox"), "Inbox")
 	if err != nil {
-		return nil, errors.New("workspace Inbox must exist without symbolic links")
+		return nil, errors.Join(ErrWorkspaceInbox, err)
 	}
 	export, err := pinDirectoryAt(rootFD, filepath.Join(config.Root, "Export"), "Export")
 	if err != nil {
 		_ = inbox.close()
-		return nil, errors.New("workspace Export must exist without symbolic links")
+		return nil, errors.Join(ErrWorkspaceExport, err)
 	}
 	server := &Server{inbox: inbox, export: export, maxFile: maxFile, maxTotal: maxTotal,
 		verified: make(map[string]receipt), sent: make(map[string]receipt)}
@@ -472,8 +478,12 @@ func openDirectoryPath(path string) (int, error) {
 
 func pinDirectoryAt(parentFD int, path, name string) (*pinnedDirectory, error) {
 	fd, err := unix.Openat2(parentFD, name, &unix.OpenHow{
-		Flags:   unix.O_RDONLY | unix.O_DIRECTORY | unix.O_CLOEXEC | unix.O_NOFOLLOW,
-		Resolve: unix.RESOLVE_BENEATH | unix.RESOLVE_NO_SYMLINKS | unix.RESOLVE_NO_MAGICLINKS | unix.RESOLVE_NO_XDEV,
+		Flags: unix.O_RDONLY | unix.O_DIRECTORY | unix.O_CLOEXEC | unix.O_NOFOLLOW,
+		// systemd implements the unit's narrow ReadWritePaths with bind mounts,
+		// so each explicitly configured endpoint may be a mount boundary. Pin
+		// that endpoint once, then keep RESOLVE_NO_XDEV on every operation below
+		// its dirfd to prevent later traversal across another filesystem.
+		Resolve: unix.RESOLVE_BENEATH | unix.RESOLVE_NO_SYMLINKS | unix.RESOLVE_NO_MAGICLINKS,
 	})
 	if err != nil {
 		return nil, err
