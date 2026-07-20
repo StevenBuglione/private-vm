@@ -26,6 +26,7 @@ func (probe fakeProbe) DaemonActive(context.Context) (bool, error) {
 type fakeActions struct {
 	activateErr   error
 	deactivateErr error
+	reloadErr     error
 	activations   int
 	deactivations int
 	reloads       int
@@ -43,7 +44,7 @@ func (actions *fakeActions) Deactivate(context.Context) error {
 
 func (actions *fakeActions) Reload(context.Context) error {
 	actions.reloads++
-	return nil
+	return actions.reloadErr
 }
 
 func TestInstallAndUninstallPreserveConfigurationAndState(t *testing.T) {
@@ -101,6 +102,63 @@ func TestInstallAndUninstallPreserveConfigurationAndState(t *testing.T) {
 	if mustRead(t, configPath) != "operator-config\n" || mustRead(t, cacheSentinel) != "cache\n" {
 		t.Fatal("uninstall changed preserved configuration or cache")
 	}
+}
+
+func TestUpgradeReplacesManagedFilesAndPreservesOperatorState(t *testing.T) {
+	root := t.TempDir()
+	actions := &fakeActions{}
+	installer := Installer{BundleRoot: makeBundleVersion(t, "1.0.0-rc.1"), Root: root, Probe: fakeProbe{uid: 0}, Actions: actions}
+	if _, err := installer.Install(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	configPath := underRoot(root, "/etc/private-vm/config.toml")
+	mustWrite(t, configPath, []byte("operator-config\n"), 0o600)
+	cacheSentinel := underRoot(root, "/var/lib/private-vm/images/sentinel")
+	mustWrite(t, cacheSentinel, []byte("cache\n"), 0o600)
+
+	upgrade := makeBundleVersion(t, "1.0.0-rc.2")
+	mustWrite(t, filepath.Join(upgrade, "private-vm"), []byte("upgraded-cli\n"), 0o755)
+	rewriteBundleManifest(t, upgrade, "1.0.0-rc.2")
+	installer.BundleRoot = upgrade
+	plan, err := installer.PlanInstall(context.Background())
+	if err != nil || !hasChange(plan, OperationReplace, "/usr/bin/private-vm") || !hasChange(plan, OperationPreserve, "/etc/private-vm/config.toml") {
+		t.Fatalf("upgrade plan=%#v err=%v", plan, err)
+	}
+	if _, err := installer.Install(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if mustRead(t, underRoot(root, "/usr/bin/private-vm")) != "upgraded-cli\n" ||
+		mustRead(t, configPath) != "operator-config\n" || mustRead(t, cacheSentinel) != "cache\n" {
+		t.Fatal("upgrade did not replace only managed immutable content")
+	}
+	if actions.activations != 2 || actions.deactivations != 0 {
+		t.Fatalf("unexpected upgrade activation sequence: %#v", actions)
+	}
+	assertNoTransactionFiles(t, root)
+}
+
+func TestUninstallReloadFailureRestoresManagedInstallation(t *testing.T) {
+	root := t.TempDir()
+	actions := &fakeActions{}
+	installer := Installer{BundleRoot: makeBundle(t), Root: root, Probe: fakeProbe{uid: 0}, Actions: actions}
+	if _, err := installer.Install(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	installedCLI := mustRead(t, underRoot(root, "/usr/bin/private-vm"))
+	actions.reloadErr = errors.New("injected reload failure")
+	if _, err := installer.Uninstall(context.Background()); err == nil {
+		t.Fatal("uninstall reload failure was accepted")
+	}
+	if mustRead(t, underRoot(root, "/usr/bin/private-vm")) != installedCLI {
+		t.Fatal("uninstall rollback did not restore managed content")
+	}
+	if _, err := os.Stat(underRoot(root, InstalledManifest)); err != nil {
+		t.Fatalf("uninstall rollback did not restore manifest: %v", err)
+	}
+	if actions.deactivations != 1 || actions.reloads != 1 || actions.activations != 2 {
+		t.Fatalf("unexpected uninstall rollback actions: %#v", actions)
+	}
+	assertNoTransactionFiles(t, root)
 }
 
 func TestActivationFailureRollsBackEveryManagedFile(t *testing.T) {
@@ -222,13 +280,23 @@ func TestManifestRejectsUnknownDuplicateAndSymbolicContent(t *testing.T) {
 }
 
 func makeBundle(t *testing.T) string {
+	return makeBundleVersion(t, "1.0.0-rc.1")
+}
+
+func makeBundleVersion(t *testing.T, version string) string {
 	t.Helper()
 	root := t.TempDir()
 	for index, template := range fileTemplates {
 		value := []byte("private-vm fixture " + template.source + " " + string(rune('a'+index)) + "\n")
 		mustWrite(t, filepath.Join(root, filepath.FromSlash(template.source)), value, os.FileMode(template.mode))
 	}
-	manifest, err := BuildManifest(context.Background(), root, "1.0.0-rc.1")
+	rewriteBundleManifest(t, root, version)
+	return root
+}
+
+func rewriteBundleManifest(t *testing.T, root, version string) {
+	t.Helper()
+	manifest, err := BuildManifest(context.Background(), root, version)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -237,7 +305,6 @@ func makeBundle(t *testing.T) string {
 		t.Fatal(err)
 	}
 	mustWrite(t, filepath.Join(root, "manifest.json"), encoded, 0o444)
-	return root
 }
 
 func underRoot(root, absolute string) string {

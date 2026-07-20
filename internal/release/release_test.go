@@ -88,12 +88,43 @@ func prepareFixture(t *testing.T, runner sourceRunner, images imageVerifier) (Pr
 }
 
 func TestPrepareSuccessAndFailureCleanup(t *testing.T) {
-	result, _ := prepareFixture(t, fakeSource{}, fakeImages{})
+	result, options := prepareFixture(t, fakeSource{}, fakeImages{})
 	if len(result.Index.Packages) != 3 || len(result.Index.Images) != 6 {
 		t.Fatal("incomplete release index")
 	}
 	if _, err := os.Stat(filepath.Join(result.Directory, "release-index.json")); err != nil {
 		t.Fatal(err)
+	}
+	entries, err := os.ReadDir(result.Directory)
+	if err != nil || len(entries) != 13 {
+		t.Fatalf("prepared release entries=%d err=%v", len(entries), err)
+	}
+	inputs := map[ArtifactKind]string{ArtifactDEB: options.DEBPath, ArtifactRPM: options.RPMPath, ArtifactGeneric: options.GenericPath}
+	for position, kind := range artifactKinds {
+		artifact := result.Index.Packages[position]
+		if artifact.Kind != kind || artifact.File != canonicalArtifactName(kind, "1.2.3") {
+			t.Fatalf("noncanonical %s artifact: %#v", kind, artifact)
+		}
+		copied, copiedErr := os.ReadFile(filepath.Join(result.Directory, artifact.File))
+		input, inputErr := os.ReadFile(inputs[kind])
+		if copiedErr != nil || inputErr != nil || string(copied) != string(input) {
+			t.Fatalf("%s package bytes changed during construction", kind)
+		}
+		manifestBytes, manifestErr := os.ReadFile(filepath.Join(result.Directory, artifact.Manifest))
+		var manifest PackageManifest
+		if manifestErr != nil || decodeClosed(manifestBytes, &manifest) != nil || validatePackageManifest(manifest, artifact, result.Index) != nil {
+			t.Fatalf("%s package manifest is invalid: %v", kind, manifestErr)
+		}
+		sbomBytes, sbomErr := os.ReadFile(filepath.Join(result.Directory, artifact.SBOM))
+		var sbom spdxDocument
+		if sbomErr != nil || decodeClosed(sbomBytes, &sbom) != nil || sbom.SPDXVersion != "SPDX-2.3" || len(sbom.Files) != 1 || len(sbom.Packages) != 1 {
+			t.Fatalf("%s SPDX evidence is invalid: %v", kind, sbomErr)
+		}
+		if predicate := result.Predicates[kind]; filepath.Dir(predicate) != result.Directory {
+			t.Fatalf("%s predicate escaped staging: %q", kind, predicate)
+		} else if info, statErr := os.Stat(predicate); statErr != nil || !info.Mode().IsRegular() || info.Size() < 1 {
+			t.Fatalf("%s predicate is unavailable: %v", kind, statErr)
+		}
 	}
 
 	for _, test := range []struct {
@@ -173,17 +204,20 @@ func (verifier fakeProvenance) Verify(context.Context, []byte, PackageManifest) 
 }
 
 type fakePublisher struct {
-	mu        sync.Mutex
-	uploads   int
-	failAt    int
-	deleted   bool
-	published bool
-	block     bool
-	deleteErr error
+	mu          sync.Mutex
+	uploads     int
+	failAt      int
+	deleted     bool
+	published   bool
+	block       bool
+	blockUpload bool
+	cancel      context.CancelFunc
+	deleteErr   error
 }
 
 type fakeAcceptance struct {
 	failAt       int
+	blockAt      int
 	calls        int
 	environments [][]string
 }
@@ -208,6 +242,10 @@ func (fetcher fakeFetcher) Fetch(ctx context.Context, _ string) (map[string][]by
 func (runner *fakeAcceptance) Run(ctx context.Context, _ string, _ []string, environment []string) error {
 	runner.calls++
 	runner.environments = append(runner.environments, append([]string(nil), environment...))
+	if runner.blockAt == runner.calls {
+		<-ctx.Done()
+		return ctx.Err()
+	}
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -224,10 +262,17 @@ func (publisher *fakePublisher) CreateDraft(ctx context.Context, _, _ string) (i
 	}
 	return 7, "fixed", nil
 }
-func (publisher *fakePublisher) Upload(_ context.Context, _ int64, _ string, _ releaseAsset) error {
+func (publisher *fakePublisher) Upload(ctx context.Context, _ int64, _ string, _ releaseAsset) error {
 	publisher.mu.Lock()
 	defer publisher.mu.Unlock()
 	publisher.uploads++
+	if publisher.blockUpload {
+		if publisher.cancel != nil {
+			publisher.cancel()
+		}
+		<-ctx.Done()
+		return ctx.Err()
+	}
 	if publisher.failAt == publisher.uploads {
 		return errors.New("upload detail")
 	}
@@ -243,6 +288,10 @@ func (publisher *fakePublisher) DeleteDraft(context.Context, int64) error {
 }
 
 func publishFixture(t *testing.T, publisher *fakePublisher) error {
+	return publishContextFixture(t, context.Background(), publisher)
+}
+
+func publishContextFixture(t *testing.T, ctx context.Context, publisher *fakePublisher) error {
 	t.Helper()
 	result, options := prepareFixture(t, fakeSource{}, fakeImages{})
 	provenance := map[ArtifactKind]string{}
@@ -259,7 +308,7 @@ func publishFixture(t *testing.T, publisher *fakePublisher) error {
 	}
 	defer token.Destroy()
 	returnErr := func() error {
-		_, err := publish(context.Background(), PublishOptions{Directory: result.Directory, ReleaseTag: options.ReleaseTag, SourceCommit: options.SourceCommit, Provenance: provenance, Token: token, Timeout: time.Second}, publisher, fakeProvenance{})
+		_, err := publish(ctx, PublishOptions{Directory: result.Directory, ReleaseTag: options.ReleaseTag, SourceCommit: options.SourceCommit, Provenance: provenance, Token: token, Timeout: time.Second}, publisher, fakeProvenance{})
 		return err
 	}()
 	if _, statErr := os.Stat(result.Directory); !errors.Is(statErr, os.ErrNotExist) {
@@ -292,30 +341,22 @@ func TestPublishSuccessFailureRollbackAndCleanup(t *testing.T) {
 func TestPublishCancellationAndTimeout(t *testing.T) {
 	for _, code := range []string{CodeTimeout, CodeCancelled} {
 		t.Run(code, func(t *testing.T) {
-			publisher := &fakePublisher{block: true}
+			var ctx context.Context
+			var cancel context.CancelFunc
 			if code == CodeCancelled {
-				// A pre-cancelled context is exercised through a blocking source in prepare;
-				// publication cancellation uses the same stable context mapper.
-				if got := contextReleaseError(func() context.Context { c, x := context.WithCancel(context.Background()); x(); return c }(), context.Canceled); !strings.Contains(got.Error(), CodeCancelled) {
-					t.Fatal(got)
-				}
-				return
+				ctx, cancel = context.WithCancel(context.Background())
+			} else {
+				ctx, cancel = context.WithTimeout(context.Background(), 2*time.Second)
 			}
-			result, options := prepareFixture(t, fakeSource{}, fakeImages{})
-			provenance := map[ArtifactKind]string{}
-			for _, kind := range artifactKinds {
-				path := filepath.Join(filepath.Dir(result.Directory), string(kind)+".bundle")
-				_ = os.WriteFile(path, []byte("bundle"), 0o600)
-				provenance[kind] = path
-			}
-			token, _ := secret.New([]byte("token"))
-			defer token.Destroy()
-			ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond)
 			defer cancel()
-			_, err := publish(ctx, PublishOptions{Directory: result.Directory, ReleaseTag: options.ReleaseTag, SourceCommit: options.SourceCommit, Provenance: provenance, Token: token, Timeout: time.Second}, publisher, fakeProvenance{})
+			publisher := &fakePublisher{blockUpload: true}
+			if code == CodeCancelled {
+				publisher.cancel = cancel
+			}
+			err := publishContextFixture(t, ctx, publisher)
 			var safe *Error
-			if !errors.As(err, &safe) || safe.Code != CodeTimeout {
-				t.Fatalf("got %v", err)
+			if !errors.As(err, &safe) || safe.Code != code || !publisher.deleted || publisher.uploads != 1 {
+				t.Fatalf("got %v publisher=%+v", err, publisher)
 			}
 		})
 	}
@@ -337,7 +378,7 @@ func TestSourceAcceptanceEvidenceAndFailFast(t *testing.T) {
 				t.Fatalf("unexpected result: %v calls=%d", err, runner.calls)
 			}
 			jsonBytes, readErr := os.ReadFile(jsonPath)
-			if readErr != nil || !strings.Contains(string(jsonBytes), `"status":"blocked"`) || strings.Contains(string(jsonBytes), "private command output") {
+			if readErr != nil || !strings.Contains(string(jsonBytes), `"status":"blocked"`) || strings.Contains(string(jsonBytes), "private command output") || strings.Contains(string(jsonBytes), root) || strings.Contains(string(jsonBytes), "PATH=") {
 				t.Fatalf("unsafe JSON evidence: %s %v", jsonBytes, readErr)
 			}
 			junitBytes, readErr := os.ReadFile(junitPath)
@@ -345,13 +386,31 @@ func TestSourceAcceptanceEvidenceAndFailFast(t *testing.T) {
 				t.Fatalf("invalid JUnit: %s %v", junitBytes, readErr)
 			}
 			environment := strings.Join(runner.environments[0], "\n")
-			for _, required := range []string{"GOMAXPROCS=2", "GOMEMLIMIT=2500MiB", "max-jobs = 1", "cores = 2"} {
+			for _, required := range []string{"CGO_ENABLED=0", "GOMAXPROCS=2", "GOMEMLIMIT=1536MiB", "max-jobs = 1", "cores = 2"} {
 				if !strings.Contains(environment, required) {
 					t.Fatalf("missing limit %q", required)
 				}
 			}
+			if sourceAcceptanceCommands[0].name != "packaging-go-test" || sourceAcceptanceCommands[1].name != "packaging-go-vet" {
+				t.Fatal("packaging transactions are absent from source acceptance")
+			}
 		})
 	}
+	t.Run("bounded-command-timeout", func(t *testing.T) {
+		root := t.TempDir()
+		ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond)
+		defer cancel()
+		runner := &fakeAcceptance{blockAt: 1}
+		err := runSourceAcceptance(ctx, root, filepath.Join(root, "timeout.json"), filepath.Join(root, "timeout.xml"), runner)
+		var safe *Error
+		if !errors.As(err, &safe) || safe.Code != CodeTimeout || runner.calls != 1 {
+			t.Fatalf("timeout result=%v calls=%d", err, runner.calls)
+		}
+		evidence, readErr := os.ReadFile(filepath.Join(root, "timeout.json"))
+		if readErr != nil || !strings.Contains(string(evidence), `"code":"RELEASE_TIMEOUT"`) || strings.Contains(string(evidence), root) {
+			t.Fatalf("unsafe timeout evidence: %s %v", evidence, readErr)
+		}
+	})
 }
 
 func TestAnonymousVerifySuccessFailureAndCancellation(t *testing.T) {

@@ -32,9 +32,13 @@ type acceptanceCommand struct {
 	arguments        []string
 }
 
+const sourceAcceptanceCommandTimeout = 30 * time.Minute
+
 var sourceAcceptanceCommands = []acceptanceCommand{
+	{"packaging-go-test", "go", []string{"test", "-p=1", "./internal/systeminstall", "./internal/cli", "./cmd/private-vm", "./cmd/private-vm-bundle-manifest"}},
+	{"packaging-go-vet", "go", []string{"vet", "-p=1", "./internal/systeminstall", "./internal/cli", "./cmd/private-vm", "./cmd/private-vm-bundle-manifest"}},
 	{"release-go-test", "go", []string{"test", "-p=1", "./internal/release", "./cmd/private-vm-release", "./cmd/private-vm-release-acceptance"}},
-	{"release-go-vet", "go", []string{"vet", "./internal/release", "./cmd/private-vm-release", "./cmd/private-vm-release-acceptance"}},
+	{"release-go-vet", "go", []string{"vet", "-p=1", "./internal/release", "./cmd/private-vm-release", "./cmd/private-vm-release-acceptance"}},
 	{"packaging-policy", "python3", []string{"tools/check_packaging_assets.py"}},
 	{"schema-validation", "python3", []string{"tools/validate_schemas.py"}},
 	{"example-validation", "python3", []string{"tools/validate_examples.py"}},
@@ -70,7 +74,7 @@ func runSourceAcceptance(ctx context.Context, workDir, jsonPath, junitPath strin
 		return releaseError(CodeInvalid, "The acceptance evidence request is unsafe.", "Use exact new JSON and JUnit paths outside the source tree root.", nil)
 	}
 	evidence := AcceptanceEvidence{SchemaVersion: SchemaVersion, Project: "private-vm", Profile: "source-only", Cases: make([]AcceptanceCase, 0, len(sourceAcceptanceCommands)+len(unavailableLiveGates))}
-	environment := []string{"PATH=" + os.Getenv("PATH"), "LANG=C.UTF-8", "LC_ALL=C.UTF-8", "TZ=UTC", "GOMAXPROCS=2", "GOMEMLIMIT=2500MiB", "NIX_CONFIG=max-jobs = 1\ncores = 2"}
+	environment := []string{"PATH=" + os.Getenv("PATH"), "LANG=C.UTF-8", "LC_ALL=C.UTF-8", "TZ=UTC", "CGO_ENABLED=0", "GOMAXPROCS=2", "GOMEMLIMIT=1536MiB", "NIX_CONFIG=max-jobs = 1\ncores = 2"}
 	if home := os.Getenv("HOME"); home != "" {
 		environment = append(environment, "HOME="+home)
 	}
@@ -80,12 +84,20 @@ func runSourceAcceptance(ctx context.Context, workDir, jsonPath, junitPath strin
 	var gateErr error
 	for _, command := range sourceAcceptanceCommands {
 		start := time.Now()
-		err := runner.Run(ctx, command.executable, command.arguments, environment)
+		commandCtx, commandCancel := context.WithTimeout(ctx, sourceAcceptanceCommandTimeout)
+		err := runner.Run(commandCtx, command.executable, command.arguments, environment)
+		commandContextErr := commandCtx.Err()
+		commandCancel()
 		status, code := "passed", "OK"
 		if err != nil {
 			status = "failed"
 			code = "SOURCE_GATE_FAILED"
 			gateErr = err
+		}
+		if errors.Is(commandContextErr, context.DeadlineExceeded) {
+			status = "failed"
+			code = CodeTimeout
+			gateErr = context.DeadlineExceeded
 		}
 		if errors.Is(ctx.Err(), context.Canceled) {
 			status = "failed"
