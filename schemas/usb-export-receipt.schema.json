@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/StevenBuglione/private-vm/schemas/usb-export-receipt.schema.json",
+  "title": "private-vm verified USB export receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": { "const": 1 },
+    "enrollment_id": { "type": "string", "pattern": "^usb-[0-9a-f]{16}$" },
+    "bytes_written": { "type": "integer", "minimum": 1 },
+    "scanner_relay_hash_equal": { "const": true },
+    "relay_exporter_hash_equal": { "const": true },
+    "exporter_reread_hash_equal": { "const": true },
+    "file_synced": { "const": true },
+    "filesystem_synced": { "const": true },
+    "atomic_rename": { "const": true },
+    "usb_unmounted": { "const": true },
+    "usb_detached": { "const": true },
+    "exporter_stopped": { "const": true },
+    "cleanup_complete": { "const": true }
+  },
+  "required": [
+    "schema_version",
+    "enrollment_id",
+    "bytes_written",
+    "scanner_relay_hash_equal",
+    "relay_exporter_hash_equal",
+    "exporter_reread_hash_equal",
+    "file_synced",
+    "filesystem_synced",
+    "atomic_rename",
+    "usb_unmounted",
+    "usb_detached",
+    "exporter_stopped",
+    "cleanup_complete"
+  ]
+}

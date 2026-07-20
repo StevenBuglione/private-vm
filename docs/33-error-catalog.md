@@ -42,6 +42,22 @@ CLI API.
 | `OUTPUT_RENDER_FAILED` | 70 | The CLI could not safely encode or write bounded output. Wrapped writer or encoder details are not exposed. |
 | `INTERNAL_ERROR` | 70 | An invalid or unclassified internal result was normalized to the redacted internal-error contract. |
 | `COMPLETION_FAILED` | 70 | Shell completion generation exceeded its bound or could not be safely produced or written. |
+| `SYSTEM_INSTALL_INVALID` | 10 | The generic install intent did not match its typed command contract. |
+| `SYSTEM_INSTALL_FAILED` | 10 | Host compatibility, bundle verification, fixed-path mutation, activation or rollback failed closed. |
+| `SYSTEM_UNINSTALL_INVALID` | 10 | The generic uninstall intent did not match its typed command contract. |
+| `SYSTEM_UNINSTALL_FAILED` | 10 | Installed-manifest verification, deactivation, fixed-path removal or rollback failed closed. |
+| `SYSTEM_ROLLBACK_INCOMPLETE` | 24 | A generic install/uninstall transaction could not prove rollback or staging cleanup complete. |
+| `RELEASE_INVALID` | 12 | A release request, path, tag or immutable identity is outside the frozen contract. |
+| `RELEASE_SOURCE_UNPROTECTED` | 12 | Source is dirty, non-official, not the tagged commit or not reachable from fetched protected main. |
+| `RELEASE_ARTIFACT_INVALID` | 12 | A package, SPDX document, build manifest or release index failed bounded verification. |
+| `RELEASE_PROVENANCE_INVALID` | 12 | A package offline Sigstore bundle failed official repository/workflow/tag verification. |
+| `RELEASE_CONFLICT` | 12 | The immutable GitHub Release already exists and will not be overwritten. |
+| `RELEASE_PUBLISH_FAILED` | 12 | Draft creation, bounded upload or final publication failed closed. |
+| `RELEASE_VERIFY_FAILED` | 12 | Anonymous package/image clean-room verification failed. |
+| `RELEASE_CANCELLED` | 21 | A bounded release transaction was canceled and cleanup was admitted. |
+| `RELEASE_TIMEOUT` | 12 | A release transaction exceeded its finite deadline. |
+| `RELEASE_CLEANUP_INCOMPLETE` | 24 | Local staging or remote draft absence could not be proved. |
+| `RELEASE_GATES_INCOMPLETE` | 12 | Source evidence passed or failed, but one or more live release gates remain blocking. |
 
 ## Stable daemon RPC errors
 
@@ -91,12 +107,12 @@ Every other unary method is rejected before its handler if its method/context
 contract is unknown or invalid. Streaming methods perform the corresponding
 context or first-frame validation in their bounded handlers.
 
-Polkit does not add an error code to this table yet. `ClaimUSB` is currently a
-non-destructive `NOT_IMPLEMENTED` stub and does not invoke `pkcheck`. The only
-permitted helper action is `org.private-vm.usb.prepare`, reserved for the
-implemented destructive prepare step immediately before mutation. Helper
-stdout/stderr is discarded and a future RPC boundary must map denial, timeout,
-or failure to a typed safe code rather than exposing raw `pkcheck` output.
+`ClaimUSB` is non-destructive and does not invoke `pkcheck`; missing claim
+integration returns `USB_INTEGRATION_UNAVAILABLE`. The only permitted helper
+action is `org.private-vm.usb.prepare`, used by the implemented destructive
+prepare step immediately before mutation. Helper stdout/stderr is discarded,
+and denial, timeout, or failure is mapped to a typed safe response without
+exposing raw `pkcheck` output.
 
 ### Daemon startup failure
 
@@ -158,6 +174,31 @@ the Go error text directly.
 | `ErrCallback` | A bounded secret-reader callback was not supplied. |
 | `ErrSerialization` | A supported serialization path was rejected. |
 
+## Startup recovery classifications
+
+Startup recovery returns the existing blocking `ORPHAN_CLEANUP_FAILED`
+diagnostic and maps a daemon RPC retry to `CLEANUP_INCOMPLETE`. Its version-1
+redacted evidence may contain only the following internal classifications. The
+report never contains a session ID, object locator, identity fingerprint or
+wrapped backend error.
+
+| Code | Safe meaning |
+|---|---|
+| `RECOVERY_INVENTORY_FAILED` | The bounded private-vm orphan inventory did not complete. |
+| `RECOVERY_INVENTORY_LIMIT` | Candidate or session count exceeded the fixed startup bound. |
+| `RECOVERY_INVENTORY_DUPLICATE` | The trusted inventories reported the same typed object twice. |
+| `RECOVERY_REGISTRY_CONFLICT` | A candidate could not be exclusively claimed against the live registry. |
+| `RECOVERY_KEY_STATE_UNKNOWN` | Loss of the volatile private-vm key source could not be proven. |
+| `RECOVERY_IDENTITY_REJECTED` | Initial identity or private-vm ownership validation failed. |
+| `RECOVERY_IDENTITY_CHANGED` | Exact identity changed between inventory and mutation. |
+| `RECOVERY_CLEANUP_FAILED` | A typed idempotent cleanup operation failed. |
+| `RECOVERY_ABSENCE_UNPROVEN` | An individual artifact could not be proven absent. |
+| `RECOVERY_SESSION_ABSENCE_UNPROVEN` | The complete cross-subsystem session audit was incomplete. |
+| `RECOVERY_BASE_IMAGE_AUDIT_FAILED` | The pre-cleanup immutable-base identity seal was unavailable. |
+| `RECOVERY_BASE_IMAGE_CHANGED` | The immutable-base identity seal changed during recovery. |
+| `RECOVERY_CANCELED` | Startup recovery was canceled before all absence audits completed. |
+| `RECOVERY_TIMEOUT` | A bounded inventory, identity, cleanup or audit step timed out. |
+
 ## Image pull/cache errors
 
 These stable internal classifications map to CLI exit 12 at the image command
@@ -203,17 +244,52 @@ ordinary, detailed and structural `fmt` verbs cannot reveal that cause.
 ### Host
 
 - `HOST_OS_UNSUPPORTED`
+- `HOST_ARCH_UNSUPPORTED`
+- `KERNEL_STATUS_UNKNOWN`
+- `KERNEL_UNSUPPORTED`
 - `SYSTEMD_REQUIRED`
 - `CGROUP_V2_REQUIRED`
+- `NETNS_UNAVAILABLE`
+- `DEVICE_MAPPER_UNAVAILABLE`
+- `LOOP_CONTROL_UNAVAILABLE`
 - `KVM_UNAVAILABLE`
 - `KVM_PERMISSION_DENIED`
 - `QEMU_UNSUPPORTED`
+- `POLKIT_CHECK_MISSING`
+- `NFTABLES_MISSING`
+- `NFTABLES_UNSUPPORTED`
+- `IPROUTE2_MISSING`
+- `IPROUTE2_UNSUPPORTED`
+- `CRYPTSETUP_MISSING`
+- `CRYPTSETUP_UNSUPPORTED`
+- `LOSETUP_MISSING`
+- `LOSETUP_UNSUPPORTED`
+- `EXT4_TOOLS_MISSING`
+- `EXT4_TOOLS_UNSUPPORTED`
+- `SPICE_VIEWER_MISSING`
+- `SPICE_VIEWER_UNSUPPORTED`
+- `USBGUARD_MISSING`
+- `USBGUARD_UNSUPPORTED`
 - `RUNTIME_NOT_TMPFS`
+- `HOST_IPV6_FORWARDING_STATUS_UNKNOWN`
+- `HOST_IPV6_FORWARDING_DISABLED`
 - `DISK_SWAP_ACTIVE`
 - `HIBERNATION_ENABLED`
 - `INSUFFICIENT_MEMORY`
 - `INSUFFICIENT_SCRATCH`
+- `SPARSE_FILE_SUPPORT_UNKNOWN`
 - `ORPHAN_CLEANUP_FAILED`
+
+The following installed-host consistency diagnostics are blocking in strict
+mode and overridable warnings in compatibility mode. Compatibility mode does
+not change any hard diagnostic above.
+
+- `SYSTEMCTL_MISSING`
+- `PRIVATE_VMD_SERVICE_INACTIVE`
+- `USBGUARD_SERVICE_INACTIVE`
+- `CONTROL_SOCKET_INVALID`
+- `DAEMON_CONFIG_INVALID`
+- `POLKIT_POLICY_INVALID`
 
 ### Supply chain
 
@@ -264,6 +340,9 @@ ordinary, detailed and structural `fmt` verbs cannot reveal that cause.
 - `NETWORK_TOPOLOGY_NOT_READY`
 - `NETWORK_CLEANUP_INCOMPLETE`
 - `GUEST_VPN_REQUEST_INVALID`
+- `GUEST_VPN_ALREADY_CONFIGURED`
+- `GUEST_VPN_COMPOSITION_FAILED`
+- `GUEST_VPN_UNCONFIGURED`
 - `GUEST_KILL_SWITCH_FAILED`
 - `GUEST_VPN_CONFIGURATION_FAILED`
 - `GUEST_VPN_VERIFICATION_FAILED`
@@ -306,6 +385,9 @@ Host-network operations additionally use these stable safe codes:
 | `NETWORK_TOPOLOGY_NOT_READY` | 13 | A stale or incomplete network handle was used for a guest handoff. | Complete topology and policy creation or create a new session after cleanup. |
 | `NETWORK_CLEANUP_INCOMPLETE` | 24 | At least one owned network resource could not be removed or audited absent. | Keep the session in cleanup state and retry verified cleanup. |
 | `GUEST_VPN_REQUEST_INVALID` | 13 | The requested guest role, underlay or lifecycle transition is invalid. | Use the typed online-role workflow and start from a fresh verified guest. |
+| `GUEST_VPN_ALREADY_CONFIGURED` | 13 | A second network plan was submitted to one online guest boot. | Destroy the guest and create a fresh role guest for another network plan. |
+| `GUEST_VPN_COMPOSITION_FAILED` | 13 | A required fixed guest VPN, probe or role adapter is unavailable. | Destroy the guest and install the verified role image. |
+| `GUEST_VPN_UNCONFIGURED` | 13 | Verification was requested before authenticated VPN configuration. | Configure the guest through the daemon before retrying verification. |
 | `GUEST_KILL_SWITCH_FAILED` | 13 | The guest default-drop policy was not installed atomically. | Do not start guest applications; stop and clean the session. |
 | `GUEST_VPN_CONFIGURATION_FAILED` | 13 | WireGuard, routing or tunnel DNS configuration failed. | Keep the kill switch armed, stop the guest and retry with a current profile. |
 | `GUEST_VPN_VERIFICATION_FAILED` | 13 | At least one required handshake, tunnel, bypass or binding proof is absent. | Keep applications stopped and run the controlled verification again. |
@@ -323,8 +405,43 @@ endpoint, address, DNS, source-path or resolver details. Caller cancellation and
 operation timeouts continue to use the canonical CLI/RPC context mappings at
 their eventual boundary.
 
+### Torrent
+
+| Code | Exit | Safe meaning |
+|---|---:|---|
+| `TORRENT_REQUEST_INVALID` | 17 | The current state or typed request is invalid. |
+| `TORRENT_STREAM_INVALID` | 17 | The host torrent begin/chunk framing is invalid. |
+| `TORRENT_STATE_INVALID` | 17 | The active downloader is not in the required workflow state. |
+| `TORRENT_INPUT_INVALID` | 17 | Magnet/metainfo syntax or stream framing is invalid. |
+| `TORRENT_INPUT_TOO_LARGE` | 17 | Magnet or metainfo exceeded its fixed bound. |
+| `TORRENT_SOURCE_UNSAFE` | 17 | The selected metainfo file failed local regular/no-follow checks. |
+| `TORRENT_INPUT_READ_FAILED` | 17 | Secure input could not be read or synchronously transferred. |
+| `TORRENT_METADATA_TIMEOUT` | 17 | Paused metadata did not become safely available in time. |
+| `TORRENT_METADATA_UNSAFE` | 17 | Metadata contains payload bytes, unsafe paths, collisions or invalid bounds. |
+| `TORRENT_SELECTION_INVALID` | 17 | Explicit indexes are absent, duplicate or outside metadata. |
+| `TORRENT_EXECUTABLE_BLOCKED` | 17 | Safe policy blocks the selected executable-like type. |
+| `TORRENT_CAPACITY_INSUFFICIENT` | 14 | A required encrypted workflow stage lacks conservative capacity. |
+| `TORRENT_CAPACITY_EVIDENCE_UNAVAILABLE` | 14 | A declared destination lacks independent scanner, reconstruction or receiver evidence. |
+| `TORRENT_PAYLOAD_NOT_APPROVED` | 17 | Payload start was requested before selection/capacity approval. |
+| `TORRENT_DOWNLOAD_STALLED` | 17 | No bounded progress occurred before the stall ceiling. |
+| `TORRENT_DOWNLOAD_FAILED` | 17 | qBittorrent reported invalid state, progress or an operation failure. |
+| `TORRENT_VPN_LOST` | 13 | Typed VPN loss paused transfer and requires re-verification. |
+| `QUARANTINE_SEAL_FAILED` | 17 | Exact completion/hash/shutdown/sync/unmount proof failed. |
+| `DOWNLOADER_CLEANUP_INCOMPLETE` | 24 | Host absence audit failed; scanner readiness remains blocked. |
+| `TORRENT_CANCELLED` | 21 | Guest operation was cancelled after a bounded pause attempt. |
+| `TORRENT_TIMEOUT` | 15 | Guest operation exceeded its deadline after a bounded pause attempt. |
+
+All messages and remediations omit magnets, torrent identifiers, display/file
+names, content hashes, endpoints, source paths and qBittorrent output.
+
 ### Scanner
 
+- `SCANNER_REQUEST_INVALID`
+- `SCANNER_DESTINATION_INVALID`
+- `SCANNER_RUNNING`
+- `SCAN_REPORT_APPROVABLE`
+- `SCAN_PROMOTION_VERIFIED`
+- `SCAN_REJECTED`
 - `SCANNER_DEFINITIONS_STALE`
 - `SCANNER_NETWORK_PRESENT`
 - `QUARANTINE_NOT_READ_ONLY`
@@ -333,11 +450,76 @@ their eventual boundary.
 - `SCAN_FILE_SKIPPED`
 - `SCAN_LIMIT_REACHED`
 - `ARCHIVE_ENCRYPTED`
+- `ARCHIVE_FORMAT_UNSUPPORTED`
+- `ARCHIVE_INVALID`
 - `ARCHIVE_LIMIT_REACHED`
 - `TYPE_MISMATCH`
 - `ACTIVE_CONTENT_BLOCKED`
 - `SANITIZER_FAILED`
 - `REPORT_INCOMPLETE`
+- `REPORT_AUTHENTICATION_FAILED`
+- `REPORT_KEY_UNAVAILABLE`
+- `REPORT_TOO_LARGE`
+- `SCANNER_UPDATE_FAILED`
+- `SCANNER_UPDATE_QUARANTINE_PRESENT`
+- `SCANNER_OVERLAY_MISMATCH`
+- `QUARANTINE_MOUNT_UNSAFE`
+- `SCAN_OPENAT2_REQUIRED`
+- `SCAN_ENTRY_CHANGED`
+- `SCAN_SYMLINK_REJECTED`
+- `SCAN_HARDLINK_REJECTED`
+- `SCAN_SPECIAL_FILE_REJECTED`
+- `CLAMAV_UNAVAILABLE`
+- `ARCHIVE_PATH_UNSAFE`
+- `ARCHIVE_DUPLICATE_PATH`
+- `ARCHIVE_LINK_REJECTED`
+- `ARCHIVE_SPECIAL_FILE_REJECTED`
+- `ARCHIVE_EXTRACTION_FAILED`
+- `ARCHIVE_SANDBOX_UNVERIFIED`
+- `ARCHIVE_CLEANUP_INCOMPLETE`
+- `SANITIZER_UNSUPPORTED_TYPE`
+- `SANITIZED_OUTPUT_INVALID`
+- `SANITIZED_OUTPUT_REJECTED`
+- `SANITIZED_OUTPUT_CLEANUP_INCOMPLETE`
+- `PROMOTION_SELECTION_REQUIRED`
+- `SCANNER_STATE_INVALID`
+- `SCANNER_SESSION_MISMATCH`
+- `SCANNER_POLICY_INVALID`
+- `SCANNER_POLICY_CHANGED`
+- `SCANNER_EVIDENCE_UNAVAILABLE`
+- `SCANNER_BOOT_MODE_MISMATCH`
+- `SCANNER_RECEIPT_UNAVAILABLE`
+- `SCANNER_RECEIPT_WRITE_FAILED`
+- `SCANNER_OFFLINE_BOOT_STAGE_FAILED`
+- `SCANNER_OFFLINE_BOOT_STAGE_CLEANUP_INCOMPLETE`
+- `SCANNER_TOOLCHAIN_UNAVAILABLE`
+- `SCANNER_SCRATCH_UNVERIFIED`
+- `SCAN_CANCELLED`
+- `SCAN_TIMEOUT`
+- `SCAN_STREAM_FAILED`
+- `SANITIZED_OUTPUT_UNAVAILABLE`
+- `SANITIZED_OUTPUT_CHANGED`
+
+Scanner guest RPC errors use one `ErrorDetail` containing the same stable code,
+safe message, remediation, retryability and current scanner state. Wrapped
+filesystem errors, tool output, logical names, hashes and malware signature text
+are discarded before status construction. Cancellation uses `Canceled`, timeout
+uses `DeadlineExceeded`, bounded limit failures use `ResourceExhausted`, missing
+image adapters use `Unavailable`, and phase, policy, isolation, report or output
+integrity failures use `FailedPrecondition` unless the request itself is invalid.
+
+The host scanner boundary preserves safe guest `ErrorDetail` values and maps
+scanner/report/sanitized-output codes to exit 18. `SCANNER_STATE_INVALID` blocks
+an unsealed source, an out-of-order decision or a non-active scanner.
+`SCANNER_DESTINATION_INVALID` blocks any target other than a fresh workstation
+or the enrolled-USB workflow. `SCAN_PROMOTION_VERIFIED` is emitted only after
+the report-selected reconstructed stream has matching scanner, daemon-relay and
+destination SHA-256 evidence and scanner cleanup completes. Failed workstation
+promotion destroys the unadvertised destination before returning; successful
+workstation output includes only its opaque destination session ID. It is not a
+malware-safety claim. Cancellation and timeout remain the canonical
+`REQUEST_CANCELED` and `REQUEST_TIMEOUT`; an absence-audit failure remains
+`CLEANUP_INCOMPLETE`/exit 24.
 
 ### USB
 
@@ -347,9 +529,35 @@ their eventual boundary.
 - `USB_COMPOSITE_INTERFACE`
 - `USB_HOST_FILESYSTEM`
 - `USB_MOUNTED`
+- `USB_READ_ONLY`
 - `USB_TOO_SMALL`
+- `USB_CONFIRMATION_REQUIRED`
+- `USB_ALREADY_CLAIMED`
 - `USB_WRITE_FAILED`
 - `USB_HASH_MISMATCH`
+- `USB_DISCOVERY_FAILED`
+- `USB_DISCOVERY_LIMIT`
+- `USB_INTEGRATION_UNAVAILABLE`
+- `USB_REQUEST_INVALID`
+- `USB_CLEANUP_INCOMPLETE`
+- `USB_WORKFLOW_UNAVAILABLE`
+- `USB_PREPARE_BEGIN_REQUIRED`
+- `USB_PREPARE_PLAN_INVALID`
+- `USB_PASSPHRASE_STREAM_INVALID`
+- `USB_PASSPHRASE_INVALID`
+- `USB_SECRET_UNAVAILABLE`
+- `USB_EXPORTER_STATE_INVALID`
+- `USB_EXPORTER_IDENTITY_MISMATCH`
+- `USB_TRANSFER_CONTEXT_INVALID`
+- `USB_TRANSFER_DESCRIPTOR_INVALID`
+- `USB_TRANSFER_INVALID`
+- `USB_TRANSFER_INCOMPLETE`
+- `USB_TRANSFER_DIGEST_MISMATCH`
+- `USB_WRITE_EVIDENCE_INCOMPLETE`
+- `USB_FINALIZE_INCOMPLETE`
+- `USB_EXPORT_SELECTION_INVALID`
+- `USB_SCANNER_APPROVAL_REQUIRED`
+- `USB_EXPORT_INCOMPLETE`
 
 ### Workspace
 
@@ -358,16 +566,25 @@ their eventual boundary.
 - `WORKSPACE_UNREACHABLE`
 - `WORKSPACE_UNEXPORTED`
 - `WORKSPACE_CHANGED`
+- `WORKSPACE_REQUEST_INVALID`
+- `WORKSPACE_TRANSFER_FAILED`
+- `WORKSPACE_SELECTION_REQUIRED`
+- `WORKSPACE_DESTINATION_UNAVAILABLE`
+- `WORKSPACE_DESTINATION_FAILED`
+- `WORKSPACE_DESTINATION_CLEANUP_INCOMPLETE`
 - `WORKSPACE_INVENTORY_FAILED`
 - `WORKSPACE_ENTRY_UNSAFE`
 - `WORKSPACE_CAPACITY_EXCEEDED`
 - `WORKSPACE_HASH_FAILED`
 - `WORKSPACE_OUTPUT_NOT_FOUND`
 - `WORKSPACE_OUTPUT_CHANGED`
+- `WORKSPACE_INBOX_CHANGED`
+- `WORKSPACE_EXPORT_CHANGED`
 - `IMPORT_STAGING_CONFLICT`
 - `IMPORT_TARGET_EXISTS`
 - `EXPORT_NOT_STREAMED`
 - `EXPORT_VERIFICATION_MISMATCH`
+- `EXPORT_VERIFICATION_FAILED`
 - `IMPORT_PATH_UNSAFE`
 - `TRANSFER_BEGIN_REQUIRED`
 - `TRANSFER_ID_INVALID`
@@ -376,10 +593,17 @@ their eventual boundary.
 - `TRANSFER_END_INVALID`
 - `TRANSFER_INCOMPLETE`
 - `TRANSFER_CANCELED`
+- `TRANSFER_TIMEOUT`
+- `TRANSFER_CHUNK_INVALID`
+- `TRANSFER_TRAILING_FRAME`
+- `TRANSFER_FRAME_LIMIT`
 - `TRANSFER_SYNC_FAILED`
+- `TRANSFER_DIGEST_MISMATCH`
 - `TRANSFER_SIZE_EXCEEDED`
 - `TRANSFER_OFFSET_INVALID`
 - `TRANSFER_HASH_MISMATCH`
+- `DISPLAY_UNAVAILABLE`
+- `DISPLAY_VIEWER_FAILED`
 
 A hard diagnostic marked “never overridable” in the requirements cannot be
 suppressed by config, environment or CLI flags.

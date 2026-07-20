@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	privatevmv1 "github.com/StevenBuglione/private-vm/gen/privatevm/v1"
 	"github.com/StevenBuglione/private-vm/internal/guestvpn"
 	"github.com/StevenBuglione/private-vm/internal/network"
 	"github.com/StevenBuglione/private-vm/internal/qemu"
@@ -101,6 +102,7 @@ type NetworkedRuntime struct {
 	capability Capability
 	process    ManagedProcess
 	guest      GuestConnection
+	display    *displayProxy
 
 	monitorCancel  context.CancelFunc
 	monitorErr     error
@@ -214,7 +216,7 @@ func validateStartRequest(request StartNetworkedRequest) error {
 func verifiedStatus(status guestvpn.Status, role session.Role) bool {
 	verified := status.SchemaVersion == 1 && status.State == guestvpn.StateVerified && status.KillSwitchArmed && status.Configured &&
 		status.Handshake && status.DNSThroughTunnel && status.DNSBypassBlocked && status.IPv4ThroughTunnel &&
-		status.IPv4BypassBlocked && status.IPv6BypassBlocked && status.Code == "GUEST_VPN_VERIFIED"
+		status.IPv4BypassBlocked && status.IPv6ThroughTunnel && status.IPv6BypassBlocked && status.Code == "GUEST_VPN_VERIFIED"
 	return verified && (role != session.RoleDownloader || status.TorrentBound)
 }
 
@@ -314,15 +316,36 @@ func (runtime *NetworkedRuntime) watchProcess() {
 	runtime.mu.Lock()
 	defer runtime.mu.Unlock()
 	runtime.processStopped = true
+	displayFailed := false
+	if runtime.display != nil {
+		if displayErr := runtime.display.Stop(); displayErr != nil {
+			displayFailed = true
+		}
+	}
 	if runtime.monitorCancel != nil {
 		runtime.monitorCancel()
 		runtime.monitorCancel = nil
 	}
 	cleanupCtx, cancel := context.WithTimeout(context.Background(), networkedCleanupTimeout)
 	defer cancel()
-	if cleanupErr := runtime.cleanupAfterProcessLocked(cleanupCtx); cleanupErr != nil || err != nil {
+	if cleanupErr := runtime.cleanupAfterProcessLocked(cleanupCtx); cleanupErr != nil || err != nil || displayFailed {
 		runtime.cleanupErr = ErrNetworkedCleanup
 	}
+}
+
+func (runtime *NetworkedRuntime) attachDisplay(display *displayProxy) error {
+	if runtime == nil || display == nil || runtime.role != session.RoleWorkstation {
+		return ErrNetworkedStart
+	}
+	runtime.mu.Lock()
+	if runtime.display != nil || runtime.processStopped {
+		runtime.mu.Unlock()
+		_ = display.Stop()
+		return ErrNetworkedCleanup
+	}
+	runtime.display = display
+	runtime.mu.Unlock()
+	return nil
 }
 
 func (runtime *NetworkedRuntime) MonitorError() error {
@@ -332,6 +355,78 @@ func (runtime *NetworkedRuntime) MonitorError() error {
 	runtime.mu.Lock()
 	defer runtime.mu.Unlock()
 	return runtime.monitorErr
+}
+
+func (runtime *NetworkedRuntime) Audit(context.Context) error {
+	if runtime == nil {
+		return ErrNetworkedCleanup
+	}
+	runtime.mu.Lock()
+	defer runtime.mu.Unlock()
+	if !runtime.processStopped || !runtime.guestClosed || !runtime.capDestroyed || !runtime.networkCleaned || runtime.cleanupErr != nil {
+		return ErrNetworkedCleanup
+	}
+	return nil
+}
+
+func (runtime *NetworkedRuntime) WorkspaceState(ctx context.Context) (string, error) {
+	if runtime == nil || runtime.role != session.RoleWorkstation {
+		return "", ErrNetworkedStart
+	}
+	runtime.mu.Lock()
+	guestConnection := runtime.guest
+	stopped := runtime.processStopped || runtime.guestClosed
+	runtime.mu.Unlock()
+	if stopped || guestConnection == nil {
+		return "", ErrNetworkedCleanup
+	}
+	if stateGuest, ok := guestConnection.(interface {
+		WorkspaceState(context.Context) (string, error)
+	}); ok {
+		return stateGuest.WorkspaceState(ctx)
+	}
+	dirty, err := guestConnection.WorkspaceDirty(ctx)
+	if err != nil {
+		return "", err
+	}
+	if dirty {
+		return "UNEXPORTED", nil
+	}
+	return "CLEAN", nil
+}
+
+func (runtime *NetworkedRuntime) Torrent() (TorrentRelay, error) {
+	if runtime == nil || runtime.role != session.RoleDownloader {
+		return nil, ErrNetworkedStart
+	}
+	runtime.mu.Lock()
+	defer runtime.mu.Unlock()
+	if runtime.processStopped || runtime.guestClosed || runtime.guest == nil {
+		return nil, ErrNetworkedCleanup
+	}
+	relay, ok := runtime.guest.(TorrentRelay)
+	if !ok || relay == nil {
+		return nil, ErrNetworkedStart
+	}
+	return relay, nil
+}
+
+func (runtime *NetworkedRuntime) ScannerClient() (privatevmv1.ScannerGuestServiceClient, error) {
+	if runtime == nil || runtime.role != session.RoleScanner {
+		return nil, ErrNetworkedStart
+	}
+	runtime.mu.Lock()
+	defer runtime.mu.Unlock()
+	if runtime.processStopped || runtime.guestClosed || runtime.guest == nil {
+		return nil, ErrNetworkedCleanup
+	}
+	provider, ok := runtime.guest.(interface {
+		ScannerClient() (privatevmv1.ScannerGuestServiceClient, error)
+	})
+	if !ok {
+		return nil, ErrNetworkedStart
+	}
+	return provider.ScannerClient()
 }
 
 func normalizeStartError(ctx context.Context) error {

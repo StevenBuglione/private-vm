@@ -121,7 +121,13 @@ ERROR_INCOMPLETE
 private-vm scan approve --session <id> --open-in workstation
 ```
 
-The scanner is destroyed before the new workstation starts.
+The daemon starts a fresh, unadvertised workstation as the authenticated
+receiver and streams the single approved reconstructed output directly into
+its Inbox. No host path or mount exists. It verifies scanner, relay and
+workstation SHA-256 equality, destroys the scanner, then returns the destination
+session ID and opens the user-owned Unix-socket viewer. Any earlier failure
+destroys the fresh workstation too. A report with zero or multiple outputs
+fails closed in v1 because the CLI intentionally does not expose output IDs.
 
 ## Abort
 

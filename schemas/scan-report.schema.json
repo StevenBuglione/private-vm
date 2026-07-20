@@ -1,146 +1,236 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://private-vm.dev/schema/scan-report-v1.json",
-  "title": "private-vm scan report",
+  "title": "private-vm authenticated scan report body",
   "type": "object",
   "additionalProperties": false,
-  "properties": {
-    "schema_version": {
-      "const": 1
-    },
-    "session_id": {
-      "type": "string",
-      "format": "uuid"
-    },
-    "policy": {
-      "type": "string"
-    },
-    "started_at": {
-      "type": "string",
-      "format": "date-time"
-    },
-    "completed_at": {
-      "type": "string",
-      "format": "date-time"
-    },
-    "scanner_image_digest": {
-      "type": "string",
-      "pattern": "^sha256:[0-9a-f]{64}$"
-    },
-    "clamav_database_version": {
-      "type": "string"
-    },
-    "input": {
+  "$defs": {
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "mime": { "type": "string", "pattern": "^[^/\\s]+/[^;\\s]+$", "maxLength": 255 },
+    "logicalName": { "type": "string", "minLength": 1, "maxLength": 4096, "pattern": "^[^/\\\\\\u0000][^\\\\\\u0000]*$" },
+    "finding": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "logical_name": {
-          "type": "string"
-        },
-        "size_bytes": {
-          "type": "integer",
-          "minimum": 0
-        },
-        "sha256": {
-          "type": "string",
-          "pattern": "^[0-9a-f]{64}$"
-        },
-        "detected_mime": {
-          "type": "string"
-        }
+        "code": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "severity": { "enum": ["info", "warning", "blocking"] },
+        "path": { "$ref": "#/$defs/logicalName" },
+        "detail": { "type": "string", "minLength": 1, "maxLength": 1024 },
+        "identifier": { "type": "string", "minLength": 1, "maxLength": 256 }
       },
-      "required": [
-        "logical_name",
-        "size_bytes",
-        "sha256",
-        "detected_mime"
-      ]
+      "required": ["code", "severity", "detail"]
     },
-    "findings": {
-      "type": "array",
-      "items": {
-        "type": "object",
-        "additionalProperties": false,
-        "properties": {
-          "code": {
-            "type": "string"
-          },
-          "severity": {
-            "enum": [
-              "info",
-              "warning",
-              "blocking"
-            ]
-          },
-          "path": {
-            "type": "string"
-          },
-          "detail": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "code",
-          "severity",
-          "detail"
-        ]
-      }
+    "tool": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "version": { "type": "string", "minLength": 1, "maxLength": 256 }
+      },
+      "required": ["name", "version"]
     },
-    "sanitized_outputs": {
-      "type": "array",
-      "items": {
-        "type": "object",
-        "additionalProperties": false,
-        "properties": {
-          "logical_name": {
-            "type": "string"
-          },
-          "size_bytes": {
-            "type": "integer",
-            "minimum": 0
-          },
-          "sha256": {
-            "type": "string",
-            "pattern": "^[0-9a-f]{64}$"
-          },
-          "detected_mime": {
-            "type": "string"
-          },
-          "transformation": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "logical_name",
-          "size_bytes",
-          "sha256",
-          "detected_mime",
-          "transformation"
-        ]
-      }
+    "requiresClamav": {
+      "properties": { "tools": { "contains": { "properties": { "name": { "const": "clamav" } }, "required": ["name"] }, "minContains": 1, "maxContains": 1 } }
     },
-    "result": {
-      "enum": [
-        "approved",
-        "rejected",
-        "error"
-      ]
+    "requiresFile": {
+      "properties": { "tools": { "contains": { "properties": { "name": { "const": "file" } }, "required": ["name"] }, "minContains": 1, "maxContains": 1 } }
     },
-    "complete": {
-      "type": "boolean"
+    "requiresGhostscript": {
+      "properties": { "tools": { "contains": { "properties": { "name": { "const": "ghostscript" } }, "required": ["name"] }, "minContains": 1, "maxContains": 1 } }
+    },
+    "requiresPoppler": {
+      "properties": { "tools": { "contains": { "properties": { "name": { "const": "poppler-utils" } }, "required": ["name"] }, "minContains": 1, "maxContains": 1 } }
+    },
+    "requiresLibreOffice": {
+      "properties": { "tools": { "contains": { "properties": { "name": { "const": "libreoffice" } }, "required": ["name"] }, "minContains": 1, "maxContains": 1 } }
+    },
+    "requiresFFmpeg": {
+      "properties": { "tools": { "contains": { "properties": { "name": { "const": "ffmpeg" } }, "required": ["name"] }, "minContains": 1, "maxContains": 1 } }
+    },
+    "requiresGoImage": {
+      "properties": { "tools": { "contains": { "properties": { "name": { "const": "go-image-png" } }, "required": ["name"] }, "minContains": 1, "maxContains": 1 } }
+    },
+    "requiresTextNormalizer": {
+      "properties": { "tools": { "contains": { "properties": { "name": { "const": "private-vm-text-normalizer" } }, "required": ["name"] }, "minContains": 1, "maxContains": 1 } }
     }
   },
-  "required": [
-    "schema_version",
-    "session_id",
-    "policy",
-    "started_at",
-    "completed_at",
-    "scanner_image_digest",
-    "input",
-    "findings",
-    "sanitized_outputs",
-    "result",
-    "complete"
+  "properties": {
+    "schema_version": { "const": 1 },
+    "session_id": { "type": "string", "pattern": "^pvm-[0-9a-f]{32}$" },
+    "policy": { "enum": ["safe", "quarantine"] },
+    "started_at": { "type": "string", "format": "date-time" },
+    "completed_at": { "type": "string", "format": "date-time" },
+    "duration_millis": { "type": "integer", "minimum": 1, "maximum": 86400000 },
+    "scanner": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "image_digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+        "source_commit": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+        "guestd_version": { "type": "string", "minLength": 1, "maxLength": 256 }
+      },
+      "required": ["image_digest", "source_commit", "guestd_version"]
+    },
+    "definitions": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "engine_version": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "database_version": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "updated_at": { "type": "string", "format": "date-time" },
+        "official": { "const": true },
+        "compatible": { "const": true }
+      },
+      "required": ["engine_version", "database_version", "updated_at", "official", "compatible"]
+    },
+    "isolation": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "no_network": { "const": true },
+        "quarantine_read_only": { "const": true },
+        "mount_options": {
+          "type": "array",
+          "prefixItems": [
+            { "const": "nodev" },
+            { "const": "noexec" },
+            { "const": "nosuid" },
+            { "const": "ro" }
+          ],
+          "items": false,
+          "minItems": 4,
+          "maxItems": 4
+        }
+      },
+      "required": ["no_network", "quarantine_read_only", "mount_options"]
+    },
+    "phases": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "definitions_verified": { "type": "boolean" },
+        "offline_verified": { "type": "boolean" },
+        "inventory_complete": { "type": "boolean" },
+        "malware_scan_complete": { "type": "boolean" },
+        "archive_inspection_complete": { "type": "boolean" },
+        "reconstruction_complete": { "type": "boolean" },
+        "output_rescan_complete": { "type": "boolean" }
+      },
+      "required": ["definitions_verified", "offline_verified", "inventory_complete", "malware_scan_complete", "archive_inspection_complete", "reconstruction_complete", "output_rescan_complete"]
+    },
+    "inputs": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 1000000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "logical_name": { "$ref": "#/$defs/logicalName" },
+          "size_bytes": { "type": "integer", "minimum": 1 },
+          "sha256": { "$ref": "#/$defs/sha256" },
+          "detected_mime": { "$ref": "#/$defs/mime" },
+          "extension_mime": { "$ref": "#/$defs/mime" },
+          "extension_agreement": { "type": "boolean" },
+          "clamav_verdict": { "type": "string", "minLength": 1, "maxLength": 256 }
+        },
+        "required": ["logical_name", "size_bytes", "sha256", "detected_mime", "extension_agreement", "clamav_verdict"]
+      }
+    },
+    "archives": {
+      "type": "array",
+      "maxItems": 1000000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "source_sha256": { "$ref": "#/$defs/sha256" },
+          "format": { "enum": ["zip", "tar"] },
+          "depth": { "type": "integer", "minimum": 0, "maximum": 10 },
+          "entry_count": { "type": "integer", "minimum": 1 },
+          "expanded_bytes": { "type": "integer", "minimum": 1 },
+          "complete": { "const": true }
+        },
+        "required": ["source_sha256", "format", "depth", "entry_count", "expanded_bytes", "complete"]
+      }
+    },
+    "findings": { "type": "array", "maxItems": 1000000, "items": { "$ref": "#/$defs/finding" } },
+    "sanitized_outputs": {
+      "type": "array",
+      "maxItems": 1000000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "output_id": { "type": "string", "pattern": "^scan-out-[0-9a-f]{32}$" },
+          "logical_name": { "$ref": "#/$defs/logicalName" },
+          "source_sha256": { "$ref": "#/$defs/sha256" },
+          "size_bytes": { "type": "integer", "minimum": 1 },
+          "sha256": { "$ref": "#/$defs/sha256" },
+          "detected_mime": { "$ref": "#/$defs/mime" },
+          "transformation": { "type": "string", "minLength": 1, "maxLength": 256 },
+          "rescan_verdict": { "const": "CLAMAV_CLEAN" }
+        },
+        "required": ["output_id", "logical_name", "source_sha256", "size_bytes", "sha256", "detected_mime", "transformation", "rescan_verdict"]
+      }
+    },
+    "tools": { "type": "array", "minItems": 1, "maxItems": 256, "uniqueItems": true, "items": { "$ref": "#/$defs/tool" } },
+    "result": { "enum": ["approved", "rejected", "error"] },
+    "complete": { "type": "boolean" }
+  },
+  "required": ["schema_version", "session_id", "policy", "started_at", "completed_at", "duration_millis", "scanner", "definitions", "isolation", "phases", "inputs", "archives", "findings", "sanitized_outputs", "tools", "result", "complete"],
+  "allOf": [
+    { "$ref": "#/$defs/requiresClamav" },
+    { "$ref": "#/$defs/requiresFile" },
+    {
+      "if": { "properties": { "sanitized_outputs": { "contains": { "properties": { "transformation": { "const": "pdf-raster-rebuild-v1" } }, "required": ["transformation"] } } } },
+      "then": { "allOf": [{ "$ref": "#/$defs/requiresGhostscript" }, { "$ref": "#/$defs/requiresPoppler" }] }
+    },
+    {
+      "if": { "properties": { "sanitized_outputs": { "contains": { "properties": { "transformation": { "const": "office-render-pdf-raster-rebuild-v1" } }, "required": ["transformation"] } } } },
+      "then": { "allOf": [{ "$ref": "#/$defs/requiresGhostscript" }, { "$ref": "#/$defs/requiresPoppler" }, { "$ref": "#/$defs/requiresLibreOffice" }] }
+    },
+    {
+      "if": { "properties": { "sanitized_outputs": { "contains": { "properties": { "transformation": { "enum": ["media-full-decode-aac-v1", "media-full-decode-h264-aac-v1"] } }, "required": ["transformation"] } } } },
+      "then": { "$ref": "#/$defs/requiresFFmpeg" }
+    },
+    {
+      "if": { "properties": { "sanitized_outputs": { "contains": { "properties": { "transformation": { "const": "image-decode-strip-reencode-png-v1" } }, "required": ["transformation"] } } } },
+      "then": { "$ref": "#/$defs/requiresGoImage" }
+    },
+    {
+      "if": { "properties": { "sanitized_outputs": { "contains": { "properties": { "transformation": { "const": "text-utf8-line-normalize-v1" } }, "required": ["transformation"] } } } },
+      "then": { "$ref": "#/$defs/requiresTextNormalizer" }
+    },
+    {
+      "if": { "properties": { "result": { "const": "approved" } }, "required": ["result"] },
+      "then": {
+        "properties": {
+          "policy": { "const": "safe" },
+          "complete": { "const": true },
+          "phases": {
+            "properties": {
+              "definitions_verified": { "const": true },
+              "offline_verified": { "const": true },
+              "inventory_complete": { "const": true },
+              "malware_scan_complete": { "const": true },
+              "archive_inspection_complete": { "const": true },
+              "reconstruction_complete": { "const": true },
+              "output_rescan_complete": { "const": true }
+            }
+          },
+          "sanitized_outputs": { "minItems": 1 }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "result": { "const": "error" } }, "required": ["result"] },
+      "then": {
+        "properties": {
+          "complete": { "const": false },
+          "sanitized_outputs": { "maxItems": 0 }
+        }
+      }
+    }
   ]
 }

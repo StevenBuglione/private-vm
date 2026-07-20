@@ -23,6 +23,10 @@ type fakeRoleOrchestrator struct {
 	active         map[string]bool
 }
 
+func (f *fakeRoleOrchestrator) PlanAllocation(_ session.Snapshot, _ session.LaunchPlan) session.AllocateFunc {
+	return f.allocation("plan")
+}
+
 func newFakeRoleOrchestrator() *fakeRoleOrchestrator {
 	return &fakeRoleOrchestrator{workspaceState: "CLEAN", active: make(map[string]bool)}
 }
@@ -123,6 +127,17 @@ func TestRoleServiceStartsThroughEveryOwnedGateAndStopsInReverseOrder(t *testing
 	}
 }
 
+func TestDownloaderStartStopsAtVerifiedVPNGateBeforeTorrentInput(t *testing.T) {
+	service, _, snapshot := roleServiceFixtureForRole(t, session.RoleDownloader)
+	started, err := service.StartRole(roleCallerContext(t, snapshot.OwnerUID), &privatevmv1.StartRoleRequest{Context: validRequestContext(snapshot.ID)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if started.GetPhase() != privatevmv1.SessionPhase_SESSION_PHASE_ACTIVE || started.GetWorkflowState() != "VPN_VERIFIED" {
+		t.Fatalf("downloader start = %+v", started)
+	}
+}
+
 func TestRoleStartFailureMatrixAlwaysConvergesToDestroyed(t *testing.T) {
 	for _, failure := range []string{"preflight", "images", "storage.allocate", "runtime.allocate"} {
 		t.Run(failure, func(t *testing.T) {
@@ -180,6 +195,10 @@ func TestProtectedStopBlocksDirtyAndUnreachableWorkspaceUntilDiscard(t *testing.
 }
 
 func roleServiceFixture(t *testing.T) (*Service, *fakeRoleOrchestrator, session.Snapshot) {
+	return roleServiceFixtureForRole(t, session.RoleWorkstation)
+}
+
+func roleServiceFixtureForRole(t *testing.T, role session.Role) (*Service, *fakeRoleOrchestrator, session.Snapshot) {
 	t.Helper()
 	root := filepath.Join(t.TempDir(), "run")
 	if err := os.Mkdir(root, 0o750); err != nil {
@@ -193,7 +212,7 @@ func roleServiceFixture(t *testing.T) (*Service, *fakeRoleOrchestrator, session.
 	if err != nil {
 		t.Fatal(err)
 	}
-	snapshot, err := manager.Create(1000, session.RoleWorkstation)
+	snapshot, err := manager.Create(1000, role)
 	if err != nil {
 		t.Fatal(err)
 	}

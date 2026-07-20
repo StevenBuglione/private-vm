@@ -6,12 +6,13 @@ Before=shutdown.target
 
 [Service]
 Type=simple
-ExecStart=/usr/libexec/private-vmd --config /etc/private-vm/config.toml
+ExecStart=/usr/libexec/private-vmd --config /etc/private-vm/config.toml --group private-vm
 Restart=on-failure
 RestartSec=2
 User=root
 Group=private-vm
 UMask=0007
+Environment=PATH=/usr/sbin:/usr/bin:/sbin:/bin
 RuntimeDirectory=private-vm
 RuntimeDirectoryMode=0750
 StateDirectory=private-vm

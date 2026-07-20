@@ -76,6 +76,58 @@ func (GuestRole) EnumDescriptor() ([]byte, []int) {
 	return file_privatevm_v1_common_proto_rawDescGZIP(), []int{0}
 }
 
+// TorrentDestination is selected before payload transfer so capacity can be
+// proven for the complete workflow. It is semantic and cannot identify a host
+// path, mount, device node, guest endpoint or QEMU argument.
+type TorrentDestination int32
+
+const (
+	TorrentDestination_TORRENT_DESTINATION_UNSPECIFIED TorrentDestination = 0
+	TorrentDestination_TORRENT_DESTINATION_WORKSTATION TorrentDestination = 1
+	TorrentDestination_TORRENT_DESTINATION_USB         TorrentDestination = 2
+)
+
+// Enum value maps for TorrentDestination.
+var (
+	TorrentDestination_name = map[int32]string{
+		0: "TORRENT_DESTINATION_UNSPECIFIED",
+		1: "TORRENT_DESTINATION_WORKSTATION",
+		2: "TORRENT_DESTINATION_USB",
+	}
+	TorrentDestination_value = map[string]int32{
+		"TORRENT_DESTINATION_UNSPECIFIED": 0,
+		"TORRENT_DESTINATION_WORKSTATION": 1,
+		"TORRENT_DESTINATION_USB":         2,
+	}
+)
+
+func (x TorrentDestination) Enum() *TorrentDestination {
+	p := new(TorrentDestination)
+	*p = x
+	return p
+}
+
+func (x TorrentDestination) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (TorrentDestination) Descriptor() protoreflect.EnumDescriptor {
+	return file_privatevm_v1_common_proto_enumTypes[1].Descriptor()
+}
+
+func (TorrentDestination) Type() protoreflect.EnumType {
+	return &file_privatevm_v1_common_proto_enumTypes[1]
+}
+
+func (x TorrentDestination) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use TorrentDestination.Descriptor instead.
+func (TorrentDestination) EnumDescriptor() ([]byte, []int) {
+	return file_privatevm_v1_common_proto_rawDescGZIP(), []int{1}
+}
+
 type SessionPhase int32
 
 const (
@@ -130,11 +182,11 @@ func (x SessionPhase) String() string {
 }
 
 func (SessionPhase) Descriptor() protoreflect.EnumDescriptor {
-	return file_privatevm_v1_common_proto_enumTypes[1].Descriptor()
+	return file_privatevm_v1_common_proto_enumTypes[2].Descriptor()
 }
 
 func (SessionPhase) Type() protoreflect.EnumType {
-	return &file_privatevm_v1_common_proto_enumTypes[1]
+	return &file_privatevm_v1_common_proto_enumTypes[2]
 }
 
 func (x SessionPhase) Number() protoreflect.EnumNumber {
@@ -143,7 +195,7 @@ func (x SessionPhase) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use SessionPhase.Descriptor instead.
 func (SessionPhase) EnumDescriptor() ([]byte, []int) {
-	return file_privatevm_v1_common_proto_rawDescGZIP(), []int{1}
+	return file_privatevm_v1_common_proto_rawDescGZIP(), []int{2}
 }
 
 type Diagnostic_Severity int32
@@ -182,11 +234,11 @@ func (x Diagnostic_Severity) String() string {
 }
 
 func (Diagnostic_Severity) Descriptor() protoreflect.EnumDescriptor {
-	return file_privatevm_v1_common_proto_enumTypes[2].Descriptor()
+	return file_privatevm_v1_common_proto_enumTypes[3].Descriptor()
 }
 
 func (Diagnostic_Severity) Type() protoreflect.EnumType {
-	return &file_privatevm_v1_common_proto_enumTypes[2]
+	return &file_privatevm_v1_common_proto_enumTypes[3]
 }
 
 func (x Diagnostic_Severity) Number() protoreflect.EnumNumber {
@@ -195,7 +247,126 @@ func (x Diagnostic_Severity) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use Diagnostic_Severity.Descriptor instead.
 func (Diagnostic_Severity) EnumDescriptor() ([]byte, []int) {
-	return file_privatevm_v1_common_proto_rawDescGZIP(), []int{5, 0}
+	return file_privatevm_v1_common_proto_rawDescGZIP(), []int{6, 0}
+}
+
+// TorrentCapacityReceipt is daemon-owned, bounded evidence for the stages
+// after quarantine download. The downloader independently measures the live
+// quarantine filesystem; no path or device selector crosses this boundary.
+type TorrentCapacityReceipt struct {
+	state                        protoimpl.MessageState `protogen:"open.v1"`
+	SchemaVersion                uint32                 `protobuf:"varint,1,opt,name=schema_version,json=schemaVersion,proto3" json:"schema_version,omitempty"`
+	Destination                  TorrentDestination     `protobuf:"varint,2,opt,name=destination,proto3,enum=privatevm.v1.TorrentDestination" json:"destination,omitempty"`
+	ScanAvailableBytes           uint64                 `protobuf:"varint,3,opt,name=scan_available_bytes,json=scanAvailableBytes,proto3" json:"scan_available_bytes,omitempty"`
+	ReconstructionAvailableBytes uint64                 `protobuf:"varint,4,opt,name=reconstruction_available_bytes,json=reconstructionAvailableBytes,proto3" json:"reconstruction_available_bytes,omitempty"`
+	DestinationAvailableBytes    uint64                 `protobuf:"varint,5,opt,name=destination_available_bytes,json=destinationAvailableBytes,proto3" json:"destination_available_bytes,omitempty"`
+	RootOverlayBudgetBytes       uint64                 `protobuf:"varint,6,opt,name=root_overlay_budget_bytes,json=rootOverlayBudgetBytes,proto3" json:"root_overlay_budget_bytes,omitempty"`
+	ArchiveExpansionBytes        uint64                 `protobuf:"varint,7,opt,name=archive_expansion_bytes,json=archiveExpansionBytes,proto3" json:"archive_expansion_bytes,omitempty"`
+	ReconstructionBytes          uint64                 `protobuf:"varint,8,opt,name=reconstruction_bytes,json=reconstructionBytes,proto3" json:"reconstruction_bytes,omitempty"`
+	MaximumSelectedBytes         uint64                 `protobuf:"varint,9,opt,name=maximum_selected_bytes,json=maximumSelectedBytes,proto3" json:"maximum_selected_bytes,omitempty"`
+	MaximumOutputBytes           uint64                 `protobuf:"varint,10,opt,name=maximum_output_bytes,json=maximumOutputBytes,proto3" json:"maximum_output_bytes,omitempty"`
+	unknownFields                protoimpl.UnknownFields
+	sizeCache                    protoimpl.SizeCache
+}
+
+func (x *TorrentCapacityReceipt) Reset() {
+	*x = TorrentCapacityReceipt{}
+	mi := &file_privatevm_v1_common_proto_msgTypes[0]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TorrentCapacityReceipt) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TorrentCapacityReceipt) ProtoMessage() {}
+
+func (x *TorrentCapacityReceipt) ProtoReflect() protoreflect.Message {
+	mi := &file_privatevm_v1_common_proto_msgTypes[0]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TorrentCapacityReceipt.ProtoReflect.Descriptor instead.
+func (*TorrentCapacityReceipt) Descriptor() ([]byte, []int) {
+	return file_privatevm_v1_common_proto_rawDescGZIP(), []int{0}
+}
+
+func (x *TorrentCapacityReceipt) GetSchemaVersion() uint32 {
+	if x != nil {
+		return x.SchemaVersion
+	}
+	return 0
+}
+
+func (x *TorrentCapacityReceipt) GetDestination() TorrentDestination {
+	if x != nil {
+		return x.Destination
+	}
+	return TorrentDestination_TORRENT_DESTINATION_UNSPECIFIED
+}
+
+func (x *TorrentCapacityReceipt) GetScanAvailableBytes() uint64 {
+	if x != nil {
+		return x.ScanAvailableBytes
+	}
+	return 0
+}
+
+func (x *TorrentCapacityReceipt) GetReconstructionAvailableBytes() uint64 {
+	if x != nil {
+		return x.ReconstructionAvailableBytes
+	}
+	return 0
+}
+
+func (x *TorrentCapacityReceipt) GetDestinationAvailableBytes() uint64 {
+	if x != nil {
+		return x.DestinationAvailableBytes
+	}
+	return 0
+}
+
+func (x *TorrentCapacityReceipt) GetRootOverlayBudgetBytes() uint64 {
+	if x != nil {
+		return x.RootOverlayBudgetBytes
+	}
+	return 0
+}
+
+func (x *TorrentCapacityReceipt) GetArchiveExpansionBytes() uint64 {
+	if x != nil {
+		return x.ArchiveExpansionBytes
+	}
+	return 0
+}
+
+func (x *TorrentCapacityReceipt) GetReconstructionBytes() uint64 {
+	if x != nil {
+		return x.ReconstructionBytes
+	}
+	return 0
+}
+
+func (x *TorrentCapacityReceipt) GetMaximumSelectedBytes() uint64 {
+	if x != nil {
+		return x.MaximumSelectedBytes
+	}
+	return 0
+}
+
+func (x *TorrentCapacityReceipt) GetMaximumOutputBytes() uint64 {
+	if x != nil {
+		return x.MaximumOutputBytes
+	}
+	return 0
 }
 
 type ApiVersion struct {
@@ -208,7 +379,7 @@ type ApiVersion struct {
 
 func (x *ApiVersion) Reset() {
 	*x = ApiVersion{}
-	mi := &file_privatevm_v1_common_proto_msgTypes[0]
+	mi := &file_privatevm_v1_common_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -220,7 +391,7 @@ func (x *ApiVersion) String() string {
 func (*ApiVersion) ProtoMessage() {}
 
 func (x *ApiVersion) ProtoReflect() protoreflect.Message {
-	mi := &file_privatevm_v1_common_proto_msgTypes[0]
+	mi := &file_privatevm_v1_common_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -233,7 +404,7 @@ func (x *ApiVersion) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ApiVersion.ProtoReflect.Descriptor instead.
 func (*ApiVersion) Descriptor() ([]byte, []int) {
-	return file_privatevm_v1_common_proto_rawDescGZIP(), []int{0}
+	return file_privatevm_v1_common_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *ApiVersion) GetMajor() uint32 {
@@ -261,7 +432,7 @@ type RequestContext struct {
 
 func (x *RequestContext) Reset() {
 	*x = RequestContext{}
-	mi := &file_privatevm_v1_common_proto_msgTypes[1]
+	mi := &file_privatevm_v1_common_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -273,7 +444,7 @@ func (x *RequestContext) String() string {
 func (*RequestContext) ProtoMessage() {}
 
 func (x *RequestContext) ProtoReflect() protoreflect.Message {
-	mi := &file_privatevm_v1_common_proto_msgTypes[1]
+	mi := &file_privatevm_v1_common_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -286,7 +457,7 @@ func (x *RequestContext) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RequestContext.ProtoReflect.Descriptor instead.
 func (*RequestContext) Descriptor() ([]byte, []int) {
-	return file_privatevm_v1_common_proto_rawDescGZIP(), []int{1}
+	return file_privatevm_v1_common_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *RequestContext) GetApiVersion() *ApiVersion {
@@ -318,7 +489,7 @@ type Empty struct {
 
 func (x *Empty) Reset() {
 	*x = Empty{}
-	mi := &file_privatevm_v1_common_proto_msgTypes[2]
+	mi := &file_privatevm_v1_common_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -330,7 +501,7 @@ func (x *Empty) String() string {
 func (*Empty) ProtoMessage() {}
 
 func (x *Empty) ProtoReflect() protoreflect.Message {
-	mi := &file_privatevm_v1_common_proto_msgTypes[2]
+	mi := &file_privatevm_v1_common_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -343,7 +514,7 @@ func (x *Empty) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Empty.ProtoReflect.Descriptor instead.
 func (*Empty) Descriptor() ([]byte, []int) {
-	return file_privatevm_v1_common_proto_rawDescGZIP(), []int{2}
+	return file_privatevm_v1_common_proto_rawDescGZIP(), []int{3}
 }
 
 type Hash struct {
@@ -356,7 +527,7 @@ type Hash struct {
 
 func (x *Hash) Reset() {
 	*x = Hash{}
-	mi := &file_privatevm_v1_common_proto_msgTypes[3]
+	mi := &file_privatevm_v1_common_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -368,7 +539,7 @@ func (x *Hash) String() string {
 func (*Hash) ProtoMessage() {}
 
 func (x *Hash) ProtoReflect() protoreflect.Message {
-	mi := &file_privatevm_v1_common_proto_msgTypes[3]
+	mi := &file_privatevm_v1_common_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -381,7 +552,7 @@ func (x *Hash) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Hash.ProtoReflect.Descriptor instead.
 func (*Hash) Descriptor() ([]byte, []int) {
-	return file_privatevm_v1_common_proto_rawDescGZIP(), []int{3}
+	return file_privatevm_v1_common_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *Hash) GetAlgorithm() string {
@@ -410,7 +581,7 @@ type FileDescriptor struct {
 
 func (x *FileDescriptor) Reset() {
 	*x = FileDescriptor{}
-	mi := &file_privatevm_v1_common_proto_msgTypes[4]
+	mi := &file_privatevm_v1_common_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -422,7 +593,7 @@ func (x *FileDescriptor) String() string {
 func (*FileDescriptor) ProtoMessage() {}
 
 func (x *FileDescriptor) ProtoReflect() protoreflect.Message {
-	mi := &file_privatevm_v1_common_proto_msgTypes[4]
+	mi := &file_privatevm_v1_common_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -435,7 +606,7 @@ func (x *FileDescriptor) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FileDescriptor.ProtoReflect.Descriptor instead.
 func (*FileDescriptor) Descriptor() ([]byte, []int) {
-	return file_privatevm_v1_common_proto_rawDescGZIP(), []int{4}
+	return file_privatevm_v1_common_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *FileDescriptor) GetLogicalName() string {
@@ -479,7 +650,7 @@ type Diagnostic struct {
 
 func (x *Diagnostic) Reset() {
 	*x = Diagnostic{}
-	mi := &file_privatevm_v1_common_proto_msgTypes[5]
+	mi := &file_privatevm_v1_common_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -491,7 +662,7 @@ func (x *Diagnostic) String() string {
 func (*Diagnostic) ProtoMessage() {}
 
 func (x *Diagnostic) ProtoReflect() protoreflect.Message {
-	mi := &file_privatevm_v1_common_proto_msgTypes[5]
+	mi := &file_privatevm_v1_common_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -504,7 +675,7 @@ func (x *Diagnostic) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Diagnostic.ProtoReflect.Descriptor instead.
 func (*Diagnostic) Descriptor() ([]byte, []int) {
-	return file_privatevm_v1_common_proto_rawDescGZIP(), []int{5}
+	return file_privatevm_v1_common_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *Diagnostic) GetCode() string {
@@ -556,7 +727,7 @@ type ErrorDetail struct {
 
 func (x *ErrorDetail) Reset() {
 	*x = ErrorDetail{}
-	mi := &file_privatevm_v1_common_proto_msgTypes[6]
+	mi := &file_privatevm_v1_common_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -568,7 +739,7 @@ func (x *ErrorDetail) String() string {
 func (*ErrorDetail) ProtoMessage() {}
 
 func (x *ErrorDetail) ProtoReflect() protoreflect.Message {
-	mi := &file_privatevm_v1_common_proto_msgTypes[6]
+	mi := &file_privatevm_v1_common_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -581,7 +752,7 @@ func (x *ErrorDetail) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ErrorDetail.ProtoReflect.Descriptor instead.
 func (*ErrorDetail) Descriptor() ([]byte, []int) {
-	return file_privatevm_v1_common_proto_rawDescGZIP(), []int{6}
+	return file_privatevm_v1_common_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *ErrorDetail) GetCode() string {
@@ -636,7 +807,7 @@ type FieldViolation struct {
 
 func (x *FieldViolation) Reset() {
 	*x = FieldViolation{}
-	mi := &file_privatevm_v1_common_proto_msgTypes[7]
+	mi := &file_privatevm_v1_common_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -648,7 +819,7 @@ func (x *FieldViolation) String() string {
 func (*FieldViolation) ProtoMessage() {}
 
 func (x *FieldViolation) ProtoReflect() protoreflect.Message {
-	mi := &file_privatevm_v1_common_proto_msgTypes[7]
+	mi := &file_privatevm_v1_common_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -661,7 +832,7 @@ func (x *FieldViolation) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FieldViolation.ProtoReflect.Descriptor instead.
 func (*FieldViolation) Descriptor() ([]byte, []int) {
-	return file_privatevm_v1_common_proto_rawDescGZIP(), []int{7}
+	return file_privatevm_v1_common_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *FieldViolation) GetField() string {
@@ -690,7 +861,7 @@ type Progress struct {
 
 func (x *Progress) Reset() {
 	*x = Progress{}
-	mi := &file_privatevm_v1_common_proto_msgTypes[8]
+	mi := &file_privatevm_v1_common_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -702,7 +873,7 @@ func (x *Progress) String() string {
 func (*Progress) ProtoMessage() {}
 
 func (x *Progress) ProtoReflect() protoreflect.Message {
-	mi := &file_privatevm_v1_common_proto_msgTypes[8]
+	mi := &file_privatevm_v1_common_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -715,7 +886,7 @@ func (x *Progress) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Progress.ProtoReflect.Descriptor instead.
 func (*Progress) Descriptor() ([]byte, []int) {
-	return file_privatevm_v1_common_proto_rawDescGZIP(), []int{8}
+	return file_privatevm_v1_common_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *Progress) GetOperation() string {
@@ -757,7 +928,7 @@ type TransferBegin struct {
 
 func (x *TransferBegin) Reset() {
 	*x = TransferBegin{}
-	mi := &file_privatevm_v1_common_proto_msgTypes[9]
+	mi := &file_privatevm_v1_common_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -769,7 +940,7 @@ func (x *TransferBegin) String() string {
 func (*TransferBegin) ProtoMessage() {}
 
 func (x *TransferBegin) ProtoReflect() protoreflect.Message {
-	mi := &file_privatevm_v1_common_proto_msgTypes[9]
+	mi := &file_privatevm_v1_common_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -782,7 +953,7 @@ func (x *TransferBegin) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TransferBegin.ProtoReflect.Descriptor instead.
 func (*TransferBegin) Descriptor() ([]byte, []int) {
-	return file_privatevm_v1_common_proto_rawDescGZIP(), []int{9}
+	return file_privatevm_v1_common_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *TransferBegin) GetContext() *RequestContext {
@@ -816,7 +987,7 @@ type TransferChunk struct {
 
 func (x *TransferChunk) Reset() {
 	*x = TransferChunk{}
-	mi := &file_privatevm_v1_common_proto_msgTypes[10]
+	mi := &file_privatevm_v1_common_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -828,7 +999,7 @@ func (x *TransferChunk) String() string {
 func (*TransferChunk) ProtoMessage() {}
 
 func (x *TransferChunk) ProtoReflect() protoreflect.Message {
-	mi := &file_privatevm_v1_common_proto_msgTypes[10]
+	mi := &file_privatevm_v1_common_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -841,7 +1012,7 @@ func (x *TransferChunk) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TransferChunk.ProtoReflect.Descriptor instead.
 func (*TransferChunk) Descriptor() ([]byte, []int) {
-	return file_privatevm_v1_common_proto_rawDescGZIP(), []int{10}
+	return file_privatevm_v1_common_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *TransferChunk) GetSequence() uint64 {
@@ -868,7 +1039,7 @@ type TransferEnd struct {
 
 func (x *TransferEnd) Reset() {
 	*x = TransferEnd{}
-	mi := &file_privatevm_v1_common_proto_msgTypes[11]
+	mi := &file_privatevm_v1_common_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -880,7 +1051,7 @@ func (x *TransferEnd) String() string {
 func (*TransferEnd) ProtoMessage() {}
 
 func (x *TransferEnd) ProtoReflect() protoreflect.Message {
-	mi := &file_privatevm_v1_common_proto_msgTypes[11]
+	mi := &file_privatevm_v1_common_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -893,7 +1064,7 @@ func (x *TransferEnd) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TransferEnd.ProtoReflect.Descriptor instead.
 func (*TransferEnd) Descriptor() ([]byte, []int) {
-	return file_privatevm_v1_common_proto_rawDescGZIP(), []int{11}
+	return file_privatevm_v1_common_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *TransferEnd) GetTotalSize() uint64 {
@@ -924,7 +1095,7 @@ type TransferFrame struct {
 
 func (x *TransferFrame) Reset() {
 	*x = TransferFrame{}
-	mi := &file_privatevm_v1_common_proto_msgTypes[12]
+	mi := &file_privatevm_v1_common_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -936,7 +1107,7 @@ func (x *TransferFrame) String() string {
 func (*TransferFrame) ProtoMessage() {}
 
 func (x *TransferFrame) ProtoReflect() protoreflect.Message {
-	mi := &file_privatevm_v1_common_proto_msgTypes[12]
+	mi := &file_privatevm_v1_common_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -949,7 +1120,7 @@ func (x *TransferFrame) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TransferFrame.ProtoReflect.Descriptor instead.
 func (*TransferFrame) Descriptor() ([]byte, []int) {
-	return file_privatevm_v1_common_proto_rawDescGZIP(), []int{12}
+	return file_privatevm_v1_common_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *TransferFrame) GetFrame() isTransferFrame_Frame {
@@ -1019,7 +1190,7 @@ type TransferReceipt struct {
 
 func (x *TransferReceipt) Reset() {
 	*x = TransferReceipt{}
-	mi := &file_privatevm_v1_common_proto_msgTypes[13]
+	mi := &file_privatevm_v1_common_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1031,7 +1202,7 @@ func (x *TransferReceipt) String() string {
 func (*TransferReceipt) ProtoMessage() {}
 
 func (x *TransferReceipt) ProtoReflect() protoreflect.Message {
-	mi := &file_privatevm_v1_common_proto_msgTypes[13]
+	mi := &file_privatevm_v1_common_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1044,7 +1215,7 @@ func (x *TransferReceipt) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TransferReceipt.ProtoReflect.Descriptor instead.
 func (*TransferReceipt) Descriptor() ([]byte, []int) {
-	return file_privatevm_v1_common_proto_rawDescGZIP(), []int{13}
+	return file_privatevm_v1_common_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *TransferReceipt) GetTransferId() string {
@@ -1072,7 +1243,19 @@ var File_privatevm_v1_common_proto protoreflect.FileDescriptor
 
 const file_privatevm_v1_common_proto_rawDesc = "" +
 	"\n" +
-	"\x19privatevm/v1/common.proto\x12\fprivatevm.v1\"8\n" +
+	"\x19privatevm/v1/common.proto\x12\fprivatevm.v1\"\xc9\x04\n" +
+	"\x16TorrentCapacityReceipt\x12%\n" +
+	"\x0eschema_version\x18\x01 \x01(\rR\rschemaVersion\x12B\n" +
+	"\vdestination\x18\x02 \x01(\x0e2 .privatevm.v1.TorrentDestinationR\vdestination\x120\n" +
+	"\x14scan_available_bytes\x18\x03 \x01(\x04R\x12scanAvailableBytes\x12D\n" +
+	"\x1ereconstruction_available_bytes\x18\x04 \x01(\x04R\x1creconstructionAvailableBytes\x12>\n" +
+	"\x1bdestination_available_bytes\x18\x05 \x01(\x04R\x19destinationAvailableBytes\x129\n" +
+	"\x19root_overlay_budget_bytes\x18\x06 \x01(\x04R\x16rootOverlayBudgetBytes\x126\n" +
+	"\x17archive_expansion_bytes\x18\a \x01(\x04R\x15archiveExpansionBytes\x121\n" +
+	"\x14reconstruction_bytes\x18\b \x01(\x04R\x13reconstructionBytes\x124\n" +
+	"\x16maximum_selected_bytes\x18\t \x01(\x04R\x14maximumSelectedBytes\x120\n" +
+	"\x14maximum_output_bytes\x18\n" +
+	" \x01(\x04R\x12maximumOutputBytes\"8\n" +
 	"\n" +
 	"ApiVersion\x12\x14\n" +
 	"\x05major\x18\x01 \x01(\rR\x05major\x12\x14\n" +
@@ -1152,7 +1335,11 @@ const file_privatevm_v1_common_proto_rawDesc = "" +
 	"\x16GUEST_ROLE_WORKSTATION\x10\x01\x12\x19\n" +
 	"\x15GUEST_ROLE_DOWNLOADER\x10\x02\x12\x16\n" +
 	"\x12GUEST_ROLE_SCANNER\x10\x03\x12\x17\n" +
-	"\x13GUEST_ROLE_EXPORTER\x10\x04*\xb8\x02\n" +
+	"\x13GUEST_ROLE_EXPORTER\x10\x04*{\n" +
+	"\x12TorrentDestination\x12#\n" +
+	"\x1fTORRENT_DESTINATION_UNSPECIFIED\x10\x00\x12#\n" +
+	"\x1fTORRENT_DESTINATION_WORKSTATION\x10\x01\x12\x1b\n" +
+	"\x17TORRENT_DESTINATION_USB\x10\x02*\xb8\x02\n" +
 	"\fSessionPhase\x12\x1d\n" +
 	"\x19SESSION_PHASE_UNSPECIFIED\x10\x00\x12\x19\n" +
 	"\x15SESSION_PHASE_CREATED\x10\x01\x12\x1d\n" +
@@ -1177,45 +1364,48 @@ func file_privatevm_v1_common_proto_rawDescGZIP() []byte {
 	return file_privatevm_v1_common_proto_rawDescData
 }
 
-var file_privatevm_v1_common_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
-var file_privatevm_v1_common_proto_msgTypes = make([]protoimpl.MessageInfo, 14)
+var file_privatevm_v1_common_proto_enumTypes = make([]protoimpl.EnumInfo, 4)
+var file_privatevm_v1_common_proto_msgTypes = make([]protoimpl.MessageInfo, 15)
 var file_privatevm_v1_common_proto_goTypes = []any{
-	(GuestRole)(0),           // 0: privatevm.v1.GuestRole
-	(SessionPhase)(0),        // 1: privatevm.v1.SessionPhase
-	(Diagnostic_Severity)(0), // 2: privatevm.v1.Diagnostic.Severity
-	(*ApiVersion)(nil),       // 3: privatevm.v1.ApiVersion
-	(*RequestContext)(nil),   // 4: privatevm.v1.RequestContext
-	(*Empty)(nil),            // 5: privatevm.v1.Empty
-	(*Hash)(nil),             // 6: privatevm.v1.Hash
-	(*FileDescriptor)(nil),   // 7: privatevm.v1.FileDescriptor
-	(*Diagnostic)(nil),       // 8: privatevm.v1.Diagnostic
-	(*ErrorDetail)(nil),      // 9: privatevm.v1.ErrorDetail
-	(*FieldViolation)(nil),   // 10: privatevm.v1.FieldViolation
-	(*Progress)(nil),         // 11: privatevm.v1.Progress
-	(*TransferBegin)(nil),    // 12: privatevm.v1.TransferBegin
-	(*TransferChunk)(nil),    // 13: privatevm.v1.TransferChunk
-	(*TransferEnd)(nil),      // 14: privatevm.v1.TransferEnd
-	(*TransferFrame)(nil),    // 15: privatevm.v1.TransferFrame
-	(*TransferReceipt)(nil),  // 16: privatevm.v1.TransferReceipt
+	(GuestRole)(0),                 // 0: privatevm.v1.GuestRole
+	(TorrentDestination)(0),        // 1: privatevm.v1.TorrentDestination
+	(SessionPhase)(0),              // 2: privatevm.v1.SessionPhase
+	(Diagnostic_Severity)(0),       // 3: privatevm.v1.Diagnostic.Severity
+	(*TorrentCapacityReceipt)(nil), // 4: privatevm.v1.TorrentCapacityReceipt
+	(*ApiVersion)(nil),             // 5: privatevm.v1.ApiVersion
+	(*RequestContext)(nil),         // 6: privatevm.v1.RequestContext
+	(*Empty)(nil),                  // 7: privatevm.v1.Empty
+	(*Hash)(nil),                   // 8: privatevm.v1.Hash
+	(*FileDescriptor)(nil),         // 9: privatevm.v1.FileDescriptor
+	(*Diagnostic)(nil),             // 10: privatevm.v1.Diagnostic
+	(*ErrorDetail)(nil),            // 11: privatevm.v1.ErrorDetail
+	(*FieldViolation)(nil),         // 12: privatevm.v1.FieldViolation
+	(*Progress)(nil),               // 13: privatevm.v1.Progress
+	(*TransferBegin)(nil),          // 14: privatevm.v1.TransferBegin
+	(*TransferChunk)(nil),          // 15: privatevm.v1.TransferChunk
+	(*TransferEnd)(nil),            // 16: privatevm.v1.TransferEnd
+	(*TransferFrame)(nil),          // 17: privatevm.v1.TransferFrame
+	(*TransferReceipt)(nil),        // 18: privatevm.v1.TransferReceipt
 }
 var file_privatevm_v1_common_proto_depIdxs = []int32{
-	3,  // 0: privatevm.v1.RequestContext.api_version:type_name -> privatevm.v1.ApiVersion
-	6,  // 1: privatevm.v1.FileDescriptor.digest:type_name -> privatevm.v1.Hash
-	2,  // 2: privatevm.v1.Diagnostic.severity:type_name -> privatevm.v1.Diagnostic.Severity
-	10, // 3: privatevm.v1.ErrorDetail.field_violations:type_name -> privatevm.v1.FieldViolation
-	4,  // 4: privatevm.v1.TransferBegin.context:type_name -> privatevm.v1.RequestContext
-	7,  // 5: privatevm.v1.TransferBegin.descriptor:type_name -> privatevm.v1.FileDescriptor
-	6,  // 6: privatevm.v1.TransferEnd.digest:type_name -> privatevm.v1.Hash
-	12, // 7: privatevm.v1.TransferFrame.begin:type_name -> privatevm.v1.TransferBegin
-	13, // 8: privatevm.v1.TransferFrame.chunk:type_name -> privatevm.v1.TransferChunk
-	14, // 9: privatevm.v1.TransferFrame.end:type_name -> privatevm.v1.TransferEnd
-	7,  // 10: privatevm.v1.TransferReceipt.descriptor:type_name -> privatevm.v1.FileDescriptor
-	6,  // 11: privatevm.v1.TransferReceipt.receiver_digest:type_name -> privatevm.v1.Hash
-	12, // [12:12] is the sub-list for method output_type
-	12, // [12:12] is the sub-list for method input_type
-	12, // [12:12] is the sub-list for extension type_name
-	12, // [12:12] is the sub-list for extension extendee
-	0,  // [0:12] is the sub-list for field type_name
+	1,  // 0: privatevm.v1.TorrentCapacityReceipt.destination:type_name -> privatevm.v1.TorrentDestination
+	5,  // 1: privatevm.v1.RequestContext.api_version:type_name -> privatevm.v1.ApiVersion
+	8,  // 2: privatevm.v1.FileDescriptor.digest:type_name -> privatevm.v1.Hash
+	3,  // 3: privatevm.v1.Diagnostic.severity:type_name -> privatevm.v1.Diagnostic.Severity
+	12, // 4: privatevm.v1.ErrorDetail.field_violations:type_name -> privatevm.v1.FieldViolation
+	6,  // 5: privatevm.v1.TransferBegin.context:type_name -> privatevm.v1.RequestContext
+	9,  // 6: privatevm.v1.TransferBegin.descriptor:type_name -> privatevm.v1.FileDescriptor
+	8,  // 7: privatevm.v1.TransferEnd.digest:type_name -> privatevm.v1.Hash
+	14, // 8: privatevm.v1.TransferFrame.begin:type_name -> privatevm.v1.TransferBegin
+	15, // 9: privatevm.v1.TransferFrame.chunk:type_name -> privatevm.v1.TransferChunk
+	16, // 10: privatevm.v1.TransferFrame.end:type_name -> privatevm.v1.TransferEnd
+	9,  // 11: privatevm.v1.TransferReceipt.descriptor:type_name -> privatevm.v1.FileDescriptor
+	8,  // 12: privatevm.v1.TransferReceipt.receiver_digest:type_name -> privatevm.v1.Hash
+	13, // [13:13] is the sub-list for method output_type
+	13, // [13:13] is the sub-list for method input_type
+	13, // [13:13] is the sub-list for extension type_name
+	13, // [13:13] is the sub-list for extension extendee
+	0,  // [0:13] is the sub-list for field type_name
 }
 
 func init() { file_privatevm_v1_common_proto_init() }
@@ -1223,7 +1413,7 @@ func file_privatevm_v1_common_proto_init() {
 	if File_privatevm_v1_common_proto != nil {
 		return
 	}
-	file_privatevm_v1_common_proto_msgTypes[12].OneofWrappers = []any{
+	file_privatevm_v1_common_proto_msgTypes[13].OneofWrappers = []any{
 		(*TransferFrame_Begin)(nil),
 		(*TransferFrame_Chunk)(nil),
 		(*TransferFrame_End)(nil),
@@ -1233,8 +1423,8 @@ func file_privatevm_v1_common_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_privatevm_v1_common_proto_rawDesc), len(file_privatevm_v1_common_proto_rawDesc)),
-			NumEnums:      3,
-			NumMessages:   14,
+			NumEnums:      4,
+			NumMessages:   15,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

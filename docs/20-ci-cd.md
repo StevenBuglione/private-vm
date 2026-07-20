@@ -57,10 +57,13 @@ For pull requests and pushes:
 - workflow policy validation with locked actionlint and zizmor
 - no publishing
 
-The source Nix job serializes derivations at two cores. It builds only the
-focused non-image gates after `nix flake check --no-build`; canonical images and
+The source Nix job serializes derivations at two cores. After `nix flake check
+--no-build`, one `nix build` invocation evaluates and builds the runtime-fuzz,
+host-module-contract, and static-binaries targets together. Canonical images and
 all TCG role boots belong exclusively to the isolated image workflow below.
-This avoids rebuilding the entire role matrix in one 16 GB workspace.
+The combined invocation preserves all three gates while avoiding two redundant
+flake evaluations and avoids rebuilding the entire role matrix in one 16 GB
+workspace.
 
 The daemon request-protobuf, context-validation, and process-evidence parser
 fuzz target runs for two seconds with one worker in both `ci.yml` and the Nix
@@ -115,8 +118,11 @@ Each job:
 3. reclaim only documented disposable runner tool directories and the unused
    Nix store
 4. require at least 10 GiB available RAM and disk before building
-5. build exactly one canonical image without a result symlink
-6. report its closure size
+5. build exactly one canonical image without a result symlink, require the build
+   to emit exactly one existing direct `/nix/store` output, and pass that path
+   through a validated step output
+6. report the captured output's closure size directly, without evaluating the
+   flake target again
 7. run the role's static contract check where applicable
 8. boot its role-specific smoke test under explicit TCG
 9. run scanner update and offline boots serially
@@ -127,8 +133,9 @@ The workflow uses `contents: read` at workflow and job scope. It has no package,
 OIDC, attestation, release, cache, or artifact-upload path, so neither pull
 requests nor main pushes publish anything in REL-002. Full-SHA action pins,
 exactly six reviewed matrix entries, the standard-runner label, serialized Nix
-limits, `--no-link`, cleanup, TCG targets, and the absence of publication are
-enforced by `tools/check_workflow_policy.py` and negative tests.
+limits, `--no-link`, single-output store-path validation, direct closure
+reporting, cleanup, TCG targets, and the absence of publication are enforced by
+`tools/check_workflow_policy.py` and negative tests.
 
 Path filters run the matrix when canonical image inputs, role guestd code,
 generated APIs, dependency closure, bundle catalogs, relevant schemas, or the
@@ -214,9 +221,16 @@ first release candidate can require that one-time owner visibility change and a
 rerun of the failed anonymous rows. Until the unauthenticated rerun succeeds,
 the release gate remains failed.
 
-REL-004 later adds package builds, the protected `release` environment, GitHub
-Release creation and whole-release clean-room verification. It must reuse these
-image digests and refuse every already-existing REL-003 package tag.
+REL-004 adds two later jobs. `packages` runs only after all six image verification
+rows, uses the protected `release` environment, builds DEB/RPM/generic outputs
+serially, creates SPDX/build manifests, anonymously re-verifies the six image
+digests, attests each exact package subject and publishes one draft-first GitHub
+Release. `verify-release` is a fresh `contents: read` runner with no credential;
+it downloads the exact 13-asset package release, verifies every digest, closed
+manifest, SPDX document and Sigstore bundle, then requires the six OCI digests
+to equal the closed whole-release index. Partial drafts are deleted; the Git tag
+is never deleted or moved. Server-side protection and live publication are
+remote-only gates.
 
 ## Local versus remote evidence
 

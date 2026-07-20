@@ -2,9 +2,9 @@ syntax = "proto3";
 
 package privatevm.v1;
 
-option go_package = "github.com/StevenBuglione/private-vm/gen/privatevm/v1;privatevmv1";
-
 import "privatevm/v1/common.proto";
+
+option go_package = "github.com/StevenBuglione/private-vm/gen/privatevm/v1;privatevmv1";
 
 // Authentication is supplied as x-private-vm-session-token metadata and
 // checked by a constant-time server interceptor before any handler runs.
@@ -16,6 +16,8 @@ service GuestCommonService {
 }
 
 service WorkstationGuestService {
+  rpc ConfigureWireGuard(ConfigureWireGuardRequest) returns (VPNStatus);
+  rpc VerifyVPN(VerifyVPNRequest) returns (VPNStatus);
   rpc GetWorkspaceState(WorkspaceStateRequest) returns (WorkspaceState);
   rpc ImportFile(stream TransferFrame) returns (TransferReceipt);
   rpc ListExportFiles(WorkspaceStateRequest) returns (WorkspaceState);
@@ -37,6 +39,8 @@ service DownloaderGuestService {
 }
 
 service ScannerGuestService {
+  rpc ConfigureWireGuard(ConfigureWireGuardRequest) returns (VPNStatus);
+  rpc VerifyVPN(VerifyVPNRequest) returns (VPNStatus);
   rpc UpdateDefinitions(ScannerRequest) returns (DefinitionsStatus);
   rpc GetDefinitionsStatus(ScannerRequest) returns (DefinitionsStatus);
   rpc VerifyOfflineMode(ScannerRequest) returns (OfflineStatus);
@@ -53,6 +57,9 @@ service ExporterGuestService {
   rpc WriteFile(stream TransferFrame) returns (TransferReceipt);
   rpc VerifyFile(VerifyExportRequest) returns (TransferReceipt);
   rpc FinalizeUSB(ExporterRequest) returns (USBStatus);
+  rpc PrepareExactUSB(stream PrepareUSBFrame) returns (USBStatus);
+  rpc WriteVerifiedFile(stream TransferFrame) returns (USBTransferReceipt);
+  rpc VerifyWrittenFile(VerifyExportRequest) returns (USBTransferReceipt);
 }
 
 message GuestContext {
@@ -60,7 +67,9 @@ message GuestContext {
   GuestRole expected_role = 2;
 }
 
-message GuestHelloRequest { GuestContext context = 1; }
+message GuestHelloRequest {
+  GuestContext context = 1;
+}
 
 message GuestHelloResponse {
   ApiVersion api_version = 1;
@@ -73,12 +82,52 @@ message GuestHelloResponse {
   string guestd_version = 8;
 }
 
-message GuestStatusRequest { GuestContext context = 1; }
-message GuestStatus { string state = 1; repeated Diagnostic diagnostics = 2; }
-message GuestEvent { uint64 sequence = 1; string code = 2; Progress progress = 3; Diagnostic diagnostic = 4; }
-message ShutdownRequest { GuestContext context = 1; bool poweroff = 2; }
+message GuestStatusRequest {
+  GuestContext context = 1;
+}
+message GuestStatus {
+  string state = 1;
+  repeated Diagnostic diagnostics = 2;
+}
+message GuestEvent {
+  uint64 sequence = 1;
+  string code = 2;
+  Progress progress = 3;
+  Diagnostic diagnostic = 4;
+}
+message ShutdownRequest {
+  GuestContext context = 1;
+  bool poweroff = 2;
+}
 
-message ConfigureWireGuardRequest { GuestContext context = 1; bytes profile = 2; }
+// GuestUnderlay is the private point-to-point addressing selected by the host
+// network owner. Addresses are canonical 4-byte/16-byte values rather than
+// strings so neither parsing nor logging can accidentally expose them.
+message GuestUnderlay {
+  bytes ipv4_address = 1;
+  uint32 ipv4_prefix_length = 2;
+  bytes ipv4_gateway = 3;
+  bytes ipv6_address = 4;
+  uint32 ipv6_prefix_length = 5;
+  bytes ipv6_gateway = 6;
+}
+
+// VPNProbeTargets are operator-controlled verification fixtures. They are
+// transported only to the authenticated guest and never returned in status.
+message VPNProbeTargets {
+  string dns_name = 1;
+  bytes ipv4_address = 2;
+  uint32 ipv4_port = 3;
+  bytes ipv6_address = 4;
+  uint32 ipv6_port = 5;
+}
+
+message ConfigureWireGuardRequest {
+  GuestContext context = 1;
+  bytes profile = 2;
+  GuestUnderlay underlay = 3;
+  VPNProbeTargets probe_targets = 4;
+}
 message VerifyVPNRequest { GuestContext context = 1; }
 message VPNStatus {
   bool configured = 1;
@@ -95,31 +144,151 @@ message VPNStatus {
 
 message TorrentInputFrame {
   GuestContext context = 1;
-  oneof frame { bytes torrent_chunk = 2; bytes magnet_chunk = 3; }
+  oneof frame {
+    bytes torrent_chunk = 2;
+    bytes magnet_chunk = 3;
+  }
   bool final = 4;
 }
-message TorrentRequest { GuestContext context = 1; }
-message TorrentFile { uint32 index = 1; string display_path = 2; uint64 size_bytes = 3; bool selected = 4; repeated string hazard_codes = 5; }
-message TorrentMetadata { string display_name = 1; repeated TorrentFile files = 2; uint64 selected_size_bytes = 3; bool payload_paused = 4; }
-message SelectTorrentFilesRequest { GuestContext context = 1; repeated uint32 indexes = 2; }
-message TorrentEvent { Progress progress = 1; Diagnostic diagnostic = 2; bool complete = 3; }
-message TorrentStatus { string state = 1; Progress progress = 2; repeated Diagnostic diagnostics = 3; }
+message TorrentRequest {
+  GuestContext context = 1;
+}
+message TorrentFile {
+  uint32 index = 1;
+  string display_path = 2;
+  uint64 size_bytes = 3;
+  bool selected = 4;
+  repeated string hazard_codes = 5;
+}
+message TorrentMetadata {
+  string display_name = 1;
+  repeated TorrentFile files = 2;
+  uint64 selected_size_bytes = 3;
+  bool payload_paused = 4;
+}
+message SelectTorrentFilesRequest {
+  GuestContext context = 1;
+  repeated uint32 indexes = 2;
+  TorrentCapacityReceipt capacity = 3;
+}
+message TorrentEvent {
+  Progress progress = 1;
+  Diagnostic diagnostic = 2;
+  bool complete = 3;
+}
+message TorrentStatus {
+  string state = 1;
+  Progress progress = 2;
+  repeated Diagnostic diagnostics = 3;
+}
 
-message ScannerRequest { GuestContext context = 1; string policy_name = 2; }
-message DefinitionsStatus { bool current = 1; string database_version = 2; int64 updated_unix_seconds = 3; repeated Diagnostic diagnostics = 4; }
-message OfflineStatus { bool no_network = 1; bool quarantine_read_only = 2; repeated Diagnostic diagnostics = 3; }
-message ScanEvent { Progress progress = 1; Diagnostic finding = 2; bool approved = 3; bool complete = 4; }
-message ScanReportEnvelope { bytes canonical_json = 1; bytes authentication_tag = 2; bool complete = 3; }
-message ExportApprovedFileRequest { GuestContext context = 1; string output_id = 2; }
+message ScannerRequest {
+  GuestContext context = 1;
+  string policy_name = 2;
+}
+message DefinitionsStatus {
+  bool current = 1;
+  string database_version = 2;
+  int64 updated_unix_seconds = 3;
+  repeated Diagnostic diagnostics = 4;
+}
+message OfflineStatus {
+  bool no_network = 1;
+  bool quarantine_read_only = 2;
+  repeated Diagnostic diagnostics = 3;
+}
+message ScanEvent {
+  Progress progress = 1;
+  Diagnostic finding = 2;
+  bool approved = 3;
+  bool complete = 4;
+}
+message ScanReportEnvelope {
+  bytes canonical_json = 1;
+  bytes authentication_tag = 2;
+  bool complete = 3;
+}
+message ExportApprovedFileRequest {
+  GuestContext context = 1;
+  string output_id = 2;
+}
 
-message WorkspaceStateRequest { GuestContext context = 1; }
-message WorkspaceEntry { string output_id = 1; uint64 size_bytes = 2; bool exported = 3; bool changed_since_export = 4; }
-message WorkspaceState { string state = 1; repeated WorkspaceEntry entries = 2; }
-message GuestExportFileRequest { GuestContext context = 1; string output_id = 2; }
-message MarkExportVerifiedRequest { GuestContext context = 1; string output_id = 2; Hash digest = 3; }
-message NetworkWarningRequest { GuestContext context = 1; string warning_code = 2; }
+message WorkspaceStateRequest {
+  GuestContext context = 1;
+}
+message WorkspaceEntry {
+  string output_id = 1;
+  uint64 size_bytes = 2;
+  bool exported = 3;
+  bool changed_since_export = 4;
+}
+message WorkspaceState {
+  string state = 1;
+  repeated WorkspaceEntry entries = 2;
+}
+message GuestExportFileRequest {
+  GuestContext context = 1;
+  string output_id = 2;
+}
+message MarkExportVerifiedRequest {
+  GuestContext context = 1;
+  string output_id = 2;
+  Hash digest = 3;
+}
+message NetworkWarningRequest {
+  GuestContext context = 1;
+  string warning_code = 2;
+}
 
-message ExporterRequest { GuestContext context = 1; }
-message PrepareUSBRequest { GuestContext context = 1; bool destructive_confirmed = 2; }
-message VerifyExportRequest { GuestContext context = 1; string transfer_id = 2; }
-message USBStatus { bool no_network = 1; bool mounted = 2; bool flushed = 3; bool unmounted = 4; repeated Diagnostic diagnostics = 5; }
+message USBDeviceExpectation {
+  string enrollment_id = 1;
+  string vendor_id = 2;
+  string product_id = 3;
+  string serial = 4;
+  uint64 capacity_bytes = 5;
+}
+message ExporterRequest {
+  GuestContext context = 1;
+  USBDeviceExpectation expected_device = 2;
+}
+message PrepareUSBBegin {
+  GuestContext context = 1;
+  USBDeviceExpectation expected_device = 2;
+}
+message PrepareUSBSecretChunk {
+  bytes data = 1;
+}
+message PrepareUSBFrame {
+  oneof frame {
+    PrepareUSBBegin begin = 1;
+    PrepareUSBSecretChunk passphrase_chunk = 2;
+  }
+}
+message PrepareUSBRequest {
+  GuestContext context = 1;
+  bool destructive_confirmed = 2;
+}
+message VerifyExportRequest {
+  GuestContext context = 1;
+  string transfer_id = 2;
+}
+message USBTransferReceipt {
+  string transfer_id = 1;
+  FileDescriptor descriptor = 2;
+  Hash receiver_digest = 3;
+  Hash reread_digest = 4;
+  bool file_synced = 5;
+  bool filesystem_synced = 6;
+  bool atomic_rename = 7;
+}
+message USBStatus {
+  bool no_network = 1;
+  bool mounted = 2;
+  bool flushed = 3;
+  bool unmounted = 4;
+  repeated Diagnostic diagnostics = 5;
+  bool identity_verified = 6;
+  bool luks2 = 7;
+  bool ext4 = 8;
+  bool luks_closed = 9;
+}

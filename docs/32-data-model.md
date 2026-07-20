@@ -48,9 +48,15 @@ between allocation and registration triggers bounded rollback. Cleanup runs in
 reverse allocation order, stops at the first failure, and resumes safely on a
 later request. This live cleanup registry is internal actor state rather than a
 public RPC or durable session field. The separate startup-recovery record added
-by `D-004` may contain only closed, daemon-derived resource identities needed to
+by `D-005` may contain only closed, daemon-derived resource identities needed to
 revalidate an orphan; it must not serialize callbacks, raw command arguments or
 sensitive values.
+
+The exported startup recovery report is a different, deliberately coarser
+object. It contains only schema version, complete/incomplete code, aggregate
+session/resource counts, volatile-key-loss and base-image audit booleans, and
+closed safe failure records. Session IDs, locators, identity fingerprints,
+process evidence, device identities and wrapped backend errors are forbidden.
 
 ## Image identity
 
@@ -108,9 +114,21 @@ ordered chunks. It is never a general filesystem tunnel.
 
 ## Scan report
 
-The report records scanner image, definitions, input identity, findings,
-transformations, output identities and final result. `complete=false` or a
-missing field cannot approve a transfer.
+The v1 canonical report records scanner image/source/guestd identity, ClamAV
+engine/database identity and timestamp, exact offline isolation evidence, every
+phase-completion bit, sorted input identities/verdicts, bounded archive records,
+findings, reconstruction tools, transformations, output identities/rescan
+verdicts and the final result. Session IDs use the internal `pvm-` form; output
+IDs use the opaque `scan-out-` form. There is deliberately no magnet, torrent
+info-hash or torrent identifier field.
+
+The guest returns the canonical JSON plus a 32-byte HMAC-SHA-256 tag made with
+the per-boot volatile session capability. The verifier authenticates bytes
+before strict decoding and requires byte-for-byte canonical re-encoding.
+Unknown fields, trailing documents, malformed ordering, a mismatched envelope
+completeness flag, `complete=false`, an unfinished phase, stale definitions, a
+blocking finding, a missing output rescan or any missing identity cannot approve
+a transfer. Reports remain under `/run` unless explicitly exported.
 
 ## Workspace state
 
@@ -138,6 +156,15 @@ rejects JSON, text, binary, gob and XML serialization. Its callback-only APIs
 provide static guest addressing, a scoped TAP descriptor or the ephemeral guest
 VPN configuration only while the same current VPN resolution plan and network
 lifecycle lease remain valid.
+
+## Redacted torrent status
+
+`schemas/torrent-status.schema.json` is the only durable/machine-safe torrent
+status shape. It contains a stable workflow state, byte counters, a stable code
+and remediation. It cannot contain a magnet, info hash, display name, file
+path, content hash, VPN endpoint, qBittorrent response or external-command
+output. Metadata and the completed-file manifest remain volatile internal/RPC
+values whose Go types reject serialization.
 
 ## Sensitive versus non-sensitive fields
 

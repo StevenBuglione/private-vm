@@ -49,7 +49,14 @@ func (s *contextServerStream) RecvMsg(message any) error {
 	}
 	switch request := message.(type) {
 	case *privatevmv1.TorrentInputFrame:
-		return ValidateGuestContext(request.GetContext(), s.role)
+		if s.validated {
+			return nil
+		}
+		if err := ValidateGuestContext(request.GetContext(), s.role); err != nil {
+			return err
+		}
+		s.validated = true
+		return nil
 	case *privatevmv1.TransferFrame:
 		if s.validated {
 			return nil
@@ -58,6 +65,21 @@ func (s *contextServerStream) RecvMsg(message any) error {
 			return guestRPCError(codes.InvalidArgument, "TRANSFER_BEGIN_REQUIRED", "The first transfer frame must be a begin frame.", "Retry the bounded transfer from the beginning.", false)
 		}
 		if err := ValidateRequestContext(request.GetBegin().GetContext()); err != nil {
+			return err
+		}
+		s.validated = true
+		return nil
+	case *privatevmv1.PrepareUSBFrame:
+		if s.validated {
+			return nil
+		}
+		if request.GetBegin() == nil {
+			if chunk := request.GetPassphraseChunk(); chunk != nil {
+				clear(chunk.Data)
+			}
+			return guestRPCError(codes.InvalidArgument, "USB_PREPARE_BEGIN_REQUIRED", "USB preparation must begin with an authenticated identity expectation.", "Retry through the private-vm daemon from a fresh preparation plan.", false)
+		}
+		if err := ValidateGuestContext(request.GetBegin().GetContext(), s.role); err != nil {
 			return err
 		}
 		s.validated = true
@@ -107,8 +129,6 @@ func unaryGuestContext(request any) (*privatevmv1.GuestContext, error) {
 	case *privatevmv1.NetworkWarningRequest:
 		return value.GetContext(), nil
 	case *privatevmv1.ExporterRequest:
-		return value.GetContext(), nil
-	case *privatevmv1.PrepareUSBRequest:
 		return value.GetContext(), nil
 	case *privatevmv1.VerifyExportRequest:
 		return value.GetContext(), nil

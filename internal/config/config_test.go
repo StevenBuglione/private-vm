@@ -19,6 +19,9 @@ func TestDefaultsAreValidAndImmutableValues(t *testing.T) {
 	if configuration.SchemaVersion() != 1 || !configuration.Strict() {
 		t.Fatalf("unexpected defaults: %#v", configuration)
 	}
+	if configuration.Desktop().MemoryBytes() != 4<<30 || configuration.Desktop().VCPUs() != 2 {
+		t.Fatalf("unsafe workstation defaults: memory=%d vcpus=%d", configuration.Desktop().MemoryBytes(), configuration.Desktop().VCPUs())
+	}
 	runtimeCopy := configuration.Runtime()
 	if runtimeCopy.Directory() != DefaultRuntimePath || configuration.Runtime().Directory() != DefaultRuntimePath {
 		t.Fatal("runtime getter did not return the immutable value")
@@ -310,6 +313,24 @@ func TestValidationRejectsMalformedRegistryIdentity(t *testing.T) {
 		ImageSource: ImageSourceOverrides{Repository: &badRepository},
 	}})
 	assertConfigCode(t, err, "CONFIG_INVALID")
+}
+
+func TestValidationRejectsUnsafeVPNProbeTargets(t *testing.T) {
+	tests := []VPNOverrides{
+		{ProbeDNSName: pointer("localhost")},
+		{ProbeIPv4: pointer("127.0.0.1:853")},
+		{ProbeIPv4: pointer("10.0.0.1:853")},
+		{ProbeIPv4: pointer("[2606:4700:4700::1111]:853")},
+		{ProbeIPv6: pointer("1.1.1.1:853")},
+		{ProbeIPv6: pointer("[fe80::1]:853")},
+		{ProbeIPv6: pointer("[2606:4700:4700::1111]:0")},
+	}
+	for index, vpnOverrides := range tests {
+		_, err := defaultLoader().Load(LoadOptions{Overrides: Overrides{VPN: vpnOverrides}})
+		if errorCode(err) != "CONFIG_INVALID" {
+			t.Fatalf("case %d returned %v", index, err)
+		}
+	}
 }
 
 func writeConfig(t *testing.T, path, value string) {

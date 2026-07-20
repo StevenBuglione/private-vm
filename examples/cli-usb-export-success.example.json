@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "ok": true,
+  "code": "USB_EXPORT_VERIFIED",
+  "data": {
+    "schema_version": 1,
+    "enrollment_id": "usb-0123456789abcdef",
+    "bytes_written": 4096,
+    "source_relay_hash_equal": true,
+    "relay_exporter_hash_equal": true,
+    "exporter_reread_hash_equal": true,
+    "file_synced": true,
+    "filesystem_synced": true,
+    "atomic_rename": true,
+    "usb_unmounted": true,
+    "usb_detached": true,
+    "exporter_stopped": true,
+    "cleanup_complete": true
+  }
+}

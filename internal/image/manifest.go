@@ -208,9 +208,9 @@ func validRoleBundle(role, bundle string) bool {
 }
 
 var roleCapabilities = map[string][]string{
-	"workstation": {"desktop", "guest-events", "guest-shutdown", "guest-status", "network-warning", "workspace-export", "workspace-import"},
+	"workstation": {"desktop", "guest-events", "guest-shutdown", "guest-status", "network-warning", "vpn-verification", "wireguard-config", "workspace-export", "workspace-import"},
 	"downloader":  {"guest-events", "guest-shutdown", "guest-status", "quarantine-seal", "torrent-download", "torrent-metadata", "vpn-verification", "wireguard-config"},
-	"scanner":     {"approved-export", "definitions-update", "guest-events", "guest-shutdown", "guest-status", "inventory", "offline-verification", "reconstruct", "scan", "scan-report"},
+	"scanner":     {"approved-export", "definitions-update", "guest-events", "guest-shutdown", "guest-status", "inventory", "offline-verification", "reconstruct", "scan", "scan-report", "vpn-verification", "wireguard-config"},
 	"exporter":    {"guest-events", "guest-shutdown", "guest-status", "usb-finalize", "usb-inspect", "usb-prepare", "usb-verify", "usb-write"},
 }
 

@@ -54,6 +54,8 @@ rechecked on 2026-07-19.
   https://protonvpn.com/support/bittorrent-vpn
 - Port-forwarding considerations:
   https://protonvpn.com/support/port-forwarding
+- qBittorrent 5.0 WebUI API (paused add, contents, file priority, stop/start):
+  https://github.com/qbittorrent/qBittorrent/wiki/WebUI-API-%28qBittorrent-5.0%29
 
 ## Address policy
 

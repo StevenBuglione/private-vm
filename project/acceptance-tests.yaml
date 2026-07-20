@@ -178,7 +178,7 @@
           "name": "One canonical image per fresh public runner",
           "given": "the active image-build matrix on a public repository",
           "when": "a canonical image input changes",
-          "then": "six independent ubuntu-24.04 jobs each build exactly one reviewed image output with serialized Nix limits"
+          "then": "six independent ubuntu-24.04 jobs each build exactly one reviewed image output with serialized Nix limits, validate one existing direct /nix/store output path and report that exact path's closure without reevaluating the flake target"
         },
         {
           "id": "CI-IMG-002",
@@ -391,6 +391,27 @@
           "given": "completed download",
           "when": "scan phase starts",
           "then": "no downloader QEMU process exists"
+        },
+        {
+          "id": "TOR-004",
+          "name": "Secure input remains off argv and logs",
+          "given": "synthetic magnet and metainfo fixtures",
+          "when": "hidden-terminal, stdin and regular-file input paths run",
+          "then": "input is bounded and cleared, malformed input rejects, and no private value enters argv, environment, status or errors"
+        },
+        {
+          "id": "TOR-005",
+          "name": "VPN loss pauses payload",
+          "given": "an approved synthetic download in progress",
+          "when": "the typed VPN-loss responder runs",
+          "then": "qBittorrent is paused before the loss is reported and explicit re-verification is required"
+        },
+        {
+          "id": "TOR-006",
+          "name": "Seal cleanup is retryable",
+          "given": "a verified completed synthetic download",
+          "when": "the downloader absence audit fails once",
+          "then": "scanner readiness remains false and a later retry audits destruction without downloading or resealing again"
         }
       ]
     },
@@ -438,6 +459,13 @@
           "given": "a selection within cumulative quarantine capacity that contains an oversized file or expanded work",
           "when": "policy planning and each one-file ClamAV invocation are bounded",
           "then": "the cumulative capacity remains independent while every file and expanded operation is at most 4 GiB and every one-file ClamAV invocation is at most 300 seconds"
+        },
+        {
+          "id": "SCAN-006-REPORT",
+          "name": "Authenticated complete report",
+          "given": "canonical scanner evidence and a volatile per-session MAC key",
+          "when": "promotion verifies the report envelope",
+          "then": "tampering, wrong key, incomplete phases, skipped output rescan and noncanonical JSON reject"
         }
       ]
     },
@@ -471,25 +499,58 @@
       "id": "WORKSPACE",
       "tests": [
         {
-          "id": "WS-001",
+          "id": "WS-003",
           "name": "Unexported work blocks stop",
           "given": "new file in ~/Export",
           "when": "desktop stop without discard",
           "then": "stop blocked"
         },
         {
-          "id": "WS-002",
+          "id": "WS-001",
           "name": "Host import is explicit",
           "given": "single selected local file",
           "when": "workspace import",
           "then": "only that byte stream reaches ~/Inbox and guest cannot enumerate parent directory"
         },
         {
-          "id": "WS-003",
+          "id": "WS-002",
           "name": "Safe promotion excludes original",
           "given": "torrent document sanitized",
           "when": "open in workstation",
           "then": "only report-listed reconstructed output is transferred"
+        }
+      ]
+    },
+    {
+      "id": "PACKAGING",
+      "tests": [
+        {
+          "id": "PKG-001",
+          "name": "NixOS host module installs the complete boundary",
+          "given": "a clean supported NixOS 26.05 host and an explicitly configured existing user",
+          "when": "the locked module is enabled and nixos-rebuild switch completes",
+          "then": "the exact package, group membership, daemon, pinned runtime PATH, tmpfiles, candidate-only udev integration, USBGuard default-block policy, one Polkit action, completions and man pages exist and strict Doctor has no unresolved package inconsistency"
+        },
+        {
+          "id": "PKG-002",
+          "name": "Native packages install, upgrade and remove cleanly",
+          "given": "the same digest-addressed DEB or RPM in fresh supported Ubuntu, Debian and Fedora VMs",
+          "when": "the package is installed, activated, upgraded after session cleanup, stopped and removed",
+          "then": "dependencies resolve, the daemon and socket pass strict Doctor, configuration and image-cache sentinels retain their hashes, and no daemon remains after removal"
+        },
+        {
+          "id": "PKG-003",
+          "name": "Generic installer is manifest-bound and transactional",
+          "given": "a verified generic archive or a tampered, unsupported, non-root, active-daemon, cancelled or timed-out variant",
+          "when": "system install or uninstall is previewed and accepted",
+          "then": "only the exact displayed fixed paths change, valid transactions activate or remove integration while preserving configuration/cache/exports, and every failure rolls back or returns cleanup-incomplete exit 24"
+        },
+        {
+          "id": "PKG-004",
+          "name": "Released packages verify in a clean room",
+          "given": "a protected canonical RC tag and published package artifacts, manifests, SPDX documents and attestations",
+          "when": "a fresh runner downloads anonymously and verifies every artifact",
+          "then": "digests and official repository/workflow/tag provenance match before any clean-VM installation gate begins"
         }
       ]
     }

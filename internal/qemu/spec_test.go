@@ -93,7 +93,8 @@ func TestScannerScanArgsHaveReadOnlyQuarantineAndNoNIC(t *testing.T) {
 		t.Fatal(err)
 	}
 	joined := strings.Join(args, " ")
-	if !strings.Contains(joined, "-nic none") || !strings.Contains(joined, "readonly=on") || strings.Contains(joined, "virtio-net-pci") {
+	if !strings.Contains(joined, "-nic none") || !strings.Contains(joined, "readonly=on") || strings.Contains(joined, "virtio-net-pci") ||
+		!strings.Contains(joined, "name=opt/private-vm/scanner-boot-mode,string=scan-offline") {
 		t.Fatalf("scanner isolation arguments are wrong: %s", joined)
 	}
 }
@@ -104,7 +105,6 @@ func TestExporterHasNoDisplayOrNetwork(t *testing.T) {
 	spec.Networked = false
 	spec.NetworkFD = 0
 	spec.SPICESocket = ""
-	spec.USB = &USBDevice{Bus: 2, Address: 4}
 	args, err := spec.Args()
 	if err != nil {
 		t.Fatal(err)
@@ -113,8 +113,11 @@ func TestExporterHasNoDisplayOrNetwork(t *testing.T) {
 	if strings.Contains(joined, "-spice") || strings.Contains(joined, "virtio-vga") || strings.Contains(joined, "virtio-net") {
 		t.Fatalf("exporter received a forbidden display or network device: %s", joined)
 	}
-	if !strings.Contains(joined, "usb-host") || !strings.Contains(joined, "-nic none") {
+	if !strings.Contains(joined, "qemu-xhci,id=usb-controller") || !strings.Contains(joined, "-nic none") {
 		t.Fatalf("exporter arguments are incomplete: %s", joined)
+	}
+	if strings.Contains(joined, "usb-host") {
+		t.Fatalf("exporter USB must be hotplugged through typed QMP only: %s", joined)
 	}
 }
 
@@ -129,7 +132,6 @@ func TestRoleDeviceMatrixFailsClosed(t *testing.T) {
 			spec.Role = session.RoleScanner
 			spec.ScannerMode = ScannerModeScan
 		},
-		func(spec *Spec) { spec.USB = &USBDevice{Bus: 1, Address: 1} },
 	}
 	for index, mutate := range tests {
 		spec := validSpec(t)
@@ -229,7 +231,26 @@ func TestDownloaderAndScannerUpdateDeviceMatrix(t *testing.T) {
 	update := validSpec(t)
 	update.Role = session.RoleScanner
 	update.ScannerMode = ScannerModeUpdate
-	if _, err := update.Args(); err != nil {
+	args, err := update.Args()
+	if err != nil {
 		t.Fatalf("valid scanner update: %v", err)
+	}
+	if joined := strings.Join(args, " "); !strings.Contains(joined, "name=opt/private-vm/scanner-boot-mode,string=definitions-update") || strings.Contains(joined, "scan-offline") {
+		t.Fatalf("scanner update boot selector is wrong: %s", joined)
+	}
+}
+
+func TestScannerBootSelectorIsRoleBoundAndClosed(t *testing.T) {
+	workstation := validSpec(t)
+	workstation.ScannerMode = ScannerModeUpdate
+	if err := workstation.Validate(); err == nil {
+		t.Fatal("non-scanner boot selector unexpectedly passed")
+	}
+
+	scanner := validSpec(t)
+	scanner.Role = session.RoleScanner
+	scanner.ScannerMode = ScannerMode("user-selected")
+	if err := scanner.Validate(); err == nil {
+		t.Fatal("unknown scanner boot selector unexpectedly passed")
 	}
 }

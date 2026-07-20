@@ -31,6 +31,33 @@ type provenanceStatement struct {
 	Predicate     *githubPredicate    `json:"predicate"`
 }
 
+// OfficialArtifactProvenance is the narrow public verification identity used
+// by the whole-release coordinator for DEB, RPM and generic archive subjects.
+// Repository, workflow and immutable GitHub IDs remain frozen internally.
+type OfficialArtifactProvenance struct {
+	SubjectName  string
+	Digest       string
+	SourceCommit string
+	SourceRef    string
+}
+
+type provenanceArtifactIdentity struct {
+	subjectName      string
+	digest           string
+	sourceRepository string
+	workflow         string
+	sourceCommit     string
+	sourceRef        string
+}
+
+func imageProvenanceIdentity(manifest Manifest) provenanceArtifactIdentity {
+	return provenanceArtifactIdentity{
+		subjectName: officialSubjectName, digest: manifest.ImageDigest,
+		sourceRepository: manifest.SourceRepository, workflow: manifest.Workflow,
+		sourceCommit: manifest.SourceCommit, sourceRef: manifest.SourceRef,
+	}
+}
+
 type provenanceSubject struct {
 	Name   string            `json:"name"`
 	Digest *provenanceDigest `json:"digest"`
@@ -107,17 +134,17 @@ func decodeProvenanceStatement(data []byte, maximumDepth int) (provenanceStateme
 	return statement, nil
 }
 
-func (statement provenanceStatement) validate(ctx context.Context, manifest Manifest) error {
+func (statement provenanceStatement) validateArtifact(ctx context.Context, artifact provenanceArtifactIdentity) error {
 	if err := ctx.Err(); err != nil {
 		return contextError(ctx, err)
 	}
-	if manifest.SourceRepository != officialRepository || manifest.Workflow != officialWorkflow ||
-		!officialReleaseRefPattern.MatchString(manifest.SourceRef) {
+	if artifact.sourceRepository != officialRepository || artifact.workflow != officialWorkflow ||
+		!officialReleaseRefPattern.MatchString(artifact.sourceRef) || artifact.subjectName == "" {
 		return provenanceIdentityError("The image manifest does not name the immutable official repository and release workflow.", nil)
 	}
 	if statement.Type != inTotoStatementV1 || statement.PredicateType != slsaProvenanceV1 ||
-		len(statement.Subject) != 1 || statement.Subject[0].Name != officialSubjectName ||
-		statement.Subject[0].Digest == nil || statement.Subject[0].Digest.SHA256 != strings.TrimPrefix(manifest.ImageDigest, "sha256:") ||
+		len(statement.Subject) != 1 || statement.Subject[0].Name != artifact.subjectName ||
+		statement.Subject[0].Digest == nil || statement.Subject[0].Digest.SHA256 != strings.TrimPrefix(artifact.digest, "sha256:") ||
 		statement.Predicate == nil || statement.Predicate.BuildDefinition == nil || statement.Predicate.RunDetails == nil {
 		return provenancePredicateError("The signed statement identity or single compressed-image subject is invalid.", nil)
 	}
@@ -130,7 +157,7 @@ func (statement provenanceStatement) validate(ctx context.Context, manifest Mani
 	}
 	repositoryURL := "https://github.com/" + officialRepository
 	workflow := definition.ExternalParameters.Workflow
-	if workflow.Ref != manifest.SourceRef || workflow.Repository != repositoryURL || workflow.Path != "/"+officialWorkflow {
+	if workflow.Ref != artifact.sourceRef || workflow.Repository != repositoryURL || workflow.Path != "/"+officialWorkflow {
 		return provenanceIdentityError("The signed workflow repository, path or ref does not match the official image manifest.", nil)
 	}
 	internal := definition.InternalParameters.GitHub
@@ -139,8 +166,8 @@ func (statement provenanceStatement) validate(ctx context.Context, manifest Mani
 		return provenancePredicateError("The signed GitHub invocation identity is not a bounded protected push event.", nil)
 	}
 	dependency := definition.ResolvedDependencies[0]
-	if dependency.URI != "git+"+repositoryURL+"@"+manifest.SourceRef || dependency.Digest == nil ||
-		dependency.Digest.GitCommit != manifest.SourceCommit {
+	if dependency.URI != "git+"+repositoryURL+"@"+artifact.sourceRef || dependency.Digest == nil ||
+		dependency.Digest.GitCommit != artifact.sourceCommit {
 		return provenanceIdentityError("The signed source dependency does not match the official repository ref and commit.", nil)
 	}
 
@@ -165,7 +192,11 @@ func (statement provenanceStatement) invocationIDForPolicy() (string, error) {
 }
 
 func officialWorkflowIdentity(manifest Manifest) string {
-	return "https://github.com/" + officialRepository + "/" + officialWorkflow + "@" + manifest.SourceRef
+	return officialWorkflowIdentityForRef(manifest.SourceRef)
+}
+
+func officialWorkflowIdentityForRef(sourceRef string) string {
+	return "https://github.com/" + officialRepository + "/" + officialWorkflow + "@" + sourceRef
 }
 
 func validRunInvocation(value string) bool {

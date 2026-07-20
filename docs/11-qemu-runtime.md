@@ -89,6 +89,13 @@ the process. Session IDs, VM names, disk serials, TAP names, socket paths,
 memory alignment and VSOCK CIDs are bounded typed values rather than raw QEMU
 arguments.
 
+Scanner specs additionally render exactly one non-secret boot-mode `fw_cfg`
+item. Update mode maps only to `definitions-update`; scan mode maps only to
+`scan-offline`; unknown modes and any scanner mode on another role are launch
+validation failures. The scanner guest compares this host intent with its
+immutable Nix phase document, while same-overlay identity and device isolation
+remain independent evidence.
+
 Representative conceptual flags:
 
 ```text
@@ -117,6 +124,11 @@ Required invariants:
 - no USB redirection
 - no TCP fallback
 - `remote-viewer` process runs as invoking user, never root
+
+The root-owned QEMU socket is never chowned to the user. After launcher
+validation, a daemon-owned bounded Unix relay creates the fixed UID-only
+`/run/private-vm/display/<session-id>.sock` handoff. Runtime cleanup closes the
+relay, audits its pinned inode and removes it before QEMU socket cleanup.
 
 ## QMP
 
@@ -175,9 +187,30 @@ descriptor (guest fd 3); a networked spec must receive the TAP as the second
 inherited descriptor (guest fd 4) and renders `-netdev tap,...,fd=4`. TAP and
 namespace names never enter QEMU argv. Offline specs reject a TAP descriptor.
 Exporter specs reject SPICE, GPU, network,
-audio, and quarantine devices. Scanner scan specs require `-nic none` and one
+audio, and quarantine devices. They render `-nic none` and one fixed xHCI
+controller but no `usb-host` argument; the exact device is added later by a
+typed QMP `device_add` operation whose caller can supply only bus and address.
+Scanner scan specs require `-nic none` and one
 read-only quarantine disk. Workstation and downloader specs require a TAP and
 cannot receive devices outside their role matrix.
+
+For the composed workstation/downloader path, launch order is CID reservation,
+capability creation, exact endpoint-scoped network allocation, private QMP and
+SPICE directory creation, verified image-lease activation, typed argument
+validation, QEMU start, authenticated guest handshake, guest kill-switch/VPN
+configuration, guest proof, host policy proof and continuous loss monitoring.
+The runtime cleanup owner reverses that ownership and audits the QEMU/network
+owner, image lease, CID and private socket directories.
+
+The exporter launch path independently owns its verified image lease, CID,
+capability, private QMP directories, QEMU process, VSOCK connection and USB
+attachment. Attachment ownership is recorded before `device_add`, because QMP
+can apply the operation before a timeout or lost response. Cleanup clears an
+ownership flag only after that step succeeds; failed steps retain their handles
+for retry. Successful process termination is sufficient proof that an
+ambiguous USB attachment no longer belongs to that guest. Host no-NIC arguments
+alone are not accepted as guest evidence: export also requires the authenticated
+exporter `InspectUSB` response to report no network.
 
 ## CPU and memory
 
@@ -185,11 +218,17 @@ Defaults:
 
 | Role | vCPU | RAM |
 |---|---:|---:|
-| workstation-basic | 4 | 8 GiB |
-| workstation-development | 8 | 16 GiB |
-| downloader | 4 | 6 GiB |
-| scanner | 6 | 12 GiB |
+| workstation (all bundles) | 2 | 4 GiB |
+| downloader | 4 | 4 GiB |
+| scanner | 4 | 4 GiB |
 | exporter | 2 | 1 GiB |
+
+The workstation value is configurable within the bounds in
+`docs/08-config-policy.md`; the table records packaged defaults, not
+recommended overrides. Downloader and scanner use closed daemon-selected
+defaults. These defaults allow one role at a time to pass the non-overcommit
+planner on the supported 16 GiB baseline while retaining the mandatory 4 GiB
+host reserve. A larger request is never selected implicitly.
 
 The planner leaves host reserve:
 

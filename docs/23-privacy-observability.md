@@ -84,10 +84,11 @@ with an empty environment, discards both stdout and stderr, and converts denial
 or failure to a safe classification rather than wrapping the child-process
 output. Its PID/start-time/UID subject is revalidated before invocation.
 
-`ClaimUSB` is currently non-destructive and unimplemented, so it returns the
-typed `NOT_IMPLEMENTED` response without invoking Polkit. When destructive USB
-prepare is implemented, the Polkit decision belongs immediately before that
-mutation; it must not be moved earlier into claim, planning, or logging paths.
+`ClaimUSB` is a non-destructive exact-identity USBGuard claim. It binds the
+claim to the exporter session and its cleanup owner without invoking Polkit.
+`PrepareUSB` is the destructive boundary: it obtains the fixed Polkit decision
+immediately before the exporter performs the mutation. The decision must not be
+moved earlier into claim, planning, confirmation, or logging paths.
 
 RPC cancellation and bounded-deadline failures are reported as
 `REQUEST_CANCELED` and `REQUEST_TIMEOUT` with safe remediation. An RPC server

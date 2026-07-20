@@ -51,11 +51,10 @@ protobuf fields are never trusted as identity. Per-session access is then
 restricted to the creating UID, with UID 0 reserved for recovery
 administration.
 
-Polkit is not part of socket admission or `ClaimUSB`. The current `ClaimUSB`
-method is a fail-closed `NOT_IMPLEMENTED` stub and does not invoke Polkit. The
-only permitted Polkit action is `org.private-vm.usb.prepare`; an implemented
-destructive USB-prepare transition must request it immediately before the
-destructive step. Its process subject is the revalidated PID, kernel start time,
+Polkit is not part of socket admission or `ClaimUSB`; claiming is
+non-destructive. The only permitted Polkit action is
+`org.private-vm.usb.prepare`; a destructive USB-prepare transition requests it
+immediately before the destructive step. Its process subject is the revalidated PID, kernel start time,
 and UID. `pkcheck` receives an empty environment, has a 30-second ceiling, and
 has stdout and stderr discarded; its raw output and wrapped failure are never
 returned through RPC or logs.
@@ -96,7 +95,8 @@ Every other unary request must carry a supported API version and an opaque
 8-128 character request ID. Session-scoped methods additionally require a valid
 internal `pvm-...` session ID; pre-session methods such as `Doctor`,
 `PlanSession`, `CreateSession`, `ListSessions`, `InspectVPNProfile`,
-`TestVPNProfile`, and `RemoveVPNProfile` do not. Planning and creation
+`TestVPNProfile`, `RemoveVPNProfile`, and the USB discovery/enrollment methods
+do not. Planning and creation
 validate the selected role, image bundle, policy name, and bounded resources
 before use. The unary interceptor rejects any method that violates this method
 to context contract before its handler runs.
@@ -111,9 +111,9 @@ cumulative profile limit. It never accepts a source path. Malformed framing and
 oversized input are rejected before parsing, and the receiving buffers are
 cleared on every return path.
 Request/session correlation metadata is attached after stream validation. The
-current fail-closed import stub has a ten-second authenticated first-frame and
-overall ceiling; later transfer implementations must add the documented
-per-chunk idle bound without weakening that first-frame bound.
+concrete import handler has a ten-second authenticated first-frame and overall
+ceiling; the role relay additionally bounds frame count, frame size, and total
+bytes without weakening that first-frame bound.
 
 `GetSessionRequest.after_sequence` is an event cursor only when the request is
 used by `StreamEvents`; `GetSession` rejects a nonzero value. The stream
@@ -207,17 +207,123 @@ Core methods:
 - `InspectVPNProfile`
 - `TestVPNProfile`
 - `RemoveVPNProfile`
+- `AddTorrent`
+- `GetTorrentMetadata`
+- `SelectTorrentFiles`
+- `StartTorrentDownload`
+- `PauseTorrentDownload`
+- `GetTorrentStatus`
+- `SealTorrentQuarantine`
 - `StartRole`
 - `StopRole`
 - `AbortSession`
 - `CleanupSession`
 - `StreamEvents`
+- `GetWorkspaceState`
 - `ImportWorkspaceFile`
 - `ExportWorkspaceFile`
+- `VerifyWorkspaceExport`
+- `ExportWorkspaceToDestination`
+- `ListUSBDevices`
+- `InspectUSBDevice`
+- `EnrollUSBDevice`
+- `GetUSBEnrollment`
+- `VerifyUSBEnrollment`
+- `ForgetUSBEnrollment`
 - `ClaimUSB`
+- `PlanUSBPreparation`
+- `PrepareUSB`
+- `ExportApprovedToUSB`
 - `ReleaseUSB`
 
+Scanner workflow methods:
+
+- `StartScanner` (server stream)
+- `GetScannerStatus`
+- `GetScannerReport`
+- `ApproveScanner`
+- `RejectScanner`
+
+`StartScanner` names an owned downloader in `QUARANTINE_SEALED`; it creates a
+separate scanner-role session. Later scanner methods name that new session.
+The daemon serializes update boot, definition verification, update shutdown,
+same-overlay offline boot, no-network/read-only checks, inventory, scanning,
+reconstruction and report verification. The CLI receives only aggregate counts,
+workflow state and stable codes. Report JSON, logical names, hashes, finding
+identifiers, source-session identity and runtime details are not present in the
+host response messages. Approval selects only `workstation` or `usb`; it cannot
+name a host path or device.
+
+For workstation approval the daemon creates the destination internally; the
+request cannot supply an existing session. `HostScannerStatus` field 13,
+`destination_session_id`, is present only after the single approved output has
+streamed into that fresh workstation, scanner/relay/receiver SHA-256 and size
+match, and scanner stop/cleanup complete. USB and non-approval responses leave
+the field empty.
+
 No arbitrary command execution method is permitted.
+
+The host workstation surface is active-workstation-only and serialized with
+role stop. `GetWorkspaceState` returns opaque output IDs, byte counts and
+export/change booleans but no filename or digest. Import replaces the caller's
+request context with a fresh authenticated guest context and verifies the
+descriptor, stream and guest receipt. Export is hashed independently by the
+guest, daemon relay and final receiver. `VerifyWorkspaceExport` succeeds only
+when the daemon-retained volatile digest and receiver digest match, after which
+the guest rehashes the current output before recording its receipt.
+
+`ExportWorkspaceToDestination` is the production export entry point. Its
+request contains an opaque output ID and a closed destination enum only. The
+daemon verifies that the selected output needs export, prepares the destination
+before consuming source frames, and gives the provider a one-shot bounded
+source callback. Success requires persisted and independently re-read receiver
+evidence, complete destination cleanup, digest equality, and the guest's final
+current-output verification. Cancellation, timeout, framing, persistence,
+receipt, or verification failure leaves the workstation dirty and invokes an
+idempotent abort under an independent bounded context. `usb` is the only v1
+destination; `encrypted-bundle` is explicitly unimplemented.
+
+USB discovery/enrollment methods are pre-session but kernel-owner-bound. They
+return bounded typed identity views for explicit review, including the
+transient block path, serial and USBGuard hash required by the enrollment
+contract; raw USBGuard output and bus/address remain inside the daemon. Enrollment storage
+is resolved exclusively from the authenticated numeric UID, never a request
+path or claimed UID. `EnrollUSBDevice` freshly resolves its opaque observation
+ID and rejects host filesystems, mounts, read-only media, ambiguous observations
+and every non-mass-storage interface before committing the owner-only record.
+`VerifyUSBEnrollment` repeats complete identity resolution; `ForgetUSBEnrollment`
+only removes the current owner's record.
+
+`ClaimUSB` is accepted only for a newly created exporter session and an exact
+opaque enrollment ID loaded from the reviewed enrollment store. The daemon
+advances `PLANNED → USB_IDENTIFIED`, acquires the physical claim inside that
+session's serialized actor, registers idempotent release plus absence audit,
+and only then publishes `USB_CLAIMED`. Failed and partially failed acquisition
+is admitted to the same cleanup owner before an error is returned. `ReleaseUSB`
+is owner- and session-bound and proves the exact claim absent; it never accepts
+a kernel device path. Neither method requests destructive Polkit authorization.
+That authorization belongs immediately before exporter-side preparation.
+
+`PlanUSBPreparation` is session/claim bound and returns one daemon-owned,
+five-minute plan. `PrepareUSB` is a client stream whose first frame carries the
+session, claim, plan challenge and both exact confirmations. It then accepts at
+most four non-empty passphrase chunks of at most 256 bytes and 1024 bytes total.
+Every receiving buffer is cleared and the protected secret is destroyed when
+the synchronous operation returns. The daemon binds the destructive Polkit
+authorization to the authenticated Unix peer immediately before preparation;
+no request UID is trusted. `ExportApprovedToUSB` accepts only opaque
+exporter-session, claim, approved-scanner-session and output IDs. Internally,
+the one-use source registry is role typed and can also represent an
+authenticated workstation Export output without adding a host path. It returns
+aggregate equality/flush/cleanup booleans, never a filename or digest.
+
+The host torrent surface is session-scoped and downloader-only. `AddTorrent`
+starts with one contextual begin frame selecting magnet or metainfo, followed
+only by non-empty chunks of at most 16 KiB. The daemon consumes the stream
+synchronously, applies the input-kind total bound, and relays only through its
+authenticated guest orchestrator. It owns the documented downloader workflow
+transitions and never exposes a qBittorrent URL, save path, guest token, command
+or device selector.
 
 ## Guest services
 
@@ -230,6 +336,8 @@ Shared:
 
 Workstation:
 
+- `ConfigureWireGuard`
+- `VerifyVPN`
 - `GetWorkspaceState`
 - `ImportFile`
 - `ListExportFiles`
@@ -249,8 +357,34 @@ Downloader:
 - `GetDownloadStatus`
 - `SealQuarantine`
 
-The implemented downloader VPN adapter accepts at most the frozen 64-KiB
-profile size, clears and detaches the protobuf byte slice on every handler
+`AddTorrent` requires its authenticated `GuestContext` on the first frame,
+then accepts one kind of non-empty chunk: magnet or metainfo, never both. Each
+chunk is at most 16 KiB, at most 1,024 frames are accepted, the cumulative
+limits are 8 KiB and 16 MiB respectively, and exactly one final frame is
+required. Received protobuf byte slices are detached and cleared on every
+path. Metadata is returned only after qBittorrent has been explicitly paused,
+payload-byte evidence is zero and every file priority has been set to zero.
+
+The downloader controller serializes selection, capacity approval, start,
+pause, progress and seal state. `StartDownload` is unavailable before explicit
+selection and all quarantine/scan/reconstruction/destination capacity gates.
+The host selection request carries a closed `TorrentDestination` enum. The
+daemon derives a schema-v1 `TorrentCapacityReceipt` from immutable role plans
+for scanner handoff, scanner reconstruction scratch and the declared receiver;
+the authenticated guest request contains only that numeric receipt and file
+indexes. The receipt distinguishes read-only scan capacity, cumulative archive
+expansion, reconstruction working bytes, maximum reconstructed output and
+destination capacity. The downloader re-probes quarantine free bytes inside the guest for
+every selection attempt. Capacity RPCs contain no paths, mounts, device nodes,
+endpoints or QEMU selectors, and absent/zero/unsupported evidence fails with
+`TORRENT_CAPACITY_EVIDENCE_UNAVAILABLE` before qBittorrent selection changes.
+VPN loss invokes the same bounded pause owner. `SealQuarantine` verifies exact
+selected paths/sizes and hashes, shuts down qBittorrent, syncs and unmounts in
+the guest; the host coordinator must additionally destroy and audit the
+downloader before it can issue a scanner-ready receipt.
+
+The implemented workstation, downloader and scanner-update VPN adapters accept at most the
+frozen 64-KiB profile size, clear and detach the protobuf byte slice on every handler
 return (including rejected role/context), and parses only a host-resolved
 literal endpoint. `ConfigureWireGuard` returns success only for controller
 state `verified`; `VerifyVPN` re-runs the complete injected proof. VPN status
@@ -258,8 +392,20 @@ and diagnostics contain explicit handshake, tunnel DNS, DNS-bypass, IPv4/IPv6
 route/bypass and qBittorrent-binding booleans plus stable codes only—never
 profile values, probe targets, public IPs or raw command output.
 
+The same authenticated request carries the daemon-selected private IPv4/IPv6
+point-to-point underlay and operator-controlled probe fixtures as closed typed
+messages. Addresses are canonical byte fields with bounded prefix lengths and
+ports, never display strings. Each online role validates them before creating
+its one VPN controller and rejects a second configuration attempt. These
+request-only values never appear in status, diagnostics, events or durable
+state. The shared internal lifecycle does not change exact role registration:
+the workstation exposes no torrent RPC and the scanner exposes no downloader
+RPC. See ADRs 0012, 0013, 0014, and 0017.
+
 Scanner:
 
+- `ConfigureWireGuard` (definitions-update boot only)
+- `VerifyVPN` (definitions-update boot only)
 - `UpdateDefinitions`
 - `GetDefinitionsStatus`
 - `VerifyOfflineMode`
@@ -276,6 +422,23 @@ Exporter:
 - `WriteFile`
 - `VerifyFile`
 - `FinalizeUSB`
+- `PrepareExactUSB`
+- `WriteVerifiedFile`
+- `VerifyWrittenFile`
+
+The original unary `PrepareUSB` and generic-receipt `WriteFile`/`VerifyFile`
+methods are retained for protocol compatibility and fail closed in the v1
+exporter implementation. `PrepareExactUSB` is an authenticated client stream with the same 1024-byte
+and four-frame secret bounds as the host stream. The first frame carries a
+guest context and exact VID/PID/serial/capacity expectation, never a device
+path. `WriteVerifiedFile` returns typed receive-hash, file/filesystem fsync and
+atomic-rename evidence. `VerifyWrittenFile` adds the reread digest; the host keeps all
+digests internal and exposes only equality booleans. `FinalizeUSB` succeeds
+only after guest-local unmount and LUKS close.
+
+Generic exporter guestd composition fails closed because it has no fixed-path
+cryptsetup/mkfs/mount adapter. Only the role image may supply that typed
+adapter; callers cannot choose commands, paths, device nodes or flags.
 
 guestd registers `GuestCommonService` plus exactly one role service selected at
 build time. A generic host build has no compiled role and refuses to start as a
@@ -283,14 +446,55 @@ guest daemon. The official Nix outputs build four distinct guestd derivations;
 there is no runtime role flag. Calling a service for another role therefore
 returns gRPC `Unimplemented` because that service is absent.
 
+The scanner role service has one serialized phase owner. Definition update,
+definition status and offline verification requests carry no policy name.
+Inventory pins one installed immutable policy; scan, reconstruction and report
+requests must use that same policy. The source composition registers the real
+scanner service only for a scanner-compiled guestd. If the image-specific boot
+evidence, retained-overlay receipt or pinned tool adapters are absent, the
+service starts but every affected operation fails with
+`SCANNER_TOOLCHAIN_UNAVAILABLE`; it never replaces a missing check with a
+successful result.
+
+`UpdateDefinitions` succeeds only after the receipt is atomically committed and
+the fixed `scan-offline` Nix specialisation is staged as the next boot target.
+The request contains no boot entry, unit, path or argument. On both scanner
+boots, guestd also requires QEMU's typed `fw_cfg` boot-mode expectation to match
+the immutable image phase before returning boot evidence.
+
+Scanner progress streams disclose only a fixed operation, counts, units and
+stable finding codes. They do not disclose logical names, hashes, tool output or
+malware signature text. `Reconstruct` creates and authenticates the canonical
+report before publishing `REPORT_COMPLETE`. `ExportApprovedFile` verifies that
+HMAC again, accepts only an output ID present in the approved report, rehashes
+the identity-pinned volatile output while streaming chunks of at most 1 MiB,
+and omits the end frame on any size, read or hash mismatch.
+
+The authenticated report uses exact scanner-manifest IDs rather than
+executable aliases. `clamav` and `file` are mandatory; PDF requires
+`poppler-utils` and `ghostscript`, Office additionally requires `libreoffice`,
+and media requires `ffmpeg`. Image/text paths use their fixed Go-native tool
+identities. Each name appears once, with the manifest version copied by the
+production composition; missing, conflicting or malformed evidence blocks the
+report.
+
+The host scanner adapter relays those calls only through an authenticated VSOCK
+client that has passed `Hello`. It verifies the volatile report MAC before
+publishing an aggregate result. A rejected scanner may be powered off while the
+verified report remains in daemon memory; cleanup removes that cache. A missing
+promotion relay, a report containing other than one sanitized output,
+invalid/trailing/bounds-violating framing, or any sender/relay/destination hash
+mismatch blocks `ApproveScanner` and destroys the unadvertised destination
+workstation.
+
 The advertised v1 capability map is exact and sorted:
 
 | Scope | Capabilities |
 |---|---|
 | common | `guest-events`, `guest-shutdown`, `guest-status` |
-| workstation | `desktop`, `network-warning`, `workspace-export`, `workspace-import` |
+| workstation | `desktop`, `network-warning`, `vpn-verification`, `wireguard-config`, `workspace-export`, `workspace-import` |
 | downloader | `quarantine-seal`, `torrent-download`, `torrent-metadata`, `vpn-verification`, `wireguard-config` |
-| scanner | `approved-export`, `definitions-update`, `inventory`, `offline-verification`, `reconstruct`, `scan`, `scan-report` |
+| scanner | `approved-export`, `definitions-update`, `inventory`, `offline-verification`, `reconstruct`, `scan`, `scan-report`, `vpn-verification`, `wireguard-config` |
 | exporter | `usb-finalize`, `usb-inspect`, `usb-prepare`, `usb-verify`, `usb-write` |
 
 ## Error model

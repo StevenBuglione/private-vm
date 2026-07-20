@@ -165,7 +165,11 @@ in
   systemd.services.private-vm-guestd = {
     description = "private-vm guest control daemon";
     wantedBy = [ "multi-user.target" ];
-    after = [ "systemd-modules-load.service" ];
+    requires = [ "systemd-tmpfiles-setup.service" ];
+    after = [
+      "systemd-modules-load.service"
+      "systemd-tmpfiles-setup.service"
+    ];
     serviceConfig = {
       ExecStart = "${privateVMPackage}/bin/private-vm-guestd";
       Restart = "on-failure";
@@ -196,7 +200,12 @@ in
       ];
       RestrictNamespaces = true;
       RestrictRealtime = true;
-      RestrictSUIDSGID = true;
+      # RestrictSUIDSGID's seccomp implementation rejects openat2 outright,
+      # while guestd requires openat2 for race-safe dirfd traversal. Deny each
+      # path-based chmod entry point instead. The only fd-only fchmod call sets
+      # a freshly created anonymous secret memfd to its fixed 0600 mode.
+      RestrictSUIDSGID = false;
+      SystemCallFilter = [ "~chmod fchmodat fchmodat2" ];
       SystemCallArchitectures = "native";
       CapabilityBoundingSet = [ "CAP_IPC_LOCK" ];
       DevicePolicy = "strict";

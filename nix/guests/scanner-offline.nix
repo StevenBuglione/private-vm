@@ -8,6 +8,33 @@
   networking.dhcpcd.enable = lib.mkForce false;
   services.resolved.enable = lib.mkForce false;
   services.clamav.updater.enable = lib.mkForce false;
+  systemd.services.private-vm-scanner-definitions-update.enable = lib.mkForce false;
+  systemd.services.private-vm-scanner-stage-offline.enable = lib.mkForce false;
+  fileSystems."/mnt/quarantine" = {
+    device = "/dev/disk/by-id/virtio-quarantine";
+    fsType = "ext4";
+    options = [
+      "ro"
+      "nodev"
+      "nosuid"
+      "noexec"
+      "x-systemd.device-timeout=30s"
+    ];
+  };
+  systemd.services.private-vm-guestd = {
+    requires = [ "mnt-quarantine.mount" ];
+    after = [ "mnt-quarantine.mount" ];
+  };
+  systemd.services.private-vm-guestd.serviceConfig.RestrictAddressFamilies = lib.mkForce [
+    "AF_UNIX"
+    "AF_VSOCK"
+  ];
+  systemd.services.private-vm-guestd.serviceConfig.CapabilityBoundingSet = lib.mkForce [
+    "CAP_IPC_LOCK"
+  ];
+  systemd.services.private-vm-guestd.serviceConfig.AmbientCapabilities = lib.mkForce [
+    "CAP_IPC_LOCK"
+  ];
 
   environment.etc."private-vm/scanner-phase.json" = {
     mode = "0444";

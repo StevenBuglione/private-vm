@@ -11,6 +11,7 @@ from unittest import mock
 from check_workflow_policy import (
     PolicyError,
     _run_tool,
+    validate_ci_workflow_text,
     validate_image_workflow_text,
     validate_release_workflow_text,
     validate_workflow_text,
@@ -62,76 +63,18 @@ def release_matrix() -> str:
 
 
 def release_workflow() -> str:
-    matrix = release_matrix()
-    return f"""
-name: Release
-on:
-  push:
-    tags: ["v*"]
-permissions:
-  contents: read
-jobs:
-  publish:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 180
-    environment: image-publish
-    permissions:
-      contents: read
-      packages: write
-      id-token: write
-      attestations: write
-    env:
-      NIX_CONFIG: "max-jobs = 1 cores = 2"
-    strategy:
-      fail-fast: false
-      matrix:
-        include:{matrix}
-    steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
-        with:
-          persist-credentials: false
-          fetch-depth: 0
-      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
-        with:
-          go-version: "1.26.5"
-          cache: false
-      - uses: DeterminateSystems/nix-installer-action@ef8a148080ab6020fd15196c2084a2eea5ff2d25
-      - name: Prepare exact image release
-        id: prepare
-        run: private-vm-image-release prepare --image-target "${{{{ matrix.image_target }}}}" --closure-target "${{{{ matrix.closure_target }}}}"
-      - name: Attest compressed image
-        id: attest
-        uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6
-        with:
-          subject-name: image.qcow2.zst
-          subject-digest: ${{{{ steps.prepare.outputs.subject_digest }}}}
-          predicate-type: https://slsa.dev/provenance/v1
-          predicate-path: ${{{{ steps.prepare.outputs.predicate_path }}}}
-      - name: Publish exact OCI artifact
-        run: |
-          set +x
-          printf '%s' '${{{{ github.token }}}}' | private-vm-image-release publish --prepared prepared --provenance '${{{{ steps.attest.outputs.bundle-path }}}}' --token-stdin
-  verify:
-    needs: publish
-    runs-on: ubuntu-24.04
-    timeout-minutes: 60
-    permissions:
-      contents: read
-    strategy:
-      fail-fast: false
-      matrix:
-        include:{matrix}
-    steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
-        with:
-          persist-credentials: false
-      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
-        with:
-          go-version: "1.26.5"
-          cache: false
-      - name: Verify public artifact anonymously
-        run: private-vm-image-release verify-anonymous --repository "${{{{ matrix.repository }}}}" --tag "${{{{ github.ref_name }}}}"
-"""
+    root = Path(__file__).resolve().parents[1]
+    return (root / ".github" / "workflows" / "release.yml").read_text()
+
+
+def ci_workflow() -> str:
+    root = Path(__file__).resolve().parents[1]
+    return (root / ".github" / "workflows" / "ci.yml").read_text()
+
+
+def ci_workflow() -> str:
+    root = Path(__file__).resolve().parents[1]
+    return (root / ".github" / "workflows" / "ci.yml").read_text()
 
 
 def workflow(
@@ -341,6 +284,26 @@ jobs:
     def test_accepts_official_build_only_image_matrix(self) -> None:
         validate_image_workflow_text(self.image_workflow())
 
+    def test_accepts_combined_non_image_nix_build(self) -> None:
+        validate_ci_workflow_text(ci_workflow())
+
+    def test_ci_rejects_serial_non_image_nix_builds(self) -> None:
+        source = ci_workflow().replace(
+            "          nix build \\\n"
+            "            .#checks.x86_64-linux.runtime-fuzz \\\n"
+            "            .#checks.x86_64-linux.host-module-contract \\\n"
+            "            .#checks.x86_64-linux.static-binaries \\\n"
+            "            --no-link \\\n"
+            "            --print-build-logs",
+            "          nix build .#checks.x86_64-linux.runtime-fuzz --no-link --print-build-logs\n"
+            "          nix build .#checks.x86_64-linux.host-module-contract --no-link --print-build-logs\n"
+            "          nix build .#checks.x86_64-linux.static-binaries --no-link --print-build-logs",
+            1,
+        )
+        self.assertNotEqual(source, ci_workflow())
+        with self.assertRaisesRegex(PolicyError, "one combined nix build"):
+            validate_ci_workflow_text(source)
+
     def test_image_matrix_rejects_duplicate_role(self) -> None:
         source = self.image_workflow().replace(
             "- image: exporter", "- image: scanner", 1
@@ -364,8 +327,49 @@ jobs:
 
     def test_image_workflow_requires_no_link_builds(self) -> None:
         source = self.image_workflow().replace(" --no-link", "", 1)
-        with self.assertRaisesRegex(PolicyError, "canonical image must use"):
+        with self.assertRaisesRegex(PolicyError, "canonical image build step"):
             validate_image_workflow_text(source)
+
+    def test_image_workflow_rejects_canonical_output_path_drift(self) -> None:
+        base = self.image_workflow()
+        for description, source, message in (
+            (
+                "missing exact output emission",
+                base.replace("              --print-out-paths", "", 1),
+                "canonical image build step",
+            ),
+            (
+                "missing ambiguity rejection",
+                base.replace(
+                    " || \"$image_output_path\" == *$'\\n'*",
+                    "",
+                    1,
+                ),
+                "canonical image build step",
+            ),
+            (
+                "closure expression bypass",
+                base.replace(
+                    "${{ steps.canonical_image.outputs.image_output_path }}",
+                    "${{ matrix.image_target }}",
+                    1,
+                ),
+                "closure report",
+            ),
+            (
+                "closure reevaluates flake",
+                base.replace(
+                    'nix path-info -Sh "$PVM_IMAGE_OUTPUT_PATH"',
+                    'nix path-info -Sh ".#${{ matrix.image_target }}"',
+                    1,
+                ),
+                "closure report",
+            ),
+        ):
+            with self.subTest(description=description):
+                self.assertNotEqual(source, base)
+                with self.assertRaisesRegex(PolicyError, message):
+                    validate_image_workflow_text(source)
 
     def test_accepts_official_tag_only_release_matrix(self) -> None:
         source = release_workflow()
@@ -564,8 +568,8 @@ jobs:
             (
                 "ignored failure",
                 release_workflow().replace(
-                    'private-vm-image-release verify-anonymous --repository "${{ matrix.repository }}" --tag "${{ github.ref_name }}"',
-                    'private-vm-image-release verify-anonymous --repository "${{ matrix.repository }}" --tag "${{ github.ref_name }}" || true',
+                    '--bundle \'${{ matrix.bundle }}\' --timeout 30m',
+                    '--bundle \'${{ matrix.bundle }}\' --timeout 30m || true',
                     1,
                 ),
                 "fail closed",

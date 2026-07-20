@@ -88,6 +88,18 @@ func (a *CIDAllocator) Release(cid uint32) bool {
 	return true
 }
 
+// Reserved reports only whether this allocator currently owns cid. It exposes
+// no session association and exists for the runtime cleanup absence audit.
+func (a *CIDAllocator) Reserved(cid uint32) bool {
+	if a == nil {
+		return false
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	_, exists := a.used[cid]
+	return exists
+}
+
 func (a *CIDAllocator) advance() {
 	if a.next == a.max {
 		a.next = a.min

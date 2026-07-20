@@ -28,6 +28,11 @@ PINNED_RELEASE_PUBLISH_ACTIONS = [
     "actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6",
 ]
 PINNED_RELEASE_VERIFY_ACTIONS = PINNED_RELEASE_PUBLISH_ACTIONS[:2]
+NON_IMAGE_NIX_TARGETS = [
+    ".#checks.x86_64-linux.runtime-fuzz",
+    ".#checks.x86_64-linux.host-module-contract",
+    ".#checks.x86_64-linux.static-binaries",
+]
 RELEASE_PUBLISH_PERMISSIONS = {
     "contents": "read",
     "packages": "write",
@@ -35,6 +40,49 @@ RELEASE_PUBLISH_PERMISSIONS = {
     "attestations": "write",
 }
 SLSA_PROVENANCE_V1 = "https://slsa.dev/provenance/v1"
+CANONICAL_IMAGE_BUILD_RUN = r'''image_output_path="$(
+  nix build ".#${{ matrix.image_target }}" \
+    --no-link \
+    --print-build-logs \
+    --print-out-paths
+)"
+if [[ -z "$image_output_path" || "$image_output_path" == *$'\n'* || "$image_output_path" == *$'\r'* ]]; then
+  echo "canonical image build must emit exactly one output path" >&2
+  exit 1
+fi
+case "$image_output_path" in
+  /nix/store/*)
+    store_name="${image_output_path#/nix/store/}"
+    ;;
+  *)
+    echo "canonical image output is not an absolute Nix store path" >&2
+    exit 1
+    ;;
+esac
+if [[ -z "$store_name" || "$store_name" == */* || "$store_name" == "." || "$store_name" == ".." ]]; then
+  echo "canonical image output is not one direct Nix store entry" >&2
+  exit 1
+fi
+test -e "$image_output_path"
+printf 'image_output_path=%s\n' "$image_output_path" >> "$GITHUB_OUTPUT"'''
+CANONICAL_IMAGE_CLOSURE_RUN = r'''if [[ -z "$PVM_IMAGE_OUTPUT_PATH" || "$PVM_IMAGE_OUTPUT_PATH" == *$'\n'* || "$PVM_IMAGE_OUTPUT_PATH" == *$'\r'* ]]; then
+  echo "canonical image output path is missing or ambiguous" >&2
+  exit 1
+fi
+case "$PVM_IMAGE_OUTPUT_PATH" in
+  /nix/store/*)
+    store_name="${PVM_IMAGE_OUTPUT_PATH#/nix/store/}"
+    ;;
+  *)
+    echo "canonical image output is not an absolute Nix store path" >&2
+    exit 1
+    ;;
+esac
+if [[ -z "$store_name" || "$store_name" == */* || "$store_name" == "." || "$store_name" == ".." ]]; then
+  echo "canonical image output is not one direct Nix store entry" >&2
+  exit 1
+fi
+nix path-info -Sh "$PVM_IMAGE_OUTPUT_PATH"'''
 IMAGE_MATRIX = {
     "workstation-basic": {
         "image_target": "image-workstation-basic",
@@ -180,7 +228,6 @@ def _validate_protected_permissions(
     expected = (
         {
             "contents": "write",
-            "packages": "write",
             "id-token": "write",
             "attestations": "write",
         }
@@ -289,6 +336,39 @@ def validate_workflow_text(source: str, name: str = "workflow") -> None:
             step_location = f"{location}.steps[{index}]"
             step = _mapping(raw_step, step_location)
             _validate_action(step, step_location)
+
+
+def validate_ci_workflow_text(source: str, name: str = "ci.yml") -> None:
+    """Validate the active source CI Nix gate composition."""
+    try:
+        document = yaml.load(source, Loader=yaml.BaseLoader)
+    except yaml.YAMLError as error:
+        raise PolicyError(f"{name}: invalid YAML: {error}") from error
+    document = _mapping(document, name)
+    jobs = _mapping(document.get("jobs"), f"{name}.jobs")
+    nix_job = _mapping(jobs.get("nix"), f"{name}.jobs.nix")
+    raw_steps = nix_job.get("steps")
+    if not isinstance(raw_steps, list):
+        raise PolicyError(f"{name}.jobs.nix.steps: expected a list")
+    gates: list[dict[str, Any]] = []
+    for index, raw_step in enumerate(raw_steps):
+        step = _mapping(raw_step, f"{name}.jobs.nix.steps[{index}]")
+        if step.get("name") == "Flake evaluation and non-image Nix gates":
+            gates.append(step)
+    if len(gates) != 1:
+        raise PolicyError(f"{name}: source Nix gates must have one reviewed step")
+    command = str(gates[0].get("run", ""))
+    if command.count("nix flake check") != 1 or "--no-build" not in command:
+        raise PolicyError(f"{name}: source Nix gates must evaluate the complete flake once")
+    if command.count("nix build") != 1:
+        raise PolicyError(f"{name}: non-image checks must use one combined nix build")
+    if "--no-link" not in command or "--print-build-logs" not in command:
+        raise PolicyError(f"{name}: combined non-image build must retain bounded build flags")
+    for target in NON_IMAGE_NIX_TARGETS:
+        if command.count(target) != 1:
+            raise PolicyError(
+                f"{name}: combined non-image build must contain exact target {target} once"
+            )
 
 
 def validate_image_workflow_text(source: str, name: str = "image-build.yml") -> None:
@@ -401,7 +481,32 @@ def validate_image_workflow_text(source: str, name: str = "image-build.yml") -> 
     if str(named_steps["Reclaim Nix outputs"].get("if")) != "always()":
         raise PolicyError(f"{name}: final Nix reclamation must run on every outcome")
 
-    build_run = str(named_steps["Build one canonical image"].get("run", ""))
+    build_step = named_steps["Build one canonical image"]
+    if (
+        set(build_step) != {"name", "id", "run"}
+        or build_step.get("id") != "canonical_image"
+        or str(build_step.get("run", "")).strip() != CANONICAL_IMAGE_BUILD_RUN
+    ):
+        raise PolicyError(
+            f"{name}: canonical image build step must emit and validate one reviewed Nix store path"
+        )
+    closure_step = named_steps["Report canonical image closure"]
+    if (
+        set(closure_step) != {"name", "env", "run"}
+        or _mapping(
+            closure_step.get("env"),
+            f"{name}.jobs.image.steps.Report canonical image closure.env",
+        )
+        != {
+            "PVM_IMAGE_OUTPUT_PATH": "${{ steps.canonical_image.outputs.image_output_path }}"
+        }
+        or str(closure_step.get("run", "")).strip() != CANONICAL_IMAGE_CLOSURE_RUN
+    ):
+        raise PolicyError(
+            f"{name}: closure report must consume only the validated canonical store path"
+        )
+
+    build_run = str(build_step.get("run", ""))
     primary_run = str(named_steps["Boot primary smoke test under TCG"].get("run", ""))
     secondary_run = str(named_steps["Boot secondary smoke test under TCG"].get("run", ""))
     for location, command in (
@@ -590,9 +695,11 @@ def _validate_stdin_publish_token(
     source: str, steps: list[dict[str, Any]], publish_index: int, name: str
 ) -> None:
     token = "${{ github.token }}"
-    if source.count(token) != 1 or re.search(
+
+    scoped_source = "\n".join(str(step) for step in steps)
+    if scoped_source.count(token) != 1 or re.search(
         r"\$\{\{\s*secrets(?:\.|\[)|\b(?:GITHUB_TOKEN|GH_TOKEN|CR_PAT)\b",
-        source,
+        scoped_source,
         flags=re.IGNORECASE,
     ):
         raise PolicyError(
@@ -613,7 +720,7 @@ def _validate_stdin_publish_token(
     token_line = token_lines[0]
     direct_pipe = re.compile(
         r"^printf '%s' '\$\{\{ github\.token \}\}' \| "
-        r"(?:\./)?private-vm-image-release publish\b.*\s--token-stdin(?:\s|$)"
+        r"(?:\./)?private-vm(?:-image)?-release publish\b.*\s--token-stdin(?:\s|$)"
     )
     if not direct_pipe.fullmatch(token_line):
         raise PolicyError(
@@ -645,21 +752,26 @@ def validate_release_workflow_text(source: str, name: str = "release.yml") -> No
         raise PolicyError(f"{name}: workflow permissions must be exactly contents: read")
 
     jobs = _mapping(document.get("jobs"), f"{name}.jobs")
-    if set(jobs) != {"publish", "verify"}:
-        raise PolicyError(f"{name}: REL-003 permits only publish and verify jobs")
+    if set(jobs) != {"publish", "verify", "packages", "verify-release"}:
+        raise PolicyError(f"{name}: release workflow must contain only the four reviewed jobs")
     publish = _mapping(jobs["publish"], f"{name}.jobs.publish")
     verify = _mapping(jobs["verify"], f"{name}.jobs.verify")
+    packages = _mapping(jobs["packages"], f"{name}.jobs.packages")
+    verify_release = _mapping(jobs["verify-release"], f"{name}.jobs.verify-release")
 
     for job_name, job, maximum_timeout in (
         ("publish", publish, 180),
         ("verify", verify, 60),
+        ("packages", packages, 90),
+        ("verify-release", verify_release, 60),
     ):
         if job.get("runs-on") != "ubuntu-24.04":
             raise PolicyError(
                 f"{name}: {job_name} must use the standard ubuntu-24.04 public runner"
             )
         _bounded_release_timeout(job, name, job_name, maximum_timeout)
-        _validate_release_matrix(job, name, job_name)
+        if job_name in ("publish", "verify"):
+            _validate_release_matrix(job, name, job_name)
         if "if" in job:
             raise PolicyError(f"{name}: {job_name} must not override normal success gating")
         for prohibited_key in ("container", "secrets", "services"):
@@ -688,17 +800,56 @@ def validate_release_workflow_text(source: str, name: str = "release.yml") -> No
     }:
         raise PolicyError(f"{name}: anonymous verification must have only contents: read")
 
+    if packages.get("needs") != "verify" or packages.get("environment") != "release":
+        raise PolicyError(f"{name}: packages must follow image verification in the protected release environment")
+    if _permissions(packages.get("permissions"), f"{name}.jobs.packages.permissions") != {
+        "contents": "write", "id-token": "write", "attestations": "write"
+    }:
+        raise PolicyError(f"{name}: package publication permissions exceed the reviewed set")
+    package_environment = _mapping(packages.get("env"), f"{name}.jobs.packages.env")
+    package_nix = str(package_environment.get("NIX_CONFIG", ""))
+    if set(package_environment) != {"NIX_CONFIG"} or "max-jobs = 1" not in package_nix or "cores = 2" not in package_nix:
+        raise PolicyError(f"{name}: packages must use serialized Nix limits")
+    if verify_release.get("needs") != "packages" or "environment" in verify_release or "env" in verify_release:
+        raise PolicyError(f"{name}: whole-release verification must use a fresh unprotected job")
+    if _permissions(verify_release.get("permissions"), f"{name}.jobs.verify-release.permissions") != {"contents": "read"}:
+        raise PolicyError(f"{name}: whole-release verification must have only contents: read")
+
     publish_steps = _release_steps(publish, name, "publish")
     verify_steps = _release_steps(verify, name, "verify")
+    package_steps = _release_steps(packages, name, "packages")
+    verify_release_steps = _release_steps(verify_release, name, "verify-release")
     _release_action_set(
         publish_steps, PINNED_RELEASE_PUBLISH_ACTIONS, name, "publish"
     )
     _release_action_set(verify_steps, PINNED_RELEASE_VERIFY_ACTIONS, name, "verify")
+    _release_action_set(package_steps, PINNED_RELEASE_PUBLISH_ACTIONS[:3] + [PINNED_RELEASE_PUBLISH_ACTIONS[3]] * 3, name, "packages")
+    _release_action_set(verify_release_steps, PINNED_RELEASE_VERIFY_ACTIONS, name, "verify-release")
     _validate_release_setup_go(publish_steps, name, "publish")
     _validate_release_setup_go(verify_steps, name, "verify")
+    _validate_release_setup_go(package_steps, name, "packages")
+    _validate_release_setup_go(verify_release_steps, name, "verify-release")
     _validate_release_checkout_history(publish_steps, name)
+    _validate_release_checkout_history(package_steps, name)
     publish_index = _validate_release_attestation(publish_steps, name)
     _validate_stdin_publish_token(source, publish_steps, publish_index, name)
+
+    package_prepare = _step_runs(package_steps, "private-vm-release prepare")
+    package_publish = _step_runs(package_steps, "private-vm-release publish")
+    package_attests = [step for step in package_steps if str(step.get("uses", "")).startswith("actions/attest@")]
+    if len(package_prepare) != 1 or len(package_publish) != 1 or len(package_attests) != 3:
+        raise PolicyError(f"{name}: package job requires one prepare, three attest and one publish operation")
+    package_publish_index = package_publish[0][0]
+    _validate_stdin_publish_token(source, package_steps, package_publish_index, name)
+    if any("continue-on-error" in step for step in package_steps):
+        raise PolicyError(f"{name}: package release steps must fail closed")
+
+    whole_verify = _step_runs(verify_release_steps, "private-vm-release verify")
+    if len(whole_verify) != 1 or re.search(r"(?:\|\||&&|[|;>])", whole_verify[0][1]):
+        raise PolicyError(f"{name}: whole-release verification must execute once and fail closed")
+    whole_verify_text = "\n".join(str(step.get("run", "")) + "\n" + str(step.get("env", "")) for step in verify_release_steps).lower()
+    if re.search(r"(secrets|github\.token|authorization|credential|password|login|\bcurl\b|\bwget\b|\bgh\b|\boras\b|packages\s*:\s*(?:read|write)|id-token|attestations)", whole_verify_text):
+        raise PolicyError(f"{name}: whole-release verification contains an authentication fallback")
 
     anonymous = _step_runs(verify_steps, "private-vm-image-release verify-anonymous")
     if len(anonymous) != 1:
@@ -771,6 +922,8 @@ def validate_repository(root: Path) -> None:
         source = path.read_text()
         relative_name = str(path.relative_to(root))
         validate_workflow_text(source, relative_name)
+        if path.name == "ci.yml":
+            validate_ci_workflow_text(source, relative_name)
         if path.name == "image-build.yml":
             validate_image_workflow_text(source, relative_name)
         if path.name == "release.yml":

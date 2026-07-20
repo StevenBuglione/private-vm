@@ -34,12 +34,9 @@ type ScannerMode string
 const (
 	ScannerModeUpdate ScannerMode = "update"
 	ScannerModeScan   ScannerMode = "scan"
-)
 
-type USBDevice struct {
-	Bus     uint8
-	Address uint8
-}
+	scannerBootModeFWCfg = "opt/private-vm/scanner-boot-mode"
+)
 
 type Spec struct {
 	Binary       string
@@ -59,7 +56,6 @@ type Spec struct {
 	NetworkFD    int
 	EnableAudio  bool
 	FWCfgTokenFD int
-	USB          *USBDevice
 }
 
 func (s Spec) Validate() error {
@@ -119,6 +115,9 @@ func (s Spec) Validate() error {
 }
 
 func (s Spec) validateRoleDevices() error {
+	if s.Role != session.RoleScanner && s.ScannerMode != "" {
+		return errors.New("scanner boot mode is restricted to scanner guests")
+	}
 	switch s.Role {
 	case session.RoleWorkstation:
 		if !s.Networked || len(s.Data) != 0 {
@@ -148,9 +147,6 @@ func (s Spec) validateRoleDevices() error {
 		if s.Networked || len(s.Data) != 0 || s.EnableAudio {
 			return errors.New("exporter forbids network, quarantine and audio")
 		}
-	}
-	if s.USB != nil && (s.Role != session.RoleExporter || s.USB.Bus == 0 || s.USB.Address == 0) {
-		return errors.New("exact USB passthrough is restricted to exporter")
 	}
 	return nil
 }
@@ -275,6 +271,13 @@ func (s Spec) Args() ([]string, error) {
 		"-device", "virtio-rng-pci,rng=rng0",
 		"-fw_cfg", "name=opt/private-vm/session-capability,file=/proc/self/fd/" + strconv.Itoa(s.FWCfgTokenFD),
 	}
+	if s.Role == session.RoleScanner {
+		bootMode, ok := scannerBootMode(s.ScannerMode)
+		if !ok {
+			return nil, errors.New("scanner boot mode is unavailable")
+		}
+		args = append(args, "-fw_cfg", "name="+scannerBootModeFWCfg+",string="+bootMode)
+	}
 	if s.Role != session.RoleExporter {
 		args = append(args,
 			"-spice", "unix=on,addr="+s.SPICESocket+
@@ -302,16 +305,24 @@ func (s Spec) Args() ([]string, error) {
 	if !s.EnableAudio {
 		args = append(args, "-audiodev", "none,id=noaudio")
 	}
-	if s.USB != nil {
-		args = append(args,
-			"-device", "qemu-xhci,id=usb-controller",
-			"-device", "usb-host,bus=usb-controller.0,hostbus="+strconv.Itoa(int(s.USB.Bus))+",hostaddr="+strconv.Itoa(int(s.USB.Address)),
-		)
+	if s.Role == session.RoleExporter {
+		args = append(args, "-device", "qemu-xhci,id=usb-controller")
 	}
 	if err := validateRenderedArgs(args); err != nil {
 		return nil, err
 	}
 	return args, nil
+}
+
+func scannerBootMode(mode ScannerMode) (string, bool) {
+	switch mode {
+	case ScannerModeUpdate:
+		return "definitions-update", true
+	case ScannerModeScan:
+		return "scan-offline", true
+	default:
+		return "", false
+	}
 }
 
 func diskArgs(id string, disk Disk) []string {

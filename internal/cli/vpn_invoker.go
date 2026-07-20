@@ -31,23 +31,46 @@ type ProductionInvoker struct {
 	stdin      io.Reader
 	prompt     io.Writer
 	readInput  func(context.Context, ValueRequest) (*secret.Bytes, error)
+	readStream func(context.Context, StreamRequest) (io.ReadCloser, error)
+	torrents   TorrentSubmitter
+	viewer     func(context.Context, string) error
 	requestID  func() (string, error)
 }
 
 func NewProductionInvoker(socketPath string, stdin io.Reader, prompt io.Writer) Invoker {
+	return NewProductionInvokerWithTorrent(socketPath, stdin, prompt, nil)
+}
+
+// NewProductionInvokerWithTorrent installs the authenticated torrent
+// orchestrator handoff without changing the CLI's Unix-daemon VPN transport.
+func NewProductionInvokerWithTorrent(socketPath string, stdin io.Reader, prompt io.Writer, torrents TorrentSubmitter) Invoker {
 	if stdin == nil {
 		stdin = os.Stdin
 	}
 	if prompt == nil {
 		prompt = io.Discard
 	}
-	return &ProductionInvoker{socketPath: socketPath, stdin: stdin, prompt: prompt, readInput: SensitiveInput, requestID: newRequestID}
+	return &ProductionInvoker{socketPath: socketPath, stdin: stdin, prompt: prompt, readInput: SensitiveInput, readStream: SensitiveStream, torrents: torrents, viewer: launchRemoteViewer, requestID: newRequestID}
 }
 
 func (invoker *ProductionInvoker) Invoke(ctx context.Context, id CommandID, intent Intent) (Result, error) {
 	switch id {
-	case CommandWorkstationStart, "desktop.status", "desktop.stop", "session.list", "session.status", "session.stop", "session.abort", "session.cleanup":
+	case CommandWorkstationStart, CommandDesktopConnect, CommandDesktopRestart, "desktop.status", "desktop.stop", "session.list", "session.status", "session.stop", "session.abort", "session.cleanup":
 		return invoker.invokeSession(ctx, id, intent)
+	case CommandWorkspaceImport, CommandWorkspaceInbox, CommandWorkspaceList, CommandWorkspaceExport, CommandWorkspaceVerify, CommandWorkspaceDiscard:
+		return invoker.invokeWorkspace(ctx, id, intent)
+	case CommandTorrentAdd:
+		request, ok := intent.(TorrentInputIntent)
+		if !ok {
+			return Result{}, invalidTorrentIntent()
+		}
+		return invoker.submitTorrent(ctx, request)
+	case CommandTorrentRun, CommandTorrentStart, CommandTorrentMetadata, CommandTorrentSelect,
+		CommandTorrentPlan, CommandTorrentDownload, CommandTorrentPause, CommandTorrentResume,
+		CommandTorrentStatus, CommandTorrentComplete:
+		return invoker.invokeTorrent(ctx, id, intent)
+	case CommandScannerStart, CommandScannerStatus, CommandScannerReport, CommandScannerApprove, CommandScannerReject:
+		return invoker.invokeScanner(ctx, id, intent)
 	case CommandVPNImport, CommandVPNRotate:
 		request, ok := intent.(VPNImportIntent)
 		if !ok {
@@ -62,6 +85,8 @@ func (invoker *ProductionInvoker) Invoke(ctx context.Context, id CommandID, inte
 		}
 		response, err := invoker.profileOperation(ctx, id, request.ProfileName)
 		return vpnResult(response, err)
+	case CommandUSBList, CommandUSBInspect, CommandUSBEnroll, CommandUSBVerify, CommandUSBForget, CommandUSBPrepare, CommandUSBExport:
+		return invoker.invokeUSB(ctx, id, intent)
 	default:
 		return failClosedInvoker{}.Invoke(ctx, id, intent)
 	}
@@ -297,13 +322,28 @@ func daemonDetailExitCode(code string) int {
 		return exitcode.DirtyWorkspace
 	case "CLEANUP_INCOMPLETE":
 		return exitcode.Cleanup
+	case "DOWNLOADER_CLEANUP_INCOMPLETE":
+		return exitcode.Cleanup
+	case "TORRENT_CAPACITY_INSUFFICIENT", "TORRENT_CAPACITY_EVIDENCE_UNAVAILABLE":
+		return exitcode.Storage
 	case "ROLE_START_FAILED", "SESSION_TRANSITION_INVALID", "SESSION_NOT_FOUND", "SESSION_SELECTION_REQUIRED":
 		return exitcode.Runtime
 	case "INTERNAL_ERROR", "RPC_CONTEXT_CONTRACT_INVALID":
 		return exitcode.Internal
 	case "PROTOCOL_VERSION_MISMATCH":
 		return exitcode.Runtime
+	case "QUARANTINE_NOT_READ_ONLY", "QUARANTINE_MOUNT_UNSAFE", "TYPE_MISMATCH", "ACTIVE_CONTENT_BLOCKED":
+		return exitcode.ScanRejected
 	default:
+		if len(code) >= len("TORRENT_") && code[:len("TORRENT_")] == "TORRENT_" || len(code) >= len("QUARANTINE_") && code[:len("QUARANTINE_")] == "QUARANTINE_" {
+			return exitcode.Torrent
+		}
+		if len(code) >= len("SCAN_") && code[:len("SCAN_")] == "SCAN_" || len(code) >= len("SCANNER_") && code[:len("SCANNER_")] == "SCANNER_" || len(code) >= len("REPORT_") && code[:len("REPORT_")] == "REPORT_" || len(code) >= len("SANITIZED_") && code[:len("SANITIZED_")] == "SANITIZED_" || len(code) >= len("MALWARE_") && code[:len("MALWARE_")] == "MALWARE_" || len(code) >= len("ARCHIVE_") && code[:len("ARCHIVE_")] == "ARCHIVE_" || len(code) >= len("CLAMAV_") && code[:len("CLAMAV_")] == "CLAMAV_" || len(code) >= len("SANITIZER_") && code[:len("SANITIZER_")] == "SANITIZER_" {
+			return exitcode.ScanRejected
+		}
+		if len(code) >= len("USB_") && code[:len("USB_")] == "USB_" {
+			return exitcode.USBExport
+		}
 		return exitcode.Network
 	}
 }

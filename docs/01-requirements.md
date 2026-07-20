@@ -13,6 +13,8 @@ It must report machine-readable status for:
 - QEMU, QMP, SPICE, virtio-vsock, virtio-net, virtio-blk, and USB-host support
 - `/dev/net/tun`, `/dev/kvm`, `/dev/vhost-vsock`, and device-mapper support
 - nftables and network-namespace support
+- the host-global IPv6 forwarding prerequisite used by the owned dual-stack
+  namespace path (global IPv4 forwarding remains disabled)
 - cryptsetup, loop devices, ext4 tooling, and sparse-file support
 - remote-viewer availability
 - USBGuard status
@@ -22,6 +24,23 @@ It must report machine-readable status for:
 - available RAM and encrypted-session disk capacity
 - orphaned private-vm resources
 - installation/package consistency
+
+With strict policy, installed-host consistency includes active `private-vmd`
+and USBGuard units, exact runtime-directory/control-socket ownership and modes,
+a root-owned mode `0600` daemon configuration, and exactly the one packaged
+`org.private-vm.usb.prepare` Polkit action. Compatibility mode may downgrade
+only these installation defects to warnings; it cannot downgrade a hard host
+security diagnostic.
+
+The frozen v1 host is x86_64 Linux kernel 6.6 or newer. Doctor verifies the
+current network-namespace identity, device-mapper and loop character-control
+nodes by metadata without opening their privileged file descriptors. It runs
+only bounded read-only version probes for nftables, cryptsetup, losetup,
+`mkfs.ext4`, remote-viewer and USBGuard, plus `ip -Version` and `ip netns list`.
+It never lists the privileged nftables ruleset. Sparse-file evidence is derived
+without creating a file from the fixed scratch path's filesystem type; ext4,
+XFS, Btrfs and tmpfs are the reviewed v1 allowlist, and unknown filesystems
+block rather than being guessed compatible.
 
 ### FR-002: immutable image management
 

@@ -36,6 +36,14 @@ type LossResponder interface {
 	OnVPNLoss(ctx context.Context, sessionStatus Status) error
 }
 
+// OnlineService is a single fixed local application whose process may start
+// only after the kill switch and tunnel are configured. The production
+// downloader uses it for the loopback-only qBittorrent child.
+type OnlineService interface {
+	Start(context.Context) error
+	Stop(context.Context) error
+}
+
 // Controller is the single serialized owner of the guest VPN state machine.
 // It intentionally keeps an armed kill switch after configuration or
 // verification failure.
@@ -43,6 +51,7 @@ type Controller struct {
 	mu              sync.Mutex
 	backend         Backend
 	verifier        Verifier
+	online          OnlineService
 	policy          RolePolicy
 	underlay        Underlay
 	state           State
@@ -50,9 +59,23 @@ type Controller struct {
 	requireIPv6     bool
 	killSwitchArmed bool
 	configured      bool
+	onlineActive    bool
 }
 
 func NewController(backend Backend, verifier Verifier, policy RolePolicy, underlay Underlay) (*Controller, error) {
+	return newController(backend, verifier, nil, policy, underlay)
+}
+
+// NewControllerWithOnlineService composes the fixed downloader application
+// into the same serialized VPN lifecycle owner.
+func NewControllerWithOnlineService(backend Backend, verifier Verifier, online OnlineService, policy RolePolicy, underlay Underlay) (*Controller, error) {
+	if isNilLike(online) {
+		return nil, invalidRequest()
+	}
+	return newController(backend, verifier, online, policy, underlay)
+}
+
+func newController(backend Backend, verifier Verifier, online OnlineService, policy RolePolicy, underlay Underlay) (*Controller, error) {
 	if isNilLike(backend) || isNilLike(verifier) {
 		return nil, invalidRequest()
 	}
@@ -62,7 +85,7 @@ func NewController(backend Backend, verifier Verifier, policy RolePolicy, underl
 	if err := underlay.validate(); err != nil {
 		return nil, err
 	}
-	return &Controller{backend: backend, verifier: verifier, policy: policy, underlay: underlay, state: StateUnconfigured}, nil
+	return &Controller{backend: backend, verifier: verifier, online: online, policy: policy, underlay: underlay, state: StateUnconfigured}, nil
 }
 
 // Configure always arms the kill switch before configuring the underlay,
@@ -99,10 +122,19 @@ func (controller *Controller) Configure(ctx context.Context, profile vpn.Profile
 	}
 	controller.state = StateConfigured
 	controller.configured = true
+	if controller.online != nil {
+		controller.onlineActive = true
+		if err := controller.online.Start(operationCtx); err != nil {
+			controller.state = StateDegraded
+			controller.stopOnlineDetached()
+			return controller.statusLocked(), verificationFailed(err)
+		}
+	}
 	proof, err := controller.verifier.Verify(operationCtx, controller.verificationPolicyLocked())
 	controller.proof = proof
 	if err != nil || !proof.complete(controller.requireIPv6, controller.policy.RequireTorrentBinding) {
 		controller.state = StateDegraded
+		controller.stopOnlineDetached()
 		return controller.statusLocked(), verificationFailed(err)
 	}
 	controller.state = StateVerified
@@ -120,6 +152,14 @@ func (controller *Controller) Verify(ctx context.Context) (Status, error) {
 	}
 	operationCtx, cancel := boundedContext(ctx, maximumOperationDuration)
 	defer cancel()
+	if controller.online != nil && !controller.onlineActive {
+		controller.onlineActive = true
+		if err := controller.online.Start(operationCtx); err != nil {
+			controller.state = StateDegraded
+			controller.stopOnlineDetached()
+			return controller.statusLocked(), verificationFailed(err)
+		}
+	}
 	proof, err := controller.verifier.Verify(operationCtx, controller.verificationPolicyLocked())
 	controller.proof = proof
 	// The profile's IPv6 requirement is already reflected by the verifier's
@@ -150,6 +190,15 @@ func (controller *Controller) Stop(ctx context.Context) error {
 	controller.mu.Lock()
 	defer controller.mu.Unlock()
 	if controller.state == StateUnconfigured || controller.state == StateStopped {
+		if controller.online != nil && controller.onlineActive {
+			cleanupCtx, cancel := boundedContext(context.Background(), maximumOperationDuration)
+			err := controller.online.Stop(cleanupCtx)
+			cancel()
+			if err != nil {
+				return cleanupIncomplete()
+			}
+			controller.onlineActive = false
+		}
 		controller.state = StateStopped
 		controller.proof = Proof{}
 		controller.requireIPv6 = false
@@ -159,6 +208,13 @@ func (controller *Controller) Stop(ctx context.Context) error {
 	}
 	cleanupCtx, cancel := boundedContext(context.Background(), maximumOperationDuration)
 	defer cancel()
+	if controller.online != nil && controller.onlineActive {
+		if err := controller.online.Stop(cleanupCtx); err != nil {
+			controller.state = StateDegraded
+			return cleanupIncomplete()
+		}
+		controller.onlineActive = false
+	}
 	if err := controller.backend.RemoveTunnel(cleanupCtx); err != nil {
 		controller.state = StateDegraded
 		return cleanupIncomplete()
@@ -215,6 +271,17 @@ func (controller *Controller) removeTunnelDetached() {
 	cleanupCtx, cancel := context.WithTimeout(context.Background(), maximumResponseDuration)
 	defer cancel()
 	_ = controller.backend.RemoveTunnel(cleanupCtx)
+}
+
+func (controller *Controller) stopOnlineDetached() {
+	if controller.online == nil || !controller.onlineActive {
+		return
+	}
+	cleanupCtx, cancel := context.WithTimeout(context.Background(), maximumResponseDuration)
+	defer cancel()
+	if controller.online.Stop(cleanupCtx) == nil {
+		controller.onlineActive = false
+	}
 }
 
 func (controller *Controller) statusLocked() Status {

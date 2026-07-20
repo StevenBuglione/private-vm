@@ -61,6 +61,8 @@ func (a Authorizer) StreamInterceptor(service any, stream grpc.ServerStream, inf
 	if info.FullMethod == privatevmv1.PrivateVMDaemonService_ImportWorkspaceFile_FullMethodName ||
 		info.FullMethod == privatevmv1.PrivateVMDaemonService_ImportVPNProfile_FullMethodName {
 		maximum = 10 * time.Second
+	} else if info.FullMethod == privatevmv1.PrivateVMDaemonService_AddTorrent_FullMethodName {
+		maximum = 2 * time.Minute
 	}
 	ctx, cancel := boundedRPCContext(stream.Context(), maximum)
 	defer cancel()

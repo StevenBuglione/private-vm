@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "state": "DOWNLOAD_PAUSED",
+  "progress": {
+    "completed_bytes": 67108864,
+    "total_bytes": 134217728
+  },
+  "code": "TORRENT_DOWNLOAD_PAUSED",
+  "remediation": "Re-verify VPN health before an explicit resume."
+}

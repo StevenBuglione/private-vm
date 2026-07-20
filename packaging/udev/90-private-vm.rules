@@ -1,3 +1,3 @@
 # Do not auto-authorize devices here. private-vmd and USBGuard enforce exact
 # enrollment. This rule only tags mass-storage devices for discovery.
-SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", ENV{ID_USB_INTERFACES}=="*:080650:*|*:080662:*|*:080600:*", TAG+="private-vm-candidate"
+SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", ENV{ID_USB_INTERFACES}=="*:08????:*", TAG+="private-vm-candidate"

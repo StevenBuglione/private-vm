@@ -183,6 +183,34 @@ func (c *QMPClient) Quit(ctx context.Context) error {
 	return err
 }
 
+// AttachUSB adds only the one fixed exporter USB device shape. Callers cannot
+// supply a driver, QEMU object identifier, bus name, or arbitrary arguments.
+func (c *QMPClient) AttachUSB(ctx context.Context, bus, address uint8) error {
+	if bus == 0 || address == 0 {
+		return errors.New("QMP USB identity is invalid")
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	_, err := c.executeLocked(ctx, "device_add", struct {
+		Driver   string `json:"driver"`
+		ID       string `json:"id"`
+		Bus      string `json:"bus"`
+		HostBus  int    `json:"hostbus"`
+		HostAddr int    `json:"hostaddr"`
+	}{Driver: "usb-host", ID: "private-vm-export-usb", Bus: "usb-controller.0", HostBus: int(bus), HostAddr: int(address)})
+	return err
+}
+
+// DetachUSB removes only the exporter device ID created by AttachUSB.
+func (c *QMPClient) DetachUSB(ctx context.Context) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	_, err := c.executeLocked(ctx, "device_del", struct {
+		ID string `json:"id"`
+	}{ID: "private-vm-export-usb"})
+	return err
+}
+
 func (c *QMPClient) NextEvent(ctx context.Context) (QMPEvent, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -206,7 +234,7 @@ func (c *QMPClient) executeLocked(ctx context.Context, name string, arguments an
 		return nil, errors.New("QMP client is closed")
 	}
 	switch name {
-	case "qmp_capabilities", "query-status", "system_powerdown", "quit":
+	case "qmp_capabilities", "query-status", "system_powerdown", "quit", "device_add", "device_del":
 	default:
 		return nil, errors.New("QMP command is not allowlisted")
 	}

@@ -33,10 +33,22 @@ func TestUnaryRequestContextContractCoversEveryContextualMethod(t *testing.T) {
 		{privatevmv1.PrivateVMDaemonService_InspectVPNProfile_FullMethodName, &privatevmv1.VPNProfileRequest{}},
 		{privatevmv1.PrivateVMDaemonService_TestVPNProfile_FullMethodName, &privatevmv1.VPNProfileRequest{}},
 		{privatevmv1.PrivateVMDaemonService_RemoveVPNProfile_FullMethodName, &privatevmv1.VPNProfileRequest{}},
+		{privatevmv1.PrivateVMDaemonService_GetTorrentMetadata_FullMethodName, &privatevmv1.TorrentControlRequest{}},
+		{privatevmv1.PrivateVMDaemonService_SelectTorrentFiles_FullMethodName, &privatevmv1.HostSelectTorrentFilesRequest{}},
+		{privatevmv1.PrivateVMDaemonService_PauseTorrentDownload_FullMethodName, &privatevmv1.TorrentControlRequest{}},
+		{privatevmv1.PrivateVMDaemonService_GetTorrentStatus_FullMethodName, &privatevmv1.TorrentControlRequest{}},
+		{privatevmv1.PrivateVMDaemonService_SealTorrentQuarantine_FullMethodName, &privatevmv1.TorrentControlRequest{}},
+		{privatevmv1.PrivateVMDaemonService_GetScannerStatus_FullMethodName, &privatevmv1.HostScannerControlRequest{}},
+		{privatevmv1.PrivateVMDaemonService_GetScannerReport_FullMethodName, &privatevmv1.HostScannerControlRequest{}},
+		{privatevmv1.PrivateVMDaemonService_ApproveScanner_FullMethodName, &privatevmv1.HostScannerApprovalRequest{}},
+		{privatevmv1.PrivateVMDaemonService_RejectScanner_FullMethodName, &privatevmv1.HostScannerControlRequest{}},
 		{privatevmv1.PrivateVMDaemonService_StartRole_FullMethodName, &privatevmv1.StartRoleRequest{}},
 		{privatevmv1.PrivateVMDaemonService_StopRole_FullMethodName, &privatevmv1.StopRoleRequest{}},
 		{privatevmv1.PrivateVMDaemonService_AbortSession_FullMethodName, &privatevmv1.AbortSessionRequest{}},
 		{privatevmv1.PrivateVMDaemonService_CleanupSession_FullMethodName, &privatevmv1.CleanupSessionRequest{}},
+		{privatevmv1.PrivateVMDaemonService_GetWorkspaceState_FullMethodName, &privatevmv1.HostWorkspaceStateRequest{}},
+		{privatevmv1.PrivateVMDaemonService_VerifyWorkspaceExport_FullMethodName, &privatevmv1.VerifyWorkspaceExportRequest{}},
+		{privatevmv1.PrivateVMDaemonService_ExportWorkspaceToDestination_FullMethodName, &privatevmv1.ExportWorkspaceToDestinationRequest{}},
 		{privatevmv1.PrivateVMDaemonService_ClaimUSB_FullMethodName, &privatevmv1.ClaimUSBRequest{}},
 		{privatevmv1.PrivateVMDaemonService_ReleaseUSB_FullMethodName, &privatevmv1.ReleaseUSBRequest{}},
 	}
@@ -101,6 +113,29 @@ func TestSessionContextAndResourceValidationFailClosed(t *testing.T) {
 	}
 	_, err = validateResources(&privatevmv1.ResourceRequest{Vcpus: 65}, defaults)
 	assertRPCError(t, err, codes.InvalidArgument, "RESOURCE_REQUEST_INVALID")
+}
+
+func TestPackagedRoleDefaultsFitTheSixteenGiBStrictBaseline(t *testing.T) {
+	configuration := config.Defaults()
+	tests := []struct {
+		role   session.Role
+		vcpus  uint32
+		memory uint64
+	}{
+		{session.RoleWorkstation, 2, 4 << 30},
+		{session.RoleDownloader, 4, 4 << 30},
+		{session.RoleScanner, 4, 4 << 30},
+		{session.RoleExporter, 2, 1 << 30},
+	}
+	for _, test := range tests {
+		resources := resourceDefaults(test.role, configuration)
+		if resources.GetVcpus() != test.vcpus || resources.GetMemoryBytes() != test.memory || resources.GetRootBytes() != 32<<30 {
+			t.Fatalf("%s defaults = %+v", test.role, resources)
+		}
+		if resources.GetMemoryBytes()+(4<<30) > 16<<30 {
+			t.Fatalf("%s defaults cannot preserve the strict host reserve", test.role)
+		}
+	}
 }
 
 func TestPlanUsesImmutableDaemonConfigAndStrictDoctor(t *testing.T) {
@@ -357,13 +392,13 @@ func TestStreamInputsRequireValidContextBeforeUnimplementedBoundary(t *testing.T
 	assertRPCError(t, service.ExportWorkspaceFile(&privatevmv1.ExportWorkspaceRequest{}, &exportFixtureStream{ctx: t.Context()}), codes.FailedPrecondition, "PROTOCOL_VERSION_MISMATCH")
 }
 
-func TestClaimUSBDoesNotPromptBeforeImplementedDestructiveTransition(t *testing.T) {
+func TestClaimUSBUnavailableDoesNotPromptForDestructiveAuthorization(t *testing.T) {
 	polkit := &recordingPolkit{}
 	service := &Service{Polkit: polkit}
 	_, err := service.ClaimUSB(t.Context(), &privatevmv1.ClaimUSBRequest{Context: validRequestContext("pvm-00000000000000000000000000000000")})
-	assertRPCError(t, err, codes.Unimplemented, "NOT_IMPLEMENTED")
+	assertRPCError(t, err, codes.Unavailable, "USB_INTEGRATION_UNAVAILABLE")
 	if polkit.called {
-		t.Fatal("unimplemented USB claim prompted for destructive authorization")
+		t.Fatal("USB claim prompted for destructive preparation authorization")
 	}
 }
 

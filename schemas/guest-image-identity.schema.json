@@ -102,6 +102,8 @@
               "guest-shutdown",
               "guest-status",
               "network-warning",
+              "vpn-verification",
+              "wireguard-config",
               "workspace-export",
               "workspace-import"
             ]
@@ -161,7 +163,9 @@
               "offline-verification",
               "reconstruct",
               "scan",
-              "scan-report"
+              "scan-report",
+              "vpn-verification",
+              "wireguard-config"
             ]
           }
         }

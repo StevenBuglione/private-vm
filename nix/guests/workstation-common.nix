@@ -72,6 +72,7 @@ in
   imports = [ ./desktop-common.nix ];
 
   networking.hostName = "workstation";
+  services.resolved.enable = true;
 
   assertions = [
     {
@@ -106,9 +107,42 @@ in
       ) catalog.bundles.office;
       message = "the workstation development bundle must include every office package";
     }
+    {
+      assertion = config.systemd.services.private-vm-guestd.serviceConfig.CapabilityBoundingSet == [
+        "CAP_DAC_OVERRIDE"
+        "CAP_IPC_LOCK"
+        "CAP_NET_ADMIN"
+      ];
+      message = "workstation guestd must retain only DAC override, memory lock and network administration capabilities";
+    }
   ];
 
-  environment.systemPackages = map (name: packagesByName.${name}) selectedPackageNames;
+  environment.systemPackages = (map (name: packagesByName.${name}) selectedPackageNames) ++ [
+    pkgs.wireguard-tools
+  ];
+
+  # guestd, not desktop applications, owns the fixed proton0 lifecycle. The
+  # broader socket families and NET_ADMIN capability are required only for
+  # typed WireGuard/nftables/netlink operations after authenticated VSOCK RPC.
+  systemd.services.private-vm-guestd.serviceConfig.RestrictAddressFamilies = lib.mkForce [
+    "AF_UNIX"
+    "AF_VSOCK"
+    "AF_INET"
+    "AF_INET6"
+    "AF_NETLINK"
+  ];
+  systemd.services.private-vm-guestd.serviceConfig.CapabilityBoundingSet = lib.mkForce [
+    "CAP_DAC_OVERRIDE"
+    "CAP_IPC_LOCK"
+    "CAP_NET_ADMIN"
+  ];
+  # ProtectSystem=strict makes the image immutable. Grant guestd only the two
+  # workspace paths used by the typed import/export API; desktop applications
+  # continue to own the rest of the private user's home.
+  systemd.services.private-vm-guestd.serviceConfig.ReadWritePaths = [
+    "/home/private/Inbox"
+    "/home/private/Export"
+  ];
 
   # NixOS installs programs.ssh.package as a core package. Point that module at
   # the same client-only derivation so the stock server-capable output cannot

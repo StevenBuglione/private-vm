@@ -43,6 +43,12 @@ in
 
   environment.systemPackages = exporterToolPackages;
 
+  # guestd resolves this fixed allow-list once at startup and retains the
+  # resulting absolute store paths. NixOS service PATHs do not inherit the
+  # interactive system profile, so declare the same minimal tool closure on
+  # the unit instead of relying on an ambient PATH.
+  systemd.services.private-vm-guestd.path = exporterToolPackages;
+
   environment.etc."private-vm/exporter-tools.json" = {
     mode = "0444";
     text = builtins.toJSON exporterToolInventory;
@@ -72,6 +78,24 @@ in
   services.udisks2.enable = lib.mkForce false;
   networking.networkmanager.enable = lib.mkForce false;
   networking.modemmanager.enable = lib.mkForce false;
+
+  # The role-compiled guestd owns the only mount and device lifecycle. These
+  # privileges are confined to the networkless exporter image and fixed Go
+  # adapter; callers cannot supply device nodes, mapper names, paths or flags.
+  systemd.services.private-vm-guestd.serviceConfig = {
+    CapabilityBoundingSet = lib.mkForce [
+      "CAP_IPC_LOCK"
+      "CAP_SYS_ADMIN"
+    ];
+    DeviceAllow = lib.mkForce [
+      "/dev/null rw"
+      "/dev/vsock rw"
+      "/dev/mapper/control rw"
+      "block-sd rw"
+      "block-device-mapper rw"
+    ];
+    ReadWritePaths = [ "/run/private-vm" ];
+  };
 
   # Root remains locked by image-base.nix. There is no normal user, desktop,
   # network manager, USB automounter, or compatibility filesystem formatter.

@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/StevenBuglione/private-vm/schemas/usb-prepare-plan.schema.json",
+  "title": "private-vm destructive USB preparation plan",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": { "const": 1 },
+    "enrollment_id": { "type": "string", "pattern": "^usb-[0-9a-f]{16}$" },
+    "identity_fingerprint": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "capacity_bytes": { "type": "integer", "minimum": 1 },
+    "filesystem": { "const": "luks2-ext4" },
+    "challenge": { "type": "string", "pattern": "^[0-9a-f]{32}$" },
+    "created_at": { "type": "string", "format": "date-time" },
+    "first_confirmation": { "type": "string", "pattern": "^ERASE usb-[0-9a-f]{16}$" },
+    "second_confirmation": { "type": "string", "pattern": "^ERASE usb-[0-9a-f]{16} [0-9a-f]{16} [0-9a-f]{32}$" }
+  },
+  "required": [
+    "schema_version",
+    "enrollment_id",
+    "identity_fingerprint",
+    "capacity_bytes",
+    "filesystem",
+    "challenge",
+    "created_at",
+    "first_confirmation",
+    "second_confirmation"
+  ]
+}

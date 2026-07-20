@@ -68,6 +68,22 @@ Requirements:
   - host relay
   - receiver
 
+## Declared destination transaction
+
+The production CLI never acts as the persistent receiver. It selects one exact
+opaque output and the closed `usb` destination. The daemon prepares the typed
+destination before it opens the workstation source, then supplies a one-shot
+bounded stream callback to that transaction. The transaction must report that
+the output was persisted, independently re-read, and that its runtime resources
+were cleaned. The daemon compares the workstation sender, daemon relay, and
+destination re-read SHA-256 values before asking the workstation guest to
+re-hash the current output and record the export receipt.
+
+Every pre-verification failure, cancellation, or timeout invokes idempotent
+abort with an independent deadline. An abort failure returns
+`WORKSPACE_DESTINATION_CLEANUP_INCOMPLETE` and requires recovery. Destination
+plans contain no pathname, device node, mount point, or arbitrary command.
+
 ## Encrypted bundle destination
 
 A later v1.x feature may export an encrypted bundle to a host-selected file.

@@ -12,6 +12,7 @@ import (
 	"runtime"
 
 	privatevmv1 "github.com/StevenBuglione/private-vm/gen/privatevm/v1"
+	"github.com/StevenBuglione/private-vm/internal/scan"
 	"github.com/StevenBuglione/private-vm/internal/secret"
 	"golang.org/x/sys/unix"
 	"google.golang.org/grpc"
@@ -102,6 +103,17 @@ func (t *Token) Destroy() {
 	if t != nil && t.value != nil {
 		t.value.Destroy()
 	}
+}
+
+// VerifyScannerReport authenticates a scanner envelope with the same per-boot
+// capability delivered through fw_cfg. It keeps the secret backing value
+// private to the guest boundary while allowing the trusted host orchestrator to
+// verify the report before any promotion decision.
+func (t *Token) VerifyScannerReport(envelope scan.AuthenticatedReport) (scan.ScanReport, error) {
+	if t == nil || t.value == nil {
+		return scan.ScanReport{}, errors.New("guest capability is unavailable")
+	}
+	return scan.VerifyReport(envelope, t.value)
 }
 
 func (t Token) String() string   { return "[REDACTED]" }

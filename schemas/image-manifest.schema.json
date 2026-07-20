@@ -60,7 +60,8 @@
           "capabilities": {
             "const": [
               "desktop", "guest-events", "guest-shutdown", "guest-status",
-              "network-warning", "workspace-export", "workspace-import"
+              "network-warning", "vpn-verification", "wireguard-config",
+              "workspace-export", "workspace-import"
             ]
           }
         }
@@ -88,7 +89,7 @@
             "const": [
               "approved-export", "definitions-update", "guest-events", "guest-shutdown",
               "guest-status", "inventory", "offline-verification", "reconstruct",
-              "scan", "scan-report"
+              "scan", "scan-report", "vpn-verification", "wireguard-config"
             ]
           }
         }

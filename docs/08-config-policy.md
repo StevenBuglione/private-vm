@@ -55,7 +55,16 @@ The implemented configuration surface is exactly the one in
 | `image_source` | `registry`, `repository`, `channel`, `require_attestation` | bounded registry and source identity; `stable` or `edge`; attestations mandatory for every source |
 | `runtime` | `directory`, `image_cache`, `scratch_directory`, `small_scratch_max_bytes`, `cleanup_timeout_seconds` | runtime, image cache and encrypted scratch roots are fixed v1 paths; scratch at most 1 TiB; cleanup 5–300 seconds |
 | `desktop` | `bundle`, `viewer`, `audio`, `memory_bytes`, `vcpus` | fixed bundles; `remote-viewer`; 2–256 GiB and 1–64 vCPUs |
-| `vpn` | `profile_name`, `disable_ipv6_if_not_tunneled` | bounded non-secret label; IPv6 fail-closed is mandatory |
+| `vpn` | `profile_name`, `disable_ipv6_if_not_tunneled`, `probe_dns_name`, `probe_ipv4`, `probe_ipv6` | bounded non-secret label and explicit public leak-test fixtures; IPv6 fail-closed is mandatory |
+
+The default controlled fixtures are Cloudflare's documented public DNS-over-TLS
+name and IPv4/IPv6 endpoints on port 853. Operators may replace all three with
+their own public global-unicast fixtures. They cross only the authenticated
+host-to-guest request and are never returned in status, events or logs.
+
+The packaged workstation default is 4 GiB and 2 vCPUs. Larger values remain
+available within the documented bounds, but operators must leave capacity for
+the host and any concurrently required workflow role.
 | `usb` | `require_usbguard`, `default_filesystem` | USBGuard mandatory; `luks2-ext4` only |
 | `logging` | `persistent_lifecycle_metadata`, `telemetry` | lifecycle metadata contains no session data; telemetry is always disabled |
 

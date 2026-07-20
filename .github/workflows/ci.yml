@@ -61,9 +61,12 @@ jobs:
       - name: Flake evaluation and non-image Nix gates
         run: |
           nix flake check --no-build --print-build-logs
-          nix build .#checks.x86_64-linux.runtime-fuzz --no-link --print-build-logs
-          nix build .#checks.x86_64-linux.host-module-contract --no-link --print-build-logs
-          nix build .#checks.x86_64-linux.static-binaries --no-link --print-build-logs
+          nix build \
+            .#checks.x86_64-linux.runtime-fuzz \
+            .#checks.x86_64-linux.host-module-contract \
+            .#checks.x86_64-linux.static-binaries \
+            --no-link \
+            --print-build-logs
       - name: Protobuf lint, breaking, and generated-code drift
         env:
           BUF_BREAKING_AGAINST: ${{ github.event_name == 'pull_request' && format('.git#ref={0}', github.event.pull_request.base.sha) || format('.git#ref={0}', github.event.before) }}
@@ -79,6 +82,7 @@ jobs:
           nix develop --command govulncheck ./...
           nix develop --command python3 tools/validate_schemas.py
           nix develop --command python3 tools/validate_examples.py
+          nix develop --command python3 tools/check_packaging_assets.py
       - name: Secret scan
         run: nix develop --command gitleaks dir . --redact --no-banner --exit-code 1
 

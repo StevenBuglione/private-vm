@@ -14,6 +14,15 @@ pairs = [
     ("schemas/cli-event.schema.json", "examples/cli-event.example.json", "json"),
     ("schemas/cli-success.schema.json", "examples/cli-success.example.json", "json"),
     ("schemas/cli-success.schema.json", "examples/cli-session-success.example.json", "json"),
+    ("schemas/install-manifest.schema.json", "examples/install-manifest.example.json", "json"),
+    ("schemas/cli-success.schema.json", "examples/cli-torrent-success.example.json", "json"),
+    ("schemas/cli-success.schema.json", "examples/cli-scanner-success.example.json", "json"),
+    ("schemas/cli-success.schema.json", "examples/cli-workspace-success.example.json", "json"),
+    ("schemas/cli-success.schema.json", "examples/cli-usb-prepare-success.example.json", "json"),
+    ("schemas/cli-success.schema.json", "examples/cli-usb-export-success.example.json", "json"),
+    ("schemas/package-release-manifest.schema.json", "examples/package-release-manifest.example.json", "json"),
+    ("schemas/release-index.schema.json", "examples/release-index.example.json", "json"),
+    ("schemas/release-acceptance-evidence.schema.json", "examples/release-acceptance-evidence.example.json", "json"),
     ("schemas/config.schema.json", "examples/config.example.toml", "toml"),
     ("schemas/policy.schema.json", "examples/policy.safe.toml", "toml"),
     ("schemas/policy.schema.json", "examples/policy.quarantine.toml", "toml"),
@@ -45,8 +54,14 @@ pairs = [
     ("schemas/image-release-receipt.schema.json", "examples/image-release-receipt.example.json", "json"),
     ("schemas/image-sbom.schema.json", "examples/image-sbom.spdx.example.json", "json"),
     ("schemas/network-status.schema.json", "examples/network-status.example.json", "json"),
+    ("schemas/torrent-status.schema.json", "examples/torrent-status.example.json", "json"),
     ("schemas/scan-report.schema.json", "examples/scan-report.example.json", "json"),
     ("schemas/vpn-profile-status.schema.json", "examples/vpn-profile-status.example.json", "json"),
+    ("schemas/recovery-report.schema.json", "examples/recovery-report.example.json", "json"),
+    ("schemas/usb-enrollment.schema.json", "examples/usb-enrollment.example.json", "json"),
+    ("schemas/usb-export-receipt.schema.json", "examples/usb-export-receipt.example.json", "json"),
+    ("schemas/usb-prepare-plan.schema.json", "examples/usb-prepare-plan.example.json", "json"),
+    ("schemas/usb-prepare-receipt.schema.json", "examples/usb-prepare-receipt.example.json", "json"),
     ("schemas/workstation-bundles.schema.json", "project/workstation-bundles.json", "json"),
 ]
 
@@ -115,6 +130,34 @@ image_sbom_schema = json.loads(
 image_sbom = json.loads(
     (ROOT / "examples/image-sbom.spdx.example.json").read_text(encoding="utf-8")
 )
+scan_report_schema = json.loads((ROOT / "schemas/scan-report.schema.json").read_text(encoding="utf-8"))
+scan_report = json.loads((ROOT / "examples/scan-report.example.json").read_text(encoding="utf-8"))
+cli_success_schema = json.loads((ROOT / "schemas/cli-success.schema.json").read_text(encoding="utf-8"))
+cli_scanner_status = json.loads((ROOT / "examples/cli-scanner-success.example.json").read_text(encoding="utf-8"))
+recovery_report_schema = json.loads(
+    (ROOT / "schemas/recovery-report.schema.json").read_text(encoding="utf-8")
+)
+recovery_report = json.loads(
+    (ROOT / "examples/recovery-report.example.json").read_text(encoding="utf-8")
+)
+usb_enrollment_schema = json.loads(
+    (ROOT / "schemas/usb-enrollment.schema.json").read_text(encoding="utf-8")
+)
+usb_enrollment = json.loads(
+    (ROOT / "examples/usb-enrollment.example.json").read_text(encoding="utf-8")
+)
+usb_prepare_plan_schema = json.loads(
+    (ROOT / "schemas/usb-prepare-plan.schema.json").read_text(encoding="utf-8")
+)
+usb_prepare_plan = json.loads(
+    (ROOT / "examples/usb-prepare-plan.example.json").read_text(encoding="utf-8")
+)
+usb_export_receipt_schema = json.loads(
+    (ROOT / "schemas/usb-export-receipt.schema.json").read_text(encoding="utf-8")
+)
+usb_export_receipt = json.loads(
+    (ROOT / "examples/usb-export-receipt.example.json").read_text(encoding="utf-8")
+)
 
 negative_cases = []
 unsigned = deepcopy(config)
@@ -171,6 +214,29 @@ for field, value in {
     unsafe_guest_vpn = deepcopy(guest_vpn_status)
     unsafe_guest_vpn[field] = value
     negative_cases.append((f"guest VPN {field} in status", guest_vpn_status_schema, unsafe_guest_vpn))
+torrent_status_schema = json.loads((ROOT / "schemas/torrent-status.schema.json").read_text(encoding="utf-8"))
+torrent_status = json.loads((ROOT / "examples/torrent-status.example.json").read_text(encoding="utf-8"))
+for field, value in {
+    "magnet": "magnet:?" + "xt=urn:btih:public-fixture",
+    "info_hash": "public-fixture",
+    "display_name": "private-name",
+    "file_path": "private/path",
+    "endpoint": "1.1.1.1:51820",
+    "raw_output": "synthetic command output",
+}.items():
+    unsafe_torrent = deepcopy(torrent_status)
+    unsafe_torrent[field] = value
+    negative_cases.append((f"torrent {field} in status", torrent_status_schema, unsafe_torrent))
+for field, value in {
+    "logical_name": "private-name.pdf",
+    "sha256": "a" * 64,
+    "canonical_json": "{}",
+    "malware_identifier": "private-signature",
+    "source_session_id": "pvm-44444444444444444444444444444444",
+}.items():
+    unsafe_scanner = deepcopy(cli_scanner_status)
+    unsafe_scanner["data"][field] = value
+    negative_cases.append((f"scanner {field} in CLI status", cli_success_schema, unsafe_scanner))
 weakened = deepcopy(safe_policy)
 weakened["rules"]["sanitize_documents"] = False
 negative_cases.append(("weakened safe policy", policy_schema, weakened))
@@ -195,6 +261,25 @@ unknown_scanner_tool_field = deepcopy(scanner_toolchain)
 unknown_scanner_tool_field["tools"][0]["credential"] = "forbidden"
 negative_cases.append(
     ("unknown scanner tool field", scanner_toolchain_schema, unknown_scanner_tool_field)
+)
+missing_scanner_manifest_id = deepcopy(scanner_toolchain)
+missing_scanner_manifest_id["tools"] = [
+    tool for tool in missing_scanner_manifest_id["tools"] if tool["id"] != "ffmpeg"
+]
+negative_cases.append(
+    ("missing required scanner manifest id", scanner_toolchain_schema, missing_scanner_manifest_id)
+)
+duplicate_scanner_manifest_id = deepcopy(scanner_toolchain)
+duplicate_file_tool = deepcopy(duplicate_scanner_manifest_id["tools"][1])
+duplicate_file_tool["version"] = "different"
+duplicate_scanner_manifest_id["tools"].append(duplicate_file_tool)
+negative_cases.append(
+    ("duplicate scanner manifest id", scanner_toolchain_schema, duplicate_scanner_manifest_id)
+)
+missing_scanner_command = deepcopy(scanner_toolchain)
+missing_scanner_command["tools"][0]["commands"].remove("freshclam")
+negative_cases.append(
+    ("missing required scanner command", scanner_toolchain_schema, missing_scanner_command)
 )
 update_with_quarantine_options = deepcopy(scanner_update_phase)
 update_with_quarantine_options["quarantine_mount_options"] = ["nodev", "noexec", "nosuid", "ro"]
@@ -264,6 +349,57 @@ negative_cases.append(("missing closure checksum field", image_sbom_schema, miss
 unknown_sbom_field = deepcopy(image_sbom)
 unknown_sbom_field["packages"][0]["source"] = "unsupported"
 negative_cases.append(("unknown SPDX package field", image_sbom_schema, unknown_sbom_field))
+incomplete_report = deepcopy(scan_report)
+incomplete_report["phases"]["output_rescan_complete"] = False
+incomplete_report["complete"] = False
+negative_cases.append(("incomplete approved scan report", scan_report_schema, incomplete_report))
+networked_report = deepcopy(scan_report)
+networked_report["isolation"]["no_network"] = False
+negative_cases.append(("networked scan report", scan_report_schema, networked_report))
+unrescanned_report = deepcopy(scan_report)
+unrescanned_report["sanitized_outputs"][0]["rescan_verdict"] = "SKIPPED"
+negative_cases.append(("unrescanned scan output", scan_report_schema, unrescanned_report))
+recovery_session_identity = deepcopy(recovery_report)
+recovery_session_identity["session_id"] = "pvm-11111111111111111111111111111111"
+negative_cases.append(("recovery report session identity", recovery_report_schema, recovery_session_identity))
+recovery_locator = deepcopy(recovery_report)
+recovery_locator["artifact_path"] = "/var/lib/private-vm/scratch/private.luks"
+negative_cases.append(("recovery report artifact locator", recovery_report_schema, recovery_locator))
+recovery_unknown_failure = deepcopy(recovery_report)
+recovery_unknown_failure["code"] = "ORPHAN_CLEANUP_FAILED"
+recovery_unknown_failure["status"] = "incomplete"
+recovery_unknown_failure["failures"] = [{
+    "code": "EXTERNAL_COMMAND_OUTPUT",
+    "safe_message": "unsafe",
+    "remediation": "unsafe",
+    "retryable": True,
+}]
+negative_cases.append(("unknown recovery failure", recovery_report_schema, recovery_unknown_failure))
+composite_usb = deepcopy(usb_enrollment)
+composite_usb["identity"]["interfaces"].append("03:01:01")
+negative_cases.append(("composite USB enrollment", usb_enrollment_schema, composite_usb))
+usb_passphrase = deepcopy(usb_enrollment)
+usb_passphrase["luks_passphrase"] = "forbidden"
+negative_cases.append(("USB enrollment secret field", usb_enrollment_schema, usb_passphrase))
+usb_prepare_path = deepcopy(usb_prepare_plan)
+usb_prepare_path["device_path"] = "/dev/sdz"
+negative_cases.append(("USB prepare kernel path", usb_prepare_plan_schema, usb_prepare_path))
+usb_raw_hash = deepcopy(usb_export_receipt)
+usb_raw_hash["sha256"] = "0" * 64
+negative_cases.append(("USB receipt raw hash", usb_export_receipt_schema, usb_raw_hash))
+usb_hash_mismatch = deepcopy(usb_export_receipt)
+usb_hash_mismatch["relay_exporter_hash_equal"] = False
+negative_cases.append(("USB receipt hash mismatch", usb_export_receipt_schema, usb_hash_mismatch))
+missing_report_tool = deepcopy(scan_report)
+missing_report_tool["tools"] = [
+    tool for tool in missing_report_tool["tools"] if tool["name"] != "poppler-utils"
+]
+negative_cases.append(("missing invoked scan report tool", scan_report_schema, missing_report_tool))
+duplicate_report_tool = deepcopy(scan_report)
+duplicate_file_evidence = deepcopy(duplicate_report_tool["tools"][1])
+duplicate_file_evidence["version"] = "different"
+duplicate_report_tool["tools"].append(duplicate_file_evidence)
+negative_cases.append(("duplicate scan report tool", scan_report_schema, duplicate_report_tool))
 
 for label, schema, value in negative_cases:
     if Draft202012Validator(schema).is_valid(value):

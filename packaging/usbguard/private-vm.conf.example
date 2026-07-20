@@ -1,0 +1,4 @@
+# Documentation-only USBGuard policy fragment. Do not install this as a broad
+# allow rule. private-vm writes an exact enrolled-device rule only after it has
+# verified VID, PID, serial/hash, physical port, capacity and the complete
+# mass-storage-only interface set through the privileged daemon API.

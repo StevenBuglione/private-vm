@@ -254,6 +254,9 @@ func (app *App) commandNeedsConfiguration(command *cobra.Command) bool {
 	for top.Parent() != nil && top.Parent() != app.root {
 		top = top.Parent()
 	}
+	if top.Name() == "system" && (command.Name() == "install" || command.Name() == "uninstall") {
+		return false
+	}
 	return top.Name() != "version" && top.Name() != "completion"
 }
 

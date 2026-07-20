@@ -48,6 +48,63 @@ func TestSourceRejectsSymlink(t *testing.T) {
 	}
 }
 
+func TestSourceRejectsSymlinkInParent(t *testing.T) {
+	root := t.TempDir()
+	realParent := filepath.Join(root, "real")
+	if err := os.Mkdir(realParent, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(realParent, "input")
+	if err := os.WriteFile(path, []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	linkedParent := filepath.Join(root, "linked")
+	if err := os.Symlink(realParent, linkedParent); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := OpenSource(t.Context(), filepath.Join(linkedParent, "input"), 1); err == nil {
+		t.Fatal("source beneath a symbolic-link parent was accepted")
+	}
+}
+
+func TestSourceDescriptorSurvivesParentPathReplacement(t *testing.T) {
+	root := t.TempDir()
+	parent := filepath.Join(root, "selected")
+	if err := os.Mkdir(parent, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(parent, "input")
+	if err := os.WriteFile(path, []byte("original"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	source, err := OpenSource(t.Context(), path, 64)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer source.Close()
+
+	moved := filepath.Join(root, "moved")
+	if err := os.Rename(parent, moved); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(parent, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte("replacement"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var received []byte
+	if err := source.Stream(t.Context(), func(_ uint64, data []byte) error {
+		received = append(received, data...)
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if string(received) != "original" {
+		t.Fatalf("stream followed replacement path: %q", received)
+	}
+}
+
 func TestSourceDetectsChangeAfterPreflight(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "input")
 	if err := os.WriteFile(path, []byte("first"), 0o600); err != nil {

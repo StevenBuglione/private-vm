@@ -1,17 +1,48 @@
 {
   "schema_version": 1,
-  "session_id": "7e01de42-f753-4aba-898c-1f5715d034e7",
+  "session_id": "pvm-11111111111111111111111111111111",
   "policy": "safe",
   "started_at": "2026-07-18T12:00:00Z",
   "completed_at": "2026-07-18T12:05:00Z",
-  "scanner_image_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-  "clamav_database_version": "example-20260718",
-  "input": {
-    "logical_name": "untrusted-document.pdf",
-    "size_bytes": 123456,
-    "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-    "detected_mime": "application/pdf"
+  "duration_millis": 300000,
+  "scanner": {
+    "image_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "source_commit": "0123456789abcdef0123456789abcdef01234567",
+    "guestd_version": "1.0.0-rc.1"
   },
+  "definitions": {
+    "engine_version": "1.5.1",
+    "database_version": "daily-28100",
+    "updated_at": "2026-07-18T11:00:00Z",
+    "official": true,
+    "compatible": true
+  },
+  "isolation": {
+    "no_network": true,
+    "quarantine_read_only": true,
+    "mount_options": ["nodev", "noexec", "nosuid", "ro"]
+  },
+  "phases": {
+    "definitions_verified": true,
+    "offline_verified": true,
+    "inventory_complete": true,
+    "malware_scan_complete": true,
+    "archive_inspection_complete": true,
+    "reconstruction_complete": true,
+    "output_rescan_complete": true
+  },
+  "inputs": [
+    {
+      "logical_name": "untrusted-document.pdf",
+      "size_bytes": 123456,
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "detected_mime": "application/pdf",
+      "extension_mime": "application/pdf",
+      "extension_agreement": true,
+      "clamav_verdict": "CLAMAV_CLEAN"
+    }
+  ],
+  "archives": [],
   "findings": [
     {
       "code": "PDF_ACTIVE_CONTENT_REMOVED",
@@ -22,12 +53,21 @@
   ],
   "sanitized_outputs": [
     {
+      "output_id": "scan-out-22222222222222222222222222222222",
       "logical_name": "untrusted-document.safe.pdf",
+      "source_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       "size_bytes": 234567,
       "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
       "detected_mime": "application/pdf",
-      "transformation": "pdf-raster-rebuild-v1"
+      "transformation": "pdf-raster-rebuild-v1",
+      "rescan_verdict": "CLAMAV_CLEAN"
     }
+  ],
+  "tools": [
+    { "name": "clamav", "version": "1.5.1" },
+    { "name": "file", "version": "5.46" },
+    { "name": "ghostscript", "version": "10.05.1" },
+    { "name": "poppler-utils", "version": "25.06.0" }
   ],
   "result": "approved",
   "complete": true

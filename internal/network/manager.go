@@ -22,6 +22,7 @@ const (
 	maximumCreateDuration  = 30 * time.Second
 	maximumCleanupDuration = 30 * time.Second
 	maximumHandoffDuration = 30 * time.Second
+	maximumAuditDuration   = 5 * time.Second
 	redactedHandle         = "[REDACTED SESSION NETWORK]"
 )
 
@@ -359,6 +360,45 @@ func (handle *Handle) Inspect() Inspection {
 		IPv4EndpointCount: len(handle.state.policy.v4), IPv6EndpointCount: len(handle.state.policy.v6),
 		TAPReady: handle.state.ready && handle.state.tapFile != nil,
 	}
+}
+
+// AuditPolicy reads the live nftables counters while holding the same lifecycle
+// lease used by provisioning, handoff and cleanup. It rejects a stale Handle,
+// a rotated VPN plan and any incomplete boolean proof.
+func (handle *Handle) AuditPolicy(ctx context.Context) (PolicyAudit, error) {
+	if ctx == nil || handle == nil || handle.manager == nil || handle.state == nil {
+		return PolicyAudit{}, invalidRequest()
+	}
+	auditCtx, cancel := boundedContext(ctx, maximumAuditDuration)
+	defer cancel()
+	var proof PolicyAudit
+	err := handle.state.profiles.UsePlan(auditCtx, handle.state.owner, handle.state.profileName, handle.state.plan, func(vpn.ResolvedProfile) error {
+		handle.state.lifecycleMu.Lock()
+		defer handle.state.lifecycleMu.Unlock()
+
+		handle.manager.mu.Lock()
+		owned := handle.manager.states[handle.state.sessionID] == handle.state
+		handle.manager.mu.Unlock()
+		handle.state.mu.Lock()
+		ready := handle.state.ready && handle.state.namespacePolicyAttempted && handle.state.hostPolicyAttempted
+		handle.state.mu.Unlock()
+		if !owned || !ready {
+			return ErrTopologyNotReady
+		}
+		var err error
+		proof, err = handle.manager.backend.AuditPolicy(auditCtx, handle.state.spec)
+		if err != nil {
+			return err
+		}
+		if !proof.NamespacePolicyPresent || !proof.HostPolicyPresent || !proof.ForbiddenEgressZero {
+			return ErrCommandFailed
+		}
+		return auditCtx.Err()
+	})
+	if err != nil {
+		return PolicyAudit{}, policyAuditFailed(err)
+	}
+	return proof, nil
 }
 
 // WithTAP proves the exact VPN plan remains current and supplies a scoped

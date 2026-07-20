@@ -82,7 +82,7 @@ func TestCompleteDocumentedCommandSurface(t *testing.T) {
 		"torrent start", "torrent add", "torrent metadata", "torrent select", "torrent plan", "torrent download", "torrent pause", "torrent resume", "torrent status", "torrent complete",
 		"scan start", "scan status", "scan report", "scan approve", "scan reject",
 		"vpn import", "vpn inspect", "vpn test", "vpn rotate", "vpn remove",
-		"usb list", "usb inspect", "usb enroll", "usb prepare", "usb verify", "usb forget",
+		"usb list", "usb inspect", "usb enroll", "usb prepare", "usb export", "usb verify", "usb forget",
 		"images list", "images sync", "images pull", "images verify", "images inspect", "images build", "images test", "images prune",
 		"session list", "session status", "session report", "session stop", "session abort", "session cleanup",
 		"policy list", "policy show", "policy validate",
@@ -155,7 +155,7 @@ func TestCLIConfigLayerIsLoadedBeforeDispatch(t *testing.T) {
 		t.Fatalf("dispatch calls=%#v", invoker.calls)
 	}
 	intent, ok := invoker.calls[0].intent.(WorkstationIntent)
-	if !ok || intent.Bundle != "development" || intent.Memory != "17179869184B" || intent.CPUs != 8 {
+	if !ok || intent.Bundle != "development" || intent.Memory != "4294967296B" || intent.CPUs != 2 {
 		t.Fatalf("configuration defaults did not reach dispatch: %#v", invoker.calls[0].intent)
 	}
 }
@@ -260,6 +260,19 @@ func TestReferenceCommandsDoNotLoadConfiguration(t *testing.T) {
 	}
 }
 
+func TestGenericInstallCommandsDoNotDependOnUserConfiguration(t *testing.T) {
+	load := func(string, config.Overrides) (config.Config, error) {
+		t.Fatal("generic install command loaded user or daemon configuration")
+		return config.Config{}, errors.New("unreachable")
+	}
+	for _, args := range [][]string{{"system", "install", "--dry-run"}, {"system", "uninstall", "--dry-run"}} {
+		invoker := &recordingInvoker{}
+		if code := New(Dependencies{LoadConfig: load, Invoker: invoker}).Execute(context.Background(), args); code != exitcode.OK {
+			t.Fatalf("args=%v code=%d", args, code)
+		}
+	}
+}
+
 func TestJSONRejectsHumanOnlyHelpAndCompletion(t *testing.T) {
 	for _, args := range [][]string{
 		{"--json"},
@@ -323,16 +336,17 @@ func TestValidatedParametersReachSemanticInvoker(t *testing.T) {
 		{name: "desktop stop", args: []string{"desktop", "stop", "--session", session, "--discard"}, want: DesktopStopIntent{SessionID: session, Discard: true}},
 		{name: "bundle", args: []string{"desktop", "bundles", "inspect", "office"}, want: BundleIntent{Name: "office"}},
 		{name: "workspace path", args: []string{"workspace", "import", "/tmp/input", "--session", session}, want: WorkspacePathIntent{SessionID: session, Path: "/tmp/input"}},
-		{name: "workspace export", args: []string{"workspace", "export", "--to", "usb", "--session", session}, want: WorkspaceExportIntent{SessionID: session, Destination: "usb"}},
+		{name: "workspace export", args: []string{"workspace", "export", "output-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "--to", "usb", "--session", session}, want: WorkspaceExportIntent{SessionID: session, Destination: "usb", OutputID: "output-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}},
 		{name: "workspace verify", args: []string{"workspace", "verify", "--export", "export-1"}, want: WorkspaceVerifyIntent{ExportID: "export-1"}},
 		{name: "workspace discard", args: []string{"workspace", "discard", "--all", "--session", session}, want: WorkspaceDiscardIntent{SessionID: session, All: true}},
 		{name: "torrent start", args: []string{"torrent", "start", "--policy", "quarantine"}, want: TorrentIntent{Policy: "quarantine"}},
 		{name: "torrent input", args: []string{"torrent", "add", "--torrent-file", "/tmp/input.torrent"}, want: TorrentInputIntent{TorrentFile: "/tmp/input.torrent"}},
-		{name: "torrent selection", args: []string{"torrent", "select", "--files", "1,2,4"}, want: TorrentSelectionIntent{Files: []uint32{1, 2, 4}}},
+		{name: "torrent selection", args: []string{"torrent", "select", "--files", "1,2,4", "--destination", "workstation"}, want: TorrentSelectionIntent{Files: []uint32{1, 2, 4}, Destination: "workstation"}},
 		{name: "scanner approval", args: []string{"scan", "approve", "--session", session, "--to", "usb"}, want: ScanApprovalIntent{SessionID: session, To: "usb"}},
 		{name: "vpn import", args: []string{"vpn", "import", "--from-file", "/tmp/profile.conf"}, want: VPNImportIntent{ProfileName: "proton-p2p", FromFile: "/tmp/profile.conf"}},
-		{name: "usb device", args: []string{"usb", "enroll", "--device", "usb-1"}, want: USBDeviceIntent{DeviceID: "usb-1"}},
+		{name: "usb device", args: []string{"usb", "enroll", "--device", "usbdev-0123456789abcdef"}, want: USBDeviceIntent{DeviceID: "usbdev-0123456789abcdef", Label: "PRIVATE_VM_TRANSFER"}},
 		{name: "usb prepare", args: []string{"usb", "prepare", "--format", "luks2-ext4"}, want: USBPrepareIntent{Format: "luks2-ext4"}},
+		{name: "usb export", args: []string{"usb", "export", "--session", session, "--claim", "usbclaim-0123456789abcdef0123456789abcdef", "--scanner-session", "pvm-22222222222222222222222222222222", "--output", "output-opaque-01"}, want: USBExportIntent{ExporterSession: session, ClaimID: "usbclaim-0123456789abcdef0123456789abcdef", SourceSession: "pvm-22222222222222222222222222222222", OutputID: "output-opaque-01"}},
 		{name: "image selection", args: []string{"images", "sync", "--role", "workstation", "--bundle", "basic"}, want: ImageSelectionIntent{Role: "workstation", Bundle: "basic"}},
 		{name: "image test", args: []string{"images", "test", "ghcr.io/example/image@sha256:abc", "--backend", "qemu"}, want: ImageTestIntent{Reference: "ghcr.io/example/image@sha256:abc", Backend: "qemu"}},
 		{name: "session report", args: []string{"session", "report", "--session", session, "--export", "/tmp/report.json"}, want: SessionReportIntent{SessionID: session, ExportPath: "/tmp/report.json"}},
@@ -340,6 +354,7 @@ func TestValidatedParametersReachSemanticInvoker(t *testing.T) {
 		{name: "policy name", args: []string{"policy", "show", "safe"}, want: PolicyNameIntent{Name: "safe"}},
 		{name: "policy file", args: []string{"policy", "validate", "/tmp/policy.toml"}, want: PolicyFileIntent{Path: "/tmp/policy.toml"}},
 		{name: "system install", args: []string{"system", "install", "--dry-run"}, want: SystemInstallIntent{DryRun: true}},
+		{name: "system uninstall", args: []string{"system", "uninstall", "--accept"}, want: SystemUninstallIntent{Accept: true}},
 		{name: "system diagnostics", args: []string{"system", "diagnostics", "--export", "/tmp/diagnostics.json"}, want: SystemDiagnosticsIntent{ExportPath: "/tmp/diagnostics.json"}},
 	}
 	for _, test := range tests {
@@ -533,6 +548,7 @@ func TestCommandValidationFailuresAreUsageErrors(t *testing.T) {
 		{"torrent", "add"},
 		{"torrent", "add", "--magnet-stdin", "--torrent-file", "/tmp/a"},
 		{"torrent", "select", "--files", "1,1"},
+		{"torrent", "select", "--files", "1"},
 		{"scan", "start"},
 		{"vpn", "import", "--non-interactive"},
 		{"usb", "prepare", "--format", "luks2-ext4", "--non-interactive"},

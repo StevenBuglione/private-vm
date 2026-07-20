@@ -47,6 +47,16 @@ type ProbeTargets struct {
 	IPv6    netip.AddrPort
 }
 
+// NewProbeTargets validates the operator-controlled fixtures before they can
+// reach a socket. Diagnostic formatting remains redacted below.
+func NewProbeTargets(dnsName string, ipv4, ipv6 netip.AddrPort) (ProbeTargets, error) {
+	targets := ProbeTargets{DNSName: dnsName, IPv4: ipv4, IPv6: ipv6}
+	if err := targets.validate(); err != nil {
+		return ProbeTargets{}, err
+	}
+	return targets, nil
+}
+
 func (targets ProbeTargets) validate() error {
 	domain := strings.ToLower(strings.TrimSuffix(targets.DNSName, "."))
 	if len(domain) == 0 || len(domain) > 253 || !probeDomainPattern.MatchString(domain) ||

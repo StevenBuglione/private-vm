@@ -22,6 +22,20 @@ const (
 	RoleExporter    Role = "exporter"
 )
 
+// LaunchPlan is the closed, non-secret result of daemon-side selector and
+// resource validation. It is retained only by the owning daemon process and is
+// never added to the volatile session journal: a restarted daemon must recover
+// resources, not resume a prior guest launch.
+type LaunchPlan struct {
+	Role         Role
+	ImageBundle  string
+	PolicyName   string
+	VCPUs        uint32
+	MemoryBytes  uint64
+	RootBytes    uint64
+	ScratchBytes uint64
+}
+
 // Phase is the top-level lifecycle from docs/05-state-machines.md. Role-specific
 // workflow states are tracked separately and may advance only through the
 // closed, role-specific transition tables below.

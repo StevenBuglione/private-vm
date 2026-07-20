@@ -92,9 +92,9 @@ func (factory commandFactory) plan() *cobra.Command {
 
 func (factory commandFactory) desktop() *cobra.Command {
 	start, _ := factory.workstationStart("start")
-	connect := factory.optionalSession("connect", "desktop.connect")
+	connect := factory.optionalSession("connect", CommandDesktopConnect)
 	status := factory.optionalSession("status", "desktop.status")
-	restart := factory.optionalSession("restart-viewer", "desktop.restart-viewer")
+	restart := factory.optionalSession("restart-viewer", CommandDesktopRestart)
 
 	var stopSession string
 	var requireClean, discard bool
@@ -158,7 +158,7 @@ func (factory commandFactory) optionalSession(use string, id CommandID) *cobra.C
 
 func (factory commandFactory) workspace() *cobra.Command {
 	var importSession string
-	importCommand := factory.operation("import FILE", "Import one trusted host file", "workspace.import", exactArgs(1), func(command *cobra.Command) error {
+	importCommand := factory.operation("import FILE", "Import one trusted host file", CommandWorkspaceImport, exactArgs(1), func(command *cobra.Command) error {
 		if err := validatePath(command.Flags().Arg(0)); err != nil {
 			return err
 		}
@@ -166,8 +166,8 @@ func (factory commandFactory) workspace() *cobra.Command {
 	}, func(args []string) Intent { return WorkspacePathIntent{SessionID: importSession, Path: args[0]} })
 	importCommand.Flags().StringVar(&importSession, "session", "", "session identifier")
 
-	inbox := factory.optionalSessionOperation("inbox", "workspace.inbox")
-	list := factory.optionalSessionOperation("list", "workspace.list")
+	inbox := factory.optionalSessionOperation("inbox", CommandWorkspaceInbox)
+	list := factory.optionalSessionOperation("list", CommandWorkspaceList)
 
 	var inspectSession string
 	inspect := factory.operation("inspect PATH", "Inspect a workspace path", "workspace.inspect", exactArgs(1), func(command *cobra.Command) error {
@@ -179,31 +179,42 @@ func (factory commandFactory) workspace() *cobra.Command {
 	inspect.Flags().StringVar(&inspectSession, "session", "", "session identifier")
 
 	var exportTo, exportSession string
-	export := factory.operation("export", "Export an explicit workspace result", "workspace.export", noArgs, func(*cobra.Command) error {
+	export := factory.operation("export OUTPUT", "Export an explicit workspace result", CommandWorkspaceExport, exactArgs(1), func(command *cobra.Command) error {
 		if err := enum(exportTo, "export destination", "usb", "encrypted-bundle"); err != nil {
 			return err
 		}
+		if err := validateOpaqueID(command.Flags().Arg(0), "workspace output", true); err != nil {
+			return err
+		}
 		return validateSessionID(exportSession, false)
-	}, func([]string) Intent { return WorkspaceExportIntent{SessionID: exportSession, Destination: exportTo} })
+	}, func(args []string) Intent {
+		return WorkspaceExportIntent{SessionID: exportSession, Destination: exportTo, OutputID: args[0]}
+	})
 	export.Flags().StringVar(&exportTo, "to", "", "usb or encrypted-bundle")
 	export.Flags().StringVar(&exportSession, "session", "", "session identifier")
 
 	var verifyLast bool
-	var verifyExport string
-	verify := factory.operation("verify", "Verify a workspace export", "workspace.verify", noArgs, func(*cobra.Command) error {
-		if err := validateExclusive(boolCount(verifyLast, verifyExport != ""), false,
+	var verifyExport, verifySession string
+	verify := factory.operation("verify", "Verify a workspace export", CommandWorkspaceVerify, noArgs, func(*cobra.Command) error {
+		if err := validateExclusive(boolCount(verifyLast, verifyExport != ""), true,
 			"The workspace verification selectors are mutually exclusive.",
-			"Choose at most one of --last and --export."); err != nil {
+			"Choose exactly one of --last and --export."); err != nil {
 			return err
 		}
-		return validateOpaqueID(verifyExport, "export", false)
-	}, func([]string) Intent { return WorkspaceVerifyIntent{Last: verifyLast, ExportID: verifyExport} })
+		if err := validateOpaqueID(verifyExport, "export", false); err != nil {
+			return err
+		}
+		return validateSessionID(verifySession, false)
+	}, func([]string) Intent {
+		return WorkspaceVerifyIntent{SessionID: verifySession, Last: verifyLast, ExportID: verifyExport}
+	})
 	verify.Flags().BoolVar(&verifyLast, "last", false, "verify the last export")
 	verify.Flags().StringVar(&verifyExport, "export", "", "export identifier")
+	verify.Flags().StringVar(&verifySession, "session", "", "session identifier")
 
 	var discardAll bool
 	var discardSession string
-	discard := factory.operation("discard", "Discard all workspace data", "workspace.discard", noArgs, func(*cobra.Command) error {
+	discard := factory.operation("discard", "Discard all workspace data", CommandWorkspaceDiscard, noArgs, func(*cobra.Command) error {
 		if !discardAll {
 			return usageError("Workspace discard requires --all.", "Pass --all to explicitly confirm the complete volatile workspace selection.")
 		}
@@ -226,40 +237,53 @@ func (factory commandFactory) optionalSessionOperation(use string, id CommandID)
 
 func (factory commandFactory) torrent() *cobra.Command {
 	var startPolicy string
-	start := factory.operation("start", "Start a torrent workflow", "torrent.start", noArgs, func(*cobra.Command) error {
+	start := factory.operation("start", "Start a torrent workflow", CommandTorrentStart, noArgs, func(*cobra.Command) error {
 		return enum(startPolicy, "policy", "safe", "quarantine")
 	}, func([]string) Intent { return TorrentIntent{Policy: startPolicy} })
 	start.Flags().StringVar(&startPolicy, "policy", "safe", "safe or quarantine")
 
-	var magnetStdin bool
+	var magnetTTY, magnetStdin bool
 	var torrentFile string
-	add := factory.operation("add", "Add a torrent through bounded secure input", "torrent.add", noArgs, func(*cobra.Command) error {
-		if err := validateExclusive(boolCount(magnetStdin, torrentFile != ""), true,
+	add := factory.operation("add", "Add a torrent through bounded secure input", CommandTorrentAdd, noArgs, func(*cobra.Command) error {
+		selected := boolCount(magnetTTY, magnetStdin, torrentFile != "")
+		if err := validateExclusive(selected, true,
 			"Torrent input requires exactly one secure source.",
-			"Choose either --magnet-stdin or --torrent-file."); err != nil {
+			"Choose hidden terminal input, --magnet-stdin, or --torrent-file."); err != nil {
 			return err
 		}
 		if torrentFile != "" {
 			return validatePath(torrentFile)
 		}
 		return nil
-	}, func([]string) Intent { return TorrentInputIntent{MagnetStdin: magnetStdin, TorrentFile: torrentFile} })
+	}, func([]string) Intent {
+		return TorrentInputIntent{MagnetTTY: magnetTTY, MagnetStdin: magnetStdin, TorrentFile: torrentFile}
+	})
+	add.Flags().BoolVar(&magnetTTY, "magnet-tty", false, "read one bounded magnet with terminal echo disabled")
 	add.Flags().BoolVar(&magnetStdin, "magnet-stdin", false, "read one bounded magnet from standard input")
 	add.Flags().StringVar(&torrentFile, "torrent-file", "", "stream one bounded .torrent file")
 
-	var files string
-	selectFiles := factory.operation("select", "Select torrent file indexes", "torrent.select", noArgs, func(*cobra.Command) error {
-		return validateFileSelection(files)
+	var files, destination string
+	selectFiles := factory.operation("select", "Select torrent file indexes", CommandTorrentSelect, noArgs, func(*cobra.Command) error {
+		if err := validateFileSelection(files); err != nil {
+			return err
+		}
+		return enum(destination, "destination", "workstation", "usb")
 	}, func([]string) Intent {
 		indexes, _ := parseFileSelection(files)
-		return TorrentSelectionIntent{Files: indexes}
+		return TorrentSelectionIntent{Files: indexes, Destination: destination}
 	})
 	selectFiles.Flags().StringVar(&files, "files", "", "comma-separated file indexes")
+	selectFiles.Flags().StringVar(&destination, "destination", "", "required downstream destination: workstation or usb")
 
-	children := []*cobra.Command{start, add, factory.simple("metadata", "torrent.metadata"), selectFiles}
-	for _, name := range []string{"plan", "download", "pause", "resume", "status", "complete"} {
-		children = append(children, factory.simple(name, CommandID("torrent."+name)))
-	}
+	children := []*cobra.Command{start, add, factory.simple("metadata", CommandTorrentMetadata), selectFiles}
+	children = append(children,
+		factory.simple("plan", CommandTorrentPlan),
+		factory.simple("download", CommandTorrentDownload),
+		factory.simple("pause", CommandTorrentPause),
+		factory.simple("resume", CommandTorrentResume),
+		factory.simple("status", CommandTorrentStatus),
+		factory.simple("complete", CommandTorrentComplete),
+	)
 	return factory.group("torrent", "Acquire torrent content into quarantine", children...)
 }
 
@@ -277,12 +301,12 @@ func (factory commandFactory) scan() *cobra.Command {
 		return validateSessionID(startSession, true)
 	}, func([]string) Intent { return ScannerIntent{SessionID: startSession} })
 	start.Flags().StringVar(&startSession, "session", "", "required session identifier")
-	status := requiredSession("status", "scan.status")
-	report := requiredSession("report", "scan.report")
-	reject := requiredSession("reject", "scan.reject")
+	status := requiredSession("status", CommandScannerStatus)
+	report := requiredSession("report", CommandScannerReport)
+	reject := requiredSession("reject", CommandScannerReject)
 
 	var sessionID, openIn, to string
-	approve := factory.operation("approve", "Approve reconstructed output", "scan.approve", noArgs, func(*cobra.Command) error {
+	approve := factory.operation("approve", "Approve reconstructed output", CommandScannerApprove, noArgs, func(*cobra.Command) error {
 		if err := validateSessionID(sessionID, true); err != nil {
 			return err
 		}
@@ -348,13 +372,26 @@ func (factory commandFactory) usb() *cobra.Command {
 	requiredDevice := func(use string, id CommandID) *cobra.Command {
 		var device string
 		command := factory.operation(use, "Operate on an exact USB identity", id, noArgs, func(*cobra.Command) error {
-			return validateOpaqueID(device, "device", true)
+			return validateUSBDeviceID(device)
 		}, func([]string) Intent { return USBDeviceIntent{DeviceID: device} })
 		command.Flags().StringVar(&device, "device", "", "exact enrolled device identifier")
 		return command
 	}
+	var enrollmentDevice, enrollmentLabel string
+	var acceptPortBinding bool
+	enroll := factory.operation("enroll", "Enroll one exact mass-storage-only USB identity", CommandUSBEnroll, noArgs, func(*cobra.Command) error {
+		if err := validateUSBDeviceID(enrollmentDevice); err != nil {
+			return err
+		}
+		return validateUSBLabel(enrollmentLabel)
+	}, func([]string) Intent {
+		return USBDeviceIntent{DeviceID: enrollmentDevice, Label: enrollmentLabel, AcceptPortBinding: acceptPortBinding}
+	})
+	enroll.Flags().StringVar(&enrollmentDevice, "device", "", "exact discovery identifier")
+	enroll.Flags().StringVar(&enrollmentLabel, "label", "PRIVATE_VM_TRANSFER", "safe enrollment label")
+	enroll.Flags().BoolVar(&acceptPortBinding, "accept-port-binding", false, "accept exact physical-port binding when no serial exists")
 	var format string
-	prepare := factory.operation("prepare", "Prepare an enrolled USB device", "usb.prepare", noArgs, func(*cobra.Command) error {
+	prepare := factory.operation("prepare", "Prepare an enrolled USB device", CommandUSBPrepare, noArgs, func(*cobra.Command) error {
 		if err := enum(format, "USB format", "luks2-ext4"); err != nil {
 			return err
 		}
@@ -364,13 +401,33 @@ func (factory commandFactory) usb() *cobra.Command {
 		return nil
 	}, func([]string) Intent { return USBPrepareIntent{Format: format} })
 	prepare.Flags().StringVar(&format, "format", "", "required format: luks2-ext4")
+	var exporterSession, claimID, sourceSession, outputID string
+	export := factory.operation("export", "Export one approved reconstructed output", CommandUSBExport, noArgs, func(*cobra.Command) error {
+		if err := validateSessionID(exporterSession, true); err != nil {
+			return err
+		}
+		if err := validateOpaqueID(claimID, "claim", true); err != nil {
+			return err
+		}
+		if err := validateSessionID(sourceSession, true); err != nil {
+			return err
+		}
+		return validateOpaqueID(outputID, "output", true)
+	}, func([]string) Intent {
+		return USBExportIntent{ExporterSession: exporterSession, ClaimID: claimID, SourceSession: sourceSession, OutputID: outputID}
+	})
+	export.Flags().StringVar(&exporterSession, "session", "", "prepared exporter session identifier")
+	export.Flags().StringVar(&claimID, "claim", "", "opaque claim identifier returned by prepare")
+	export.Flags().StringVar(&sourceSession, "scanner-session", "", "approved scanner session identifier")
+	export.Flags().StringVar(&outputID, "output", "", "opaque approved output identifier")
 	return factory.group("usb", "Inspect, enroll and prepare exact USB devices",
-		factory.simple("list", "usb.list"),
-		requiredDevice("inspect", "usb.inspect"),
-		requiredDevice("enroll", "usb.enroll"),
+		factory.simple("list", CommandUSBList),
+		requiredDevice("inspect", CommandUSBInspect),
+		enroll,
 		prepare,
-		factory.simple("verify", "usb.verify"),
-		factory.simple("forget", "usb.forget"),
+		export,
+		factory.simple("verify", CommandUSBVerify),
+		factory.simple("forget", CommandUSBForget),
 	)
 }
 
@@ -491,14 +548,14 @@ func (factory commandFactory) system() *cobra.Command {
 	install.Flags().BoolVar(&dryRun, "dry-run", false, "show the installation plan")
 	install.Flags().BoolVar(&accept, "accept", false, "apply the reviewed installation plan")
 
-	var uninstallDryRun bool
+	var uninstallDryRun, uninstallAccept bool
 	uninstall := factory.operation("uninstall", "Plan host integration removal", "system.uninstall", noArgs, func(*cobra.Command) error {
-		if !uninstallDryRun {
-			return usageError("System uninstall requires --dry-run in v1.", "Use --dry-run to inspect the bounded removal plan.")
-		}
-		return nil
-	}, func([]string) Intent { return SystemUninstallIntent{DryRun: uninstallDryRun} })
+		return validateExclusive(boolCount(uninstallDryRun, uninstallAccept), true,
+			"System uninstall requires exactly one execution mode.",
+			"Choose --dry-run to inspect removals or --accept to apply the reviewed plan.")
+	}, func([]string) Intent { return SystemUninstallIntent{DryRun: uninstallDryRun, Accept: uninstallAccept} })
 	uninstall.Flags().BoolVar(&uninstallDryRun, "dry-run", false, "show the removal plan")
+	uninstall.Flags().BoolVar(&uninstallAccept, "accept", false, "apply the reviewed removal plan")
 
 	var diagnosticsExport string
 	diagnostics := factory.operation("diagnostics", "Create a redacted diagnostic bundle", "system.diagnostics", noArgs, func(*cobra.Command) error {

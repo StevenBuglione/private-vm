@@ -84,6 +84,15 @@ One `Session` object owns:
 No resource may exist without a parent session record. Cleanup is idempotent and
 walks this ownership graph in reverse creation order.
 
+## Workstation display handoff
+
+The root-owned QEMU SPICE socket remains private and identity-pinned. A
+session-owned daemon relay exposes only
+`/run/private-vm/display/<session-id>.sock`, mode `0600` for the creating UID,
+after the QEMU socket passes launcher validation. The CLI launches the reviewed
+`remote-viewer` binary as that UID. The relay rechecks `SO_PEERCRED`, has no TCP
+fallback, and is removed by the same runtime cleanup owner.
+
 ## Daemon boundary
 
 The daemon is not a generic root command runner. Its APIs are semantic:
@@ -96,6 +105,13 @@ The daemon is not a generic root command runner. Its APIs are semantic:
 - claim an enrolled USB for exporter
 - relay a bounded verified stream
 - destroy session
+
+The scanner handoff creates a distinct scanner session from a sealed downloader.
+Its runtime provider atomically transfers an exclusive quarantine lease to the
+scanner cleanup owner, boots update and offline device graphs serially, and
+keeps the verified report only in volatile daemon memory. Generic session
+abort/cleanup and scanner operations share the same per-session serialization
+lock so source cleanup cannot race lease acquisition.
 
 There is no API such as `RunCommand`, `MountPath`, `AttachArbitraryDevice`, or
 `LaunchCustomQEMUArgs`.

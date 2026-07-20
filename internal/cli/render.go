@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"regexp"
 	"strings"
 	"time"
 	"unicode"
@@ -23,17 +24,37 @@ const (
 	DefaultMaxOutputBytes = 1 << 20
 )
 
+var (
+	usbDeviceIDOutputPattern    = regexp.MustCompile(`^usbdev-[0-9a-f]{16}$`)
+	usbEnrollmentOutputPattern  = regexp.MustCompile(`^usb-[0-9a-f]{16}$`)
+	usbHexIDOutputPattern       = regexp.MustCompile(`^[0-9a-f]{4}$`)
+	usbPortOutputPattern        = regexp.MustCompile(`^[0-9]+-[0-9]+(?:\.[0-9]+)*$`)
+	usbInterfaceOutputPattern   = regexp.MustCompile(`^08:[0-9a-f]{2}:[0-9a-f]{2}$`)
+	usbHashOutputPattern        = regexp.MustCompile(`^[A-Za-z0-9+/=_-]{16,256}$`)
+	usbFingerprintOutputPattern = regexp.MustCompile(`^[0-9a-f]{64}$`)
+	usbBlockPathOutputPattern   = regexp.MustCompile(`^/dev/[A-Za-z0-9._-]+$`)
+	usbClaimOutputPattern       = regexp.MustCompile(`^usbclaim-[0-9a-f]{32}$`)
+)
+
 // Code is a stable, machine-readable result or event code.
 type Code string
 
 const (
-	CodeVersion       Code = "VERSION_REPORTED"
-	CodeDoctorReport  Code = "DOCTOR_REPORT"
-	CodeAcknowledged  Code = "ACKNOWLEDGED"
-	CodeVPNProfile    Code = "VPN_PROFILE_STATUS"
-	CodeSessionStatus Code = "SESSION_STATUS"
-	CodeInternalError Code = "INTERNAL_ERROR"
-	CodeRenderFailed  Code = "OUTPUT_RENDER_FAILED"
+	CodeVersion         Code = "VERSION_REPORTED"
+	CodeDoctorReport    Code = "DOCTOR_REPORT"
+	CodeAcknowledged    Code = "ACKNOWLEDGED"
+	CodeVPNProfile      Code = "VPN_PROFILE_STATUS"
+	CodeSessionStatus   Code = "SESSION_STATUS"
+	CodeWorkspaceStatus Code = "WORKSPACE_STATUS"
+	CodeTorrentStatus   Code = "TORRENT_STATUS"
+	CodeScannerStatus   Code = "SCANNER_STATUS"
+	CodeUSBDevices      Code = "USB_DEVICE_STATUS"
+	CodeUSBEnrollment   Code = "USB_ENROLLMENT_STATUS"
+	CodeUSBPrepared     Code = "USB_PREPARED"
+	CodeUSBExported     Code = "USB_EXPORT_VERIFIED"
+	CodeSystemPlan      Code = "SYSTEM_PLAN"
+	CodeInternalError   Code = "INTERNAL_ERROR"
+	CodeRenderFailed    Code = "OUTPUT_RENDER_FAILED"
 )
 
 // MachinePayload is deliberately sealed. Machine output must use an audited,
@@ -116,6 +137,154 @@ type SessionView struct {
 }
 
 func (SessionPayload) machinePayload() {}
+
+// WorkspaceStatusPayload is aggregate-only. It cannot represent filenames,
+// paths, content hashes, socket paths or guest-internal output identities.
+type WorkspaceStatusPayload struct {
+	SchemaVersion   uint32 `json:"schema_version"`
+	State           string `json:"state"`
+	FileCount       uint32 `json:"file_count"`
+	ExportedCount   uint32 `json:"exported_count"`
+	UnexportedCount uint32 `json:"unexported_count"`
+	ChangedCount    uint32 `json:"changed_count"`
+}
+
+func (WorkspaceStatusPayload) machinePayload() {}
+
+// SystemChangePayload is one non-sensitive fixed host integration mutation.
+type SystemChangePayload struct {
+	Operation string `json:"operation"`
+	Path      string `json:"path"`
+}
+
+// SystemPlanPayload is the generic install/uninstall preview or receipt.
+type SystemPlanPayload struct {
+	Action  string                `json:"action"`
+	Version string                `json:"version"`
+	Applied bool                  `json:"applied"`
+	Changes []SystemChangePayload `json:"changes"`
+}
+
+func (SystemPlanPayload) machinePayload() {}
+
+// TorrentStatusPayload deliberately carries only aggregate counters and
+// stable state. Torrent names, file paths, hashes and peer identifiers never
+// cross the CLI machine-output boundary.
+type TorrentStatusPayload struct {
+	SchemaVersion  uint32 `json:"schema_version"`
+	State          string `json:"state"`
+	CompletedBytes uint64 `json:"completed_bytes"`
+	TotalBytes     uint64 `json:"total_bytes"`
+	FileCount      uint32 `json:"file_count"`
+	SelectedCount  uint32 `json:"selected_count"`
+	PayloadPaused  bool   `json:"payload_paused"`
+	Code           string `json:"code"`
+	Remediation    string `json:"remediation"`
+}
+
+func (TorrentStatusPayload) machinePayload() {}
+
+// ScannerStatusPayload is an aggregate-only projection of authenticated
+// scanner evidence. Logical names, hashes, report JSON, malware identifiers,
+// source session IDs and runtime details are intentionally unrepresentable.
+type ScannerStatusPayload struct {
+	SchemaVersion        uint32 `json:"schema_version"`
+	SessionID            string `json:"session_id"`
+	DestinationSessionID string `json:"destination_session_id,omitempty"`
+	WorkflowState        string `json:"workflow_state"`
+	ReportComplete       bool   `json:"report_complete"`
+	Decision             string `json:"decision"`
+	InputCount           uint32 `json:"input_count"`
+	FindingCount         uint32 `json:"finding_count"`
+	BlockingFindingCount uint32 `json:"blocking_finding_count"`
+	SanitizedOutputCount uint32 `json:"sanitized_output_count"`
+	SanitizedOutputBytes uint64 `json:"sanitized_output_bytes"`
+	Code                 string `json:"code"`
+	Remediation          string `json:"remediation"`
+}
+
+func (ScannerStatusPayload) machinePayload() {}
+
+type USBDevicePayload struct {
+	SchemaVersion       uint32   `json:"schema_version"`
+	DeviceID            string   `json:"device_id"`
+	VendorID            string   `json:"vendor_id"`
+	ProductID           string   `json:"product_id"`
+	Model               string   `json:"model,omitempty"`
+	Serial              string   `json:"serial,omitempty"`
+	USBGuardHash        string   `json:"usbguard_hash"`
+	PortPath            string   `json:"port_path"`
+	BlockPath           string   `json:"block_path"`
+	Interfaces          []string `json:"interfaces"`
+	CapacityBytes       uint64   `json:"capacity_bytes"`
+	Mounted             bool     `json:"mounted"`
+	ReadOnly            bool     `json:"read_only"`
+	HostFilesystem      bool     `json:"host_filesystem"`
+	Selectable          bool     `json:"selectable"`
+	IdentityFingerprint string   `json:"identity_fingerprint"`
+	Code                string   `json:"code"`
+	Remediation         string   `json:"remediation"`
+}
+
+type USBDevicesPayload struct {
+	Devices []USBDevicePayload `json:"devices"`
+}
+
+func (USBDevicesPayload) machinePayload() {}
+
+type USBEnrollmentPayload struct {
+	SchemaVersion       uint32   `json:"schema_version"`
+	EnrollmentID        string   `json:"enrollment_id"`
+	Label               string   `json:"label"`
+	Filesystem          string   `json:"filesystem"`
+	VendorID            string   `json:"vendor_id"`
+	ProductID           string   `json:"product_id"`
+	Model               string   `json:"model,omitempty"`
+	Serial              string   `json:"serial,omitempty"`
+	USBGuardHash        string   `json:"usbguard_hash"`
+	BlockPath           string   `json:"block_path,omitempty"`
+	PortPath            string   `json:"port_path"`
+	PortBound           bool     `json:"port_bound"`
+	Interfaces          []string `json:"interfaces"`
+	CapacityBytes       uint64   `json:"capacity_bytes"`
+	IdentityFingerprint string   `json:"identity_fingerprint"`
+	Verified            bool     `json:"verified"`
+	Code                string   `json:"code"`
+	Remediation         string   `json:"remediation"`
+}
+
+func (USBEnrollmentPayload) machinePayload() {}
+
+type USBPreparePayload struct {
+	SchemaVersion       uint32 `json:"schema_version"`
+	ExporterSessionID   string `json:"exporter_session_id"`
+	ClaimID             string `json:"claim_id"`
+	EnrollmentID        string `json:"enrollment_id"`
+	Filesystem          string `json:"filesystem"`
+	CapacityBytes       uint64 `json:"capacity_bytes"`
+	IdentityFingerprint string `json:"identity_fingerprint"`
+	State               string `json:"state"`
+}
+
+func (USBPreparePayload) machinePayload() {}
+
+type USBExportPayload struct {
+	SchemaVersion           uint32 `json:"schema_version"`
+	EnrollmentID            string `json:"enrollment_id"`
+	BytesWritten            uint64 `json:"bytes_written"`
+	SourceRelayHashEqual    bool   `json:"source_relay_hash_equal"`
+	RelayExporterHashEqual  bool   `json:"relay_exporter_hash_equal"`
+	ExporterRereadHashEqual bool   `json:"exporter_reread_hash_equal"`
+	FileSynced              bool   `json:"file_synced"`
+	FilesystemSynced        bool   `json:"filesystem_synced"`
+	AtomicRename            bool   `json:"atomic_rename"`
+	USBUnmounted            bool   `json:"usb_unmounted"`
+	USBDetached             bool   `json:"usb_detached"`
+	ExporterStopped         bool   `json:"exporter_stopped"`
+	CleanupComplete         bool   `json:"cleanup_complete"`
+}
+
+func (USBExportPayload) machinePayload() {}
 
 // EventPayload is deliberately sealed independently from success payloads.
 // Adding an event shape requires an explicit, reviewed concrete type.
@@ -311,9 +480,91 @@ func validSuccess(success SuccessEnvelope) bool {
 			}
 		}
 		return true
+	case WorkspaceStatusPayload:
+		return success.Code == CodeWorkspaceStatus && data.SchemaVersion == 1 &&
+			oneOf(data.State, "CLEAN", "READY", "UNEXPORTED", "CHANGED") &&
+			data.ExportedCount <= data.FileCount && data.UnexportedCount <= data.FileCount && data.ChangedCount <= data.FileCount
+	case SystemPlanPayload:
+		if success.Code != CodeSystemPlan || !oneOf(data.Action, "install", "uninstall") ||
+			!validRequiredString(data.Version, 64) || data.Changes == nil || len(data.Changes) == 0 || len(data.Changes) > 64 {
+			return false
+		}
+		for _, change := range data.Changes {
+			if !oneOf(change.Operation, "create", "replace", "preserve", "remove", "ensure-group", "enable-service", "disable-service") ||
+				!validRequiredString(change.Path, 256) || strings.ContainsAny(change.Path, "\r\n\x00") {
+				return false
+			}
+		}
+		return true
+	case TorrentStatusPayload:
+		return success.Code == CodeTorrentStatus && data.SchemaVersion == 1 &&
+			validCode(Code(data.State)) && data.CompletedBytes <= data.TotalBytes &&
+			data.SelectedCount <= data.FileCount && validCode(Code(data.Code)) &&
+			validRequiredString(data.Remediation, 512)
+	case ScannerStatusPayload:
+		return success.Code == CodeScannerStatus && data.SchemaVersion == 1 &&
+			validOptionalSessionID(data.SessionID) && data.SessionID != "" &&
+			validOptionalSessionID(data.DestinationSessionID) &&
+			(data.DestinationSessionID == "" || data.Decision == "approved" && data.WorkflowState == "SCAN_VM_STOPPED") &&
+			validCode(Code(data.WorkflowState)) && oneOf(data.Decision, "pending", "approved", "rejected") &&
+			data.BlockingFindingCount <= data.FindingCount && validCode(Code(data.Code)) &&
+			validRequiredString(data.Remediation, 512)
+	case USBDevicesPayload:
+		if success.Code != CodeUSBDevices || data.Devices == nil || len(data.Devices) > 256 {
+			return false
+		}
+		for _, device := range data.Devices {
+			if !validUSBDevice(device) {
+				return false
+			}
+		}
+		return true
+	case USBEnrollmentPayload:
+		return success.Code == CodeUSBEnrollment && data.SchemaVersion == 1 && usbEnrollmentOutputPattern.MatchString(data.EnrollmentID) &&
+			validRequiredString(data.Label, 32) && data.Filesystem == "luks2-ext4" && usbHexIDOutputPattern.MatchString(data.VendorID) && usbHexIDOutputPattern.MatchString(data.ProductID) &&
+			data.CapacityBytes > 0 && usbFingerprintOutputPattern.MatchString(data.IdentityFingerprint) && validUSBInterfaces(data.Interfaces) && usbHashOutputPattern.MatchString(data.USBGuardHash) &&
+			(data.BlockPath == "" || usbBlockPathOutputPattern.MatchString(data.BlockPath)) && usbPortOutputPattern.MatchString(data.PortPath) && validUSBText(data.Serial, 256, true) && validUSBText(data.Model, 256, true) &&
+			validCode(Code(data.Code)) && validRequiredString(data.Remediation, 512)
+	case USBPreparePayload:
+		return success.Code == CodeUSBPrepared && data.SchemaVersion == 1 && validOptionalSessionID(data.ExporterSessionID) &&
+			usbClaimOutputPattern.MatchString(data.ClaimID) && usbEnrollmentOutputPattern.MatchString(data.EnrollmentID) &&
+			data.Filesystem == "luks2-ext4" && data.CapacityBytes > 0 && usbFingerprintOutputPattern.MatchString(data.IdentityFingerprint) && data.State == "DESTINATION_PREPARED"
+	case USBExportPayload:
+		return success.Code == CodeUSBExported && data.SchemaVersion == 1 && usbEnrollmentOutputPattern.MatchString(data.EnrollmentID) && data.BytesWritten > 0 &&
+			data.SourceRelayHashEqual && data.RelayExporterHashEqual && data.ExporterRereadHashEqual && data.FileSynced && data.FilesystemSynced && data.AtomicRename &&
+			data.USBUnmounted && data.USBDetached && data.ExporterStopped && data.CleanupComplete
 	default:
 		return false
 	}
+}
+
+func validUSBDevice(device USBDevicePayload) bool {
+	return device.SchemaVersion == 1 && usbDeviceIDOutputPattern.MatchString(device.DeviceID) &&
+		usbHexIDOutputPattern.MatchString(device.VendorID) && usbHexIDOutputPattern.MatchString(device.ProductID) &&
+		device.CapacityBytes > 0 && usbFingerprintOutputPattern.MatchString(device.IdentityFingerprint) &&
+		validUSBInterfaces(device.Interfaces) && usbHashOutputPattern.MatchString(device.USBGuardHash) &&
+		usbBlockPathOutputPattern.MatchString(device.BlockPath) && usbPortOutputPattern.MatchString(device.PortPath) &&
+		validUSBText(device.Serial, 256, true) && validUSBText(device.Model, 256, true) &&
+		validCode(Code(device.Code)) && validRequiredString(device.Remediation, 512)
+}
+
+func validUSBInterfaces(values []string) bool {
+	if len(values) == 0 || len(values) > 32 {
+		return false
+	}
+	for index, value := range values {
+		if !usbInterfaceOutputPattern.MatchString(value) || index > 0 && values[index-1] >= value {
+			return false
+		}
+	}
+	return true
+}
+
+func validUSBText(value string, maximum int, optional bool) bool {
+	if value == "" {
+		return optional
+	}
+	return len(value) <= maximum && utf8.ValidString(value) && !strings.ContainsAny(value, "\x00\r\n")
 }
 
 func validRequiredString(value string, maximum int) bool {
@@ -423,6 +674,58 @@ func humanSuccess(code Code, data MachinePayload) string {
 			fmt.Fprintf(&buffer, "%s role=%s phase=%s%s\n", safeLine(current.ID), safeLine(current.Role), safeLine(current.Phase), workflow)
 		}
 		return buffer.String()
+	case WorkspaceStatusPayload:
+		return fmt.Sprintf("workspace=%s files=%d exported=%d unexported=%d changed=%d\n",
+			safeLine(value.State), value.FileCount, value.ExportedCount, value.UnexportedCount, value.ChangedCount)
+	case SystemPlanPayload:
+		var buffer strings.Builder
+		fmt.Fprintf(&buffer, "%s %s (applied: %t)\n", safeLine(value.Action), safeLine(value.Version), value.Applied)
+		for _, change := range value.Changes {
+			fmt.Fprintf(&buffer, "  %s %s\n", safeLine(change.Operation), safeLine(change.Path))
+		}
+		return buffer.String()
+	case TorrentStatusPayload:
+		return fmt.Sprintf(
+			"%s state=%s progress=%d/%d files=%d selected=%d payload_paused=%t\nremediation: %s\n",
+			safeLine(value.Code), safeLine(value.State), value.CompletedBytes, value.TotalBytes,
+			value.FileCount, value.SelectedCount, value.PayloadPaused, safeLine(value.Remediation),
+		)
+	case ScannerStatusPayload:
+		destination := ""
+		if value.DestinationSessionID != "" {
+			destination = " destination_session=" + safeLine(value.DestinationSessionID)
+		}
+		return fmt.Sprintf(
+			"%s session=%s%s state=%s decision=%s report_complete=%t inputs=%d findings=%d blocking=%d outputs=%d output_bytes=%d\nremediation: %s\n",
+			safeLine(value.Code), safeLine(value.SessionID), destination, safeLine(value.WorkflowState), safeLine(value.Decision),
+			value.ReportComplete, value.InputCount, value.FindingCount, value.BlockingFindingCount,
+			value.SanitizedOutputCount, value.SanitizedOutputBytes, safeLine(value.Remediation),
+		)
+	case USBDevicesPayload:
+		if len(value.Devices) == 0 {
+			return "no USB mass-storage candidates\n"
+		}
+		var buffer strings.Builder
+		for _, device := range value.Devices {
+			fmt.Fprintf(&buffer, "%s path=%s %s:%s model=%s serial=%s usbguard_hash=%s capacity=%d port=%s selectable=%t fingerprint=%s code=%s\n",
+				safeLine(device.DeviceID), safeLine(device.BlockPath), safeLine(device.VendorID), safeLine(device.ProductID), safeLine(device.Model),
+				safeLine(device.Serial), safeLine(device.USBGuardHash), device.CapacityBytes, safeLine(device.PortPath), device.Selectable,
+				safeLine(device.IdentityFingerprint), safeLine(device.Code))
+		}
+		return buffer.String()
+	case USBEnrollmentPayload:
+		return fmt.Sprintf("%s label=%s path=%s %s:%s serial=%s usbguard_hash=%s capacity=%d port=%s port_bound=%t verified=%t fingerprint=%s code=%s\nremediation: %s\n",
+			safeLine(value.EnrollmentID), safeLine(value.Label), safeLine(value.BlockPath), safeLine(value.VendorID), safeLine(value.ProductID),
+			safeLine(value.Serial), safeLine(value.USBGuardHash), value.CapacityBytes, safeLine(value.PortPath), value.PortBound, value.Verified,
+			safeLine(value.IdentityFingerprint), safeLine(value.Code), safeLine(value.Remediation))
+	case USBPreparePayload:
+		return fmt.Sprintf("exporter=%s claim=%s enrollment=%s filesystem=%s capacity=%d fingerprint=%s state=%s\n",
+			safeLine(value.ExporterSessionID), safeLine(value.ClaimID), safeLine(value.EnrollmentID), safeLine(value.Filesystem), value.CapacityBytes,
+			safeLine(value.IdentityFingerprint), safeLine(value.State))
+	case USBExportPayload:
+		return fmt.Sprintf("enrollment=%s bytes=%d source_relay_hash_equal=%t relay_exporter_hash_equal=%t exporter_reread_hash_equal=%t synced=%t filesystem_synced=%t atomic=%t unmounted=%t detached=%t stopped=%t cleanup=%t\n",
+			safeLine(value.EnrollmentID), value.BytesWritten, value.SourceRelayHashEqual, value.RelayExporterHashEqual, value.ExporterRereadHashEqual,
+			value.FileSynced, value.FilesystemSynced, value.AtomicRename, value.USBUnmounted, value.USBDetached, value.ExporterStopped, value.CleanupComplete)
 	default:
 		// MachinePayload is sealed; this protects against new payload types being
 		// added without a corresponding reviewed human representation.

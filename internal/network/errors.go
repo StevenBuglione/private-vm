@@ -14,6 +14,7 @@ var (
 	ErrCollisionExhausted = errors.New("network allocation collision limit reached")
 	ErrTopologyFailed     = errors.New("network topology creation failed")
 	ErrPolicyFailed       = errors.New("host endpoint policy installation failed")
+	ErrPolicyAuditFailed  = errors.New("host endpoint policy audit failed")
 	ErrTopologyNotReady   = errors.New("network topology is not ready")
 	ErrCleanupIncomplete  = errors.New("network cleanup is incomplete")
 	ErrBackendUnavailable = errors.New("network backend is unavailable")
@@ -69,6 +70,18 @@ func policyFailed(cause error) error {
 		"The exact Proton endpoint allowlist could not be installed atomically.",
 		"Do not start QEMU; clean the session network, verify nftables support, and retry with a current VPN plan.",
 		ErrPolicyFailed,
+	)
+}
+
+func policyAuditFailed(cause error) error {
+	if errors.Is(cause, context.Canceled) || errors.Is(cause, context.DeadlineExceeded) {
+		return cause
+	}
+	return apperror.Wrap(
+		"HOST_EGRESS_AUDIT_FAILED", exitcode.Network,
+		"The live private-vm nftables policy could not be verified.",
+		"Keep the guest blocked, clean the owned session network, and retry with working nftables JSON support.",
+		ErrPolicyAuditFailed,
 	)
 }
 

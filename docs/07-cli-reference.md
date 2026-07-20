@@ -100,6 +100,34 @@ private-vm doctor [--strict] [--repair-safe] [--json]
 state. It must not change firewall, format disks, enable hibernation settings, or
 enroll USB devices.
 
+Strict mode makes an inactive `private-vmd` or USBGuard service, an invalid
+control socket or daemon configuration, a missing `systemctl`, and a missing or
+expanded Polkit policy blocking installation diagnostics. Compatibility mode
+reports those installation defects as overridable warnings; it never weakens
+the always-blocking kernel, device, swap, resume, capacity, networking or image
+checks. An unencrypted host root remains an explicit defense-in-depth warning
+because writable session state is independently tmpfs-backed or encrypted.
+
+Doctor also requires x86_64, Linux 6.6 or newer, a valid current network
+namespace, device-mapper and loop control character devices, and a reviewed
+sparse-capable scratch filesystem. Its external capability probes are limited
+to fixed version arguments and `ip netns list`; output is bounded, discarded
+from diagnostics and never includes an nftables ruleset. It does not open the
+root-only device-mapper or loop control nodes and does not create a sparse test
+file.
+
+QEMU probing requires q35, VSOCK, VirtIO block/network and USB-host device help,
+plus SPICE help containing Unix-socket, clipboard-disable and file-transfer
+disable controls. Supported QEMU releases intentionally return a nonzero status
+for `-spice help`; Doctor accepts that status only when the complete bounded
+capability output is present.
+
+The read-only report blocks online-role planning when
+`net.ipv6.conf.all.forwarding` is not exactly `1`. The NixOS module declares
+this prerequisite; distribution packages must install an equivalent sysctl
+fragment. Doctor never changes it. Global IPv4 forwarding is neither required
+nor enabled because the daemon confines IPv4 forwarding to its owned veth.
+
 ### `private-vm plan`
 
 ```bash
@@ -130,6 +158,17 @@ workstation matches. `desktop stop` permits `CLEAN` and, unless
 `--require-clean` is set, fully verified `READY`; other states require the
 explicit destructive `--discard` choice.
 
+`desktop connect` and `desktop restart-viewer` resolve one active owned
+workstation through the daemon, then run the root-owned `remote-viewer`
+executable as the invoking user against the fixed UID-only Unix display proxy.
+There is no viewer-command, socket-path or TCP option. `desktop start` never
+launches a viewer and returns when the daemon reports the workstation active.
+The two viewer commands intentionally run `remote-viewer` in the foreground;
+they return when it exits and cancel it when the CLI context or global
+`--timeout` expires (five minutes by default, at most 24 hours). Viewer exit or
+timeout does not stop the VM. The display proxy permits one active client and
+immediately closes every concurrent connection instead of queueing it.
+
 ### Workspace
 
 ```text
@@ -137,21 +176,54 @@ private-vm workspace import FILE [--session ID]
 private-vm workspace inbox [--session ID]
 private-vm workspace list [--session ID]
 private-vm workspace inspect PATH [--session ID]
-private-vm workspace export --to usb|encrypted-bundle [--session ID]
-private-vm workspace verify [--last|--export ID]
+private-vm workspace export OUTPUT --to usb|encrypted-bundle [--session ID]
+private-vm workspace verify (--last|--export ID) [--session ID]
 private-vm workspace discard --all [--session ID]
 ```
 
 No v1 command imports a directory.
 
+`workspace import` opens and hashes one no-follow regular host file, streams it
+without exposing its path to the daemon or guest, and requires the daemon and
+guest SHA-256 receipt to match. `workspace list` and `workspace inbox` return an
+aggregate `WORKSPACE_STATUS` record; machine output contains only state and
+counts. `workspace discard --all` is the explicit destructive choice and stops
+the disposable workstation through the protected daemon stop path.
+
+The production CLI sends the exact opaque output ID and closed `usb`
+destination enum to `ExportWorkspaceToDestination`; it never receives output
+bytes or supplies a host path. The daemon prepares a typed destination
+transaction before opening the authenticated workstation stream. That
+transaction must persist and independently re-read the receiver bytes and
+clean its resources. Only equality between the guest/daemon digest and the
+receiver digest invokes guest verification; failure leaves the workstation
+dirty and triggers bounded transaction abort. The concrete USB transaction is
+composed by the exporter workflow. `encrypted-bundle` remains explicitly
+unavailable until its separate storage/encryption ADR is approved. `workspace
+verify` revalidates that exactly one selected guest receipt
+is current and unchanged; destination re-read verification happens during the
+export command and is not reconstructed from persistent CLI state. `--last`
+is accepted only when exactly one current verified receipt exists; otherwise
+the caller must use one explicit output ID.
+
+Scanner-to-workstation promotion uses a sealed typed host hook that accepts
+only the sole output in a complete authenticated approved report. The daemon
+creates and starts a fresh unadvertised workstation through the normal role
+path, relays bounded frames without a host path, requires scanner/relay/receiver
+SHA-256 equality, cleans the scanner, and only then returns the destination
+session ID and launches the user-owned Unix viewer. Any pre-success failure
+cleans the fresh workstation. Reports with zero or multiple sanitized outputs
+fail closed in v1; ordinary trusted-file import cannot bypass this boundary.
+
 ### Torrent
 
 ```text
 private-vm torrent start [--policy safe|quarantine]
+private-vm torrent add --magnet-tty
 private-vm torrent add --magnet-stdin
 private-vm torrent add --torrent-file FILE
 private-vm torrent metadata
-private-vm torrent select --files 1,2,4
+private-vm torrent select --files 1,2,4 --destination workstation|usb
 private-vm torrent plan
 private-vm torrent download
 private-vm torrent pause
@@ -160,8 +232,28 @@ private-vm torrent status
 private-vm torrent complete
 ```
 
+Torrent subcommands automatically select the sole active downloader owned by
+the caller and fail when none or more than one exists. They always traverse the
+Unix daemon and its session authorization boundary; the CLI never dials guest
+VSOCK directly. Machine results expose only state, byte/file counts and stable
+remediation. Torrent names, paths, hashes, peer identifiers and input values are
+omitted; exact file review remains inside the isolated downloader display.
+
+`torrent select` requires the downstream destination before any payload can
+start. The value is a closed semantic enum, not a path or device selector.
+Selection fails with `TORRENT_CAPACITY_EVIDENCE_UNAVAILABLE` when that
+destination does not yet have independent scanner, reconstruction and receiver
+capacity evidence; frozen v1 does not substitute the quarantine free-space
+value for a missing stage.
+
 `--magnet STRING` is absent by default. A deliberately unsafe argv flag may be
 added only for debugging builds, never official release UX.
+
+`--magnet-tty` uses the process-serialized `/dev/tty` reader, disables echo and
+restores terminal state on every return path. `--magnet-stdin` uses the bounded
+owned standard-input adapter. `.torrent` input is a no-follow regular-file
+stream capped at 16 MiB; its path is consumed by the unprivileged CLI and is not
+sent to guestd. Exactly one source is required.
 
 ### Scan
 
@@ -172,6 +264,22 @@ private-vm scan report --session ID
 private-vm scan approve --session ID --open-in workstation|--to usb
 private-vm scan reject --session ID
 ```
+
+For `scan start`, `--session` is the downloader session whose state is
+`QUARANTINE_SEALED`. The command creates and returns a different scanner session
+ID. `status`, `report`, `approve` and `reject` require that scanner ID. The run
+alias uses the identical daemon stream and cannot bypass update, offline,
+read-only, report-authentication or cleanup gates.
+
+Scanner machine output uses `SCANNER_STATUS`. It contains the scanner session
+ID, workflow state, decision, aggregate input/finding/output counts, total
+sanitized bytes, stable code and remediation. Successful `--open-in
+workstation` output additionally contains `destination_session_id`; all other
+scanner results omit it. It never contains the source
+session ID, report JSON, logical names, hashes, finding identifiers, paths or
+guest/runtime details. `approve` returns success only after the selected
+destination relay and integrity verification complete; `reject` never invokes a
+promotion relay.
 
 ### VPN
 
@@ -218,14 +326,41 @@ uses the same atomic import path. It never generates or persists a key itself.
 ```text
 private-vm usb list
 private-vm usb inspect --device ID
-private-vm usb enroll --device ID
+private-vm usb enroll --device ID [--label PRIVATE_VM_TRANSFER]
+                              [--accept-port-binding]
 private-vm usb prepare --format luks2-ext4
+private-vm usb export --session EXPORTER_SESSION --claim CLAIM_ID \
+                      --scanner-session SCANNER_SESSION --output OUTPUT_ID
 private-vm usb verify
 private-vm usb forget
 ```
 
 `prepare` is destructive and requires an exact displayed device identity plus
-interactive confirmation unless a signed automation policy explicitly permits it.
+two exact interactive confirmations. It creates one exporter session, claims
+the current enrollment, displays the daemon-generated plan, reads the LUKS2
+passphrase without echo, and streams it through the authenticated control
+socket. The success record returns only the opaque exporter session, claim and
+enrollment IDs plus aggregate identity/capacity evidence. Failure aborts the
+same session and invokes its registered cleanup owner.
+
+`export` selects one policy-approved reconstructed scanner output by opaque
+session/output IDs. It never accepts a host or guest path. Success requires all
+source/relay/exporter/reread equality, flush, atomic-rename, unmount, detach,
+exporter-stop and session-cleanup booleans. The success record contains no
+filename, digest or device path.
+
+`list`, `inspect`, `enroll`, `verify`, and `forget` traverse the authenticated
+Unix daemon and are owner-bound by kernel peer credentials. Their typed output
+contains an opaque observation ID, transient kernel block path, VID/PID, model,
+serial, USBGuard hash, physical port, complete interface classes, capacity,
+eligibility and a complete identity fingerprint. Raw USBGuard command output is
+never returned, and the kernel path is never persisted or accepted as later
+authorization. `--accept-port-binding` is required only
+when the inspected device has no stable serial and explicitly pins the record
+to the displayed port. Enrollment is saved under the installed daemon-owned
+enrollment root in one mode-`0700`, numeric-UID-owned directory with a mode
+`0600` regular file. `forget` is idempotent and does not inspect or mutate the
+physical device.
 
 ### Images
 
@@ -294,8 +429,15 @@ private-vm system status
 private-vm system install --dry-run
 private-vm system install --accept
 private-vm system uninstall --dry-run
+private-vm system uninstall --accept
 private-vm system diagnostics [--export FILE]
 ```
+
+The generic Linux install and uninstall commands require exactly one of
+`--dry-run` and `--accept`. Both verify the closed bundle or installed manifest
+and produce the same exact mutation plan; `--accept` additionally records that
+the plan was applied. Uninstall preserves configuration, image cache, enrolled
+identity state and user exports.
 
 `system diagnostics` displays a redacted diagnostic-bundle manifest. With
 `--export`, the user must review that manifest before the bounded bundle is
