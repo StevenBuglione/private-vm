@@ -20,7 +20,7 @@ let
       pkgs
       ;
   };
-  freshclamConfig = pkgs.writeText "private-vm-freshclam.conf" ''
+  freshclamConfiguration = ''
     DatabaseDirectory /var/lib/clamav
     DatabaseOwner clamav
     DNSDatabaseInfo current.cvd.clamav.net
@@ -53,6 +53,10 @@ in
   environment.etc."private-vm/policy.safe.toml" = {
     mode = "0444";
     source = ../../examples/policy.safe.toml;
+  };
+  environment.etc."private-vm/freshclam.conf" = {
+    mode = "0444";
+    text = freshclamConfiguration;
   };
 
   # Only the definitions-update boot grants guestd the socket families and
@@ -153,7 +157,7 @@ in
     restartIfChanged = false;
     serviceConfig = {
       Type = "oneshot";
-      ExecStart = "${pkgs.clamav}/bin/freshclam --config-file=${freshclamConfig} --stdout";
+      ExecStart = "${pkgs.clamav}/bin/freshclam --config-file=/etc/private-vm/freshclam.conf --stdout";
       SuccessExitStatus = "1";
       User = "clamav";
       Group = "clamav";

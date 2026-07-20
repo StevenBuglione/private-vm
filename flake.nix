@@ -820,11 +820,11 @@
             grep -Fx 'MaxFileSize 4G' "${scannerEtc}/etc/clamav/clamd.conf"
             grep -Fx 'MaxScanTime 300000' "${scannerEtc}/etc/clamav/clamd.conf"
             grep -Fx 'AlertEncrypted true' "${scannerEtc}/etc/clamav/clamd.conf"
-            grep -Fx 'DatabaseMirror database.clamav.net' "${scannerEtc}/etc/clamav/freshclam.conf"
-            grep -Fx 'ConnectTimeout 10' "${scannerEtc}/etc/clamav/freshclam.conf"
-            grep -Fx 'ReceiveTimeout 60' "${scannerEtc}/etc/clamav/freshclam.conf"
-            grep -Fx 'MaxAttempts 3' "${scannerEtc}/etc/clamav/freshclam.conf"
-            ! grep -Eq '^(DatabaseCustomURL|PrivateMirror) ' "${scannerEtc}/etc/clamav/freshclam.conf"
+            grep -Fx 'DatabaseMirror database.clamav.net' "${scannerEtc}/etc/private-vm/freshclam.conf"
+            grep -Fx 'ConnectTimeout 10' "${scannerEtc}/etc/private-vm/freshclam.conf"
+            grep -Fx 'ReceiveTimeout 60' "${scannerEtc}/etc/private-vm/freshclam.conf"
+            grep -Fx 'MaxAttempts 3' "${scannerEtc}/etc/private-vm/freshclam.conf"
+            ! grep -Eq '^(DatabaseCustomURL|PrivateMirror) ' "${scannerEtc}/etc/private-vm/freshclam.conf"
             ${nixpkgs.lib.concatMapStringsSep "\n" verifyCommand toolchain.requiredCommands}
             ${nixpkgs.lib.concatMapStringsSep "\n" verifyTool toolchain.tools}
             ${nixpkgs.lib.concatMapStringsSep "\n" verifyForbiddenCommand scannerForbiddenCommands}
