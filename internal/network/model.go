@@ -59,6 +59,15 @@ type Inspection struct {
 	TAPReady          bool `json:"tap_ready"`
 }
 
+// PolicyAudit is the complete safe result of reading the live nftables policy.
+// Exact object names, counters, addresses and raw command output stay inside the
+// network owner and cannot enter orchestration state.
+type PolicyAudit struct {
+	NamespacePolicyPresent bool
+	HostPolicyPresent      bool
+	ForbiddenEgressZero    bool
+}
+
 func candidateFor(sessionID string, attempt uint8) topologySpec {
 	digest := sha256.Sum256([]byte(sessionID + ":" + strconv.FormatUint(uint64(attempt), 10)))
 	suffix := hex.EncodeToString(digest[:5])

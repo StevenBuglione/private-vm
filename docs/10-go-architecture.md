@@ -215,6 +215,14 @@ resource absence. Cleanup first inventories exact names, attempts every resource
 that creation may have touched, and releases ownership only after a final exact
 inventory proves absence.
 
+The same owner performs the live egress audit. A `Handle` holds the lifecycle
+lease and current opaque VPN plan while the Linux backend lists only its exact
+host and namespace nftables tables in JSON mode. The bounded parser requires the
+versioned owner marker, expected base chains and the complete zero-valued audit
+counter set. It destroys raw output and returns only namespace-present,
+host-present and forbidden-egress-zero booleans; stale handles and concurrent
+cleanup fail closed.
+
 One lifecycle mutex is acquired before a network state becomes visible. It
 serializes provisioning, scoped TAP/static-address/VPN-config handoffs and the
 idempotent cleanup owner. Cleanup invalidates readiness immediately, uses its

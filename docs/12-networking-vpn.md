@@ -158,6 +158,17 @@ the network becomes ready. Endpoint values never appear in argv or environment
 and never leave the adapter through returned errors, status or captured output;
 the transient stdin rule buffer is cleared after every result.
 
+Each owned table also has a later, default-drop forward audit hook. Exact Proton
+tuples are exempted again; IPv4, IPv6, direct DNS, private/special-range and
+unrelated egress that unexpectedly survives the primary hook is counted and
+dropped. Readiness requires fresh `nft -j list table inet <owned-table>` evidence
+for both the host and namespace tables while the current-plan lifecycle lease is
+held. The bounded parser requires the exact private-vm owner marker, table,
+primary/audit chains and one zero-valued instance of every counter. Missing,
+duplicate, malformed, nonzero, stale or unowned evidence fails closed. Raw JSON,
+object names, endpoints and counter values are destroyed after parsing; only a
+three-boolean aggregate reaches orchestration.
+
 Provisioning, TAP/configuration handoffs and cleanup have one serialized
 lifecycle owner. Once cleanup is accepted it continues in an independent
 bounded context even if the initiating client disconnects. It first disables
@@ -317,9 +328,11 @@ command output. The concrete bounded adapters use fixed `wg` arguments,
 interface-bound Go sockets, systemd-resolved's private D-Bus connection and the
 loopback-only qBittorrent preferences API. The host orchestrator then requires
 the verified guest result and a boolean-only host/namespace counter proof before
-starting continuous monitoring. Controlled mock-peer packet tests, production
-namespace counters, image composition and live Proton smoke proof remain
-image/acceptance work; none is reported as passed by the source suite.
+starting continuous monitoring. The source suite exercises the production
+bounded nft JSON parser with synthetic owned-table evidence; controlled
+mock-peer packets, live namespace counters, image composition and the live
+Proton smoke proof remain image/acceptance work and are not reported as passed
+by source tests.
 
 ## VPN loss
 
