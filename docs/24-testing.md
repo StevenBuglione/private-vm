@@ -670,9 +670,10 @@ typed workstation-warning/downloader-pause responses, and host lifecycle
 composition. The orchestration fault matrix proves ordered start, refusal of
 incomplete guest/counter proofs, cancellation, dirty-stop protection,
 unexpected QEMU exit cleanup, retry and idempotence. Namespace packet tests, a
-mock WireGuard peer, production namespace counters, image composition, live
-QEMU ordering and the controlled Proton smoke test remain image/acceptance
-gates.
+mock WireGuard peer, image composition, live QEMU ordering and the controlled
+Proton smoke test remain image/acceptance gates. The isolated Linux topology
+gate above now supplies the real namespace packet and production nftables
+counter evidence without mutating the host network.
 
 Mock Proton endpoint:
 
