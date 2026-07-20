@@ -748,7 +748,11 @@ Capacity-specific tests use distinct stage values and prove the minimum-stage
 decision, insufficient quarantine/scanner/reconstruction/destination failures,
 checked-arithmetic overflow, a fresh quarantine probe and downstream receipt
 on reselection, cancellation/deadline propagation, stable redacted errors and
-the production role-plan composition. Protobuf descriptor tests prevent paths,
+the production role-plan composition. An end-to-end production planner fixture
+admits a small non-archive selection, rejects one-byte deficits independently
+at all four stages, rejects input above the 128 MiB runtime ceiling and proves
+archive/reconstruction/output bounds fit the exact 512 MiB scanner scratch.
+Protobuf descriptor tests prevent paths,
 devices, mounts, endpoints, names or hashes from entering the capacity receipt.
 
 The HTTP contract test proves only loopback API origin, fixed quarantine path,

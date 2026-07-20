@@ -126,6 +126,7 @@ func torrentCapacityEvidence(receipt *privatevmv1.TorrentCapacityReceipt) (torre
 		RootOverlayBudgetBytes:  receipt.GetRootOverlayBudgetBytes(),
 		ArchiveExpansionBytes:   receipt.GetArchiveExpansionBytes(),
 		ReconstructionBytes:     receipt.GetReconstructionBytes(),
+		MaximumOutputBytes:      receipt.GetMaximumOutputBytes(),
 		MaximumSelectedBytes:    receipt.GetMaximumSelectedBytes(),
 	}, nil
 }

@@ -10,7 +10,7 @@ func TestCapacityPlanUsesTheMinimumIndependentStage(t *testing.T) {
 	budget := CapacityBudget{
 		QuarantineAvailableBytes: ^uint64(0), ScanAvailableBytes: ^uint64(0), ReconstructionAvailable: ^uint64(0),
 		DestinationAvailable: ^uint64(0), RootOverlayBudgetBytes: 1 << 30, ArchiveExpansionBytes: 1 << 30,
-		ReconstructionBytes: 128 << 20, MaximumSelectedBytes: 1 << 30,
+		ReconstructionBytes: 128 << 20, MaximumOutputBytes: 64 << 20, MaximumSelectedBytes: 1 << 30,
 	}
 	_, plan, err := planSelection(metadata, []uint32{0}, budget, true)
 	if err != nil {
@@ -44,7 +44,7 @@ func TestCapacityPlanFailsClosedOnOverflow(t *testing.T) {
 	budget := CapacityBudget{
 		QuarantineAvailableBytes: ^uint64(0), ScanAvailableBytes: ^uint64(0), ReconstructionAvailable: ^uint64(0),
 		DestinationAvailable: ^uint64(0), RootOverlayBudgetBytes: 1, ArchiveExpansionBytes: 1,
-		ReconstructionBytes: 1, MaximumSelectedBytes: ^uint64(0),
+		ReconstructionBytes: 1, MaximumOutputBytes: 1, MaximumSelectedBytes: ^uint64(0),
 	}
 	if _, _, err := planSelection(metadata, []uint32{0}, budget, true); !errors.Is(err, ErrCapacity) {
 		t.Fatalf("overflow error = %v", err)

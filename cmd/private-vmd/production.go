@@ -170,12 +170,15 @@ func composeProductionHost(ctx context.Context, cfg config.Config) (*productionH
 }
 
 func productionTorrentCapacitySource() orchestrator.PlannedTorrentCapacitySource {
+	capacity := guest.DefaultProductionScannerCapacity()
 	return orchestrator.PlannedTorrentCapacitySource{
-		ScannerScratchBytes:         guest.DefaultProductionScannerConfig().SandboxMaxBytes,
+		ScannerReadOnlyBytes:        capacity.ReadOnlyScanBytes,
+		ScannerScratchBytes:         capacity.ScratchBytes,
 		WorkstationDestinationBytes: 32 << 30,
-		ArchiveExpansionBytes:       4 << 30,
-		ReconstructionBytes:         1 << 30,
-		MaximumSelectedBytes:        500 << 30,
+		ArchiveExpansionBytes:       capacity.ArchiveExpansionBytes,
+		ReconstructionBytes:         capacity.ReconstructionWorkBytes,
+		MaximumOutputBytes:          capacity.MaximumOutputBytes,
+		MaximumSelectedBytes:        capacity.MaximumInputBytes,
 	}
 }
 

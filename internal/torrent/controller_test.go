@@ -295,7 +295,7 @@ func testCapacityEvidence() CapacityEvidence {
 	return CapacityEvidence{
 		Destination: DestinationWorkstation, ScanAvailableBytes: 64 << 30, ReconstructionAvailable: 64 << 30,
 		DestinationAvailable: 64 << 30, RootOverlayBudgetBytes: 8 << 30, ArchiveExpansionBytes: 4 << 30,
-		ReconstructionBytes: 1 << 30, MaximumSelectedBytes: 32 << 30,
+		ReconstructionBytes: 1 << 30, MaximumOutputBytes: 512 << 20, MaximumSelectedBytes: 32 << 30,
 	}
 }
 

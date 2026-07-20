@@ -162,7 +162,7 @@ func guestCapacityReceipt() *privatevmv1.TorrentCapacityReceipt {
 		SchemaVersion: 1, Destination: privatevmv1.TorrentDestination_TORRENT_DESTINATION_WORKSTATION,
 		ScanAvailableBytes: 8 << 30, ReconstructionAvailableBytes: 8 << 30,
 		DestinationAvailableBytes: 8 << 30, RootOverlayBudgetBytes: 1 << 30,
-		ArchiveExpansionBytes: 1 << 30, ReconstructionBytes: 128 << 20, MaximumSelectedBytes: 1 << 30,
+		ArchiveExpansionBytes: 1 << 30, ReconstructionBytes: 128 << 20, MaximumOutputBytes: 64 << 20, MaximumSelectedBytes: 1 << 30,
 	}
 }
 

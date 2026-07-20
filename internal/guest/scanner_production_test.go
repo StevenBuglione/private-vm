@@ -446,6 +446,31 @@ func TestProductionReconstructionApprovesOneTextOutputAndCleansIt(t *testing.T) 
 	}
 }
 
+func TestProductionScannerRuntimeLimitsMatchScratchContract(t *testing.T) {
+	selected, err := policy.Load(filepath.Join("..", "..", "examples", "policy.safe.toml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	contract := DefaultProductionScannerCapacity()
+	reconstruction, archive := productionScannerRuntimeLimits(selected.Limits())
+	if reconstruction.MaxOutputBytes != contract.MaximumOutputBytes || archive.MaxFileBytes != contract.MaximumInputBytes ||
+		archive.MaxExpandedBytes != contract.ArchiveExpansionBytes || contract.ReconstructionWorkBytes != 2*reconstruction.MaxOutputBytes ||
+		archive.MaxExpandedBytes+contract.ReconstructionWorkBytes+(64<<20) > contract.ScratchBytes {
+		t.Fatalf("runtime limits reconstruction=%+v archive=%+v contract=%+v", reconstruction, archive, contract)
+	}
+}
+
+func TestProductionReconstructionRejectsSecondCandidateBeforeAllocation(t *testing.T) {
+	run := &productionReconstructionRun{result: &ScannerReconstruction{Outputs: []scan.ReportSanitizedOutput{{OutputID: "output-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}}}}
+	entry := scan.InventoryEntry{RelativePath: "second.txt", DetectedMIME: "text/plain", ExtensionAgreement: true}
+	if err := run.processEntry(t.Context(), "/unused", entry, "second.txt", 0); err != nil {
+		t.Fatal(err)
+	}
+	if len(run.result.Outputs) != 1 || len(run.result.Findings) != 1 || run.result.Findings[0].Code != "PROMOTION_SELECTION_REQUIRED" {
+		t.Fatalf("second candidate result = %+v", run.result)
+	}
+}
+
 func TestProductionArchiveTraversalBecomesBlockingCompleteFinding(t *testing.T) {
 	parent := productionTmpfs(t)
 	quarantine := t.TempDir()

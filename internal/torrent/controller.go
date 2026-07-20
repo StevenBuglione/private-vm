@@ -195,11 +195,7 @@ func (controller *Controller) Select(ctx context.Context, indexes []uint32, evid
 		}
 		return Metadata{}, CapacityPlan{}, capacityEvidenceUnavailable()
 	}
-	budget, err := evidence.budget(quarantineAvailable)
-	if err != nil {
-		return Metadata{}, CapacityPlan{}, err
-	}
-	metadata, plan, err := planSelection(controller.metadata, indexes, budget, controller.config.SafePolicy)
+	metadata, plan, err := PlanSelection(controller.metadata, indexes, evidence, quarantineAvailable, controller.config.SafePolicy)
 	if err != nil {
 		return Metadata{}, CapacityPlan{}, err
 	}

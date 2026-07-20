@@ -148,8 +148,9 @@ func (adapter CoreScannerIsolation) Verify(ctx context.Context, receipt scan.Upd
 }
 
 type CoreScannerInventory struct {
-	RootPath   string
-	Classifier scan.MIMEClassifier
+	RootPath          string
+	Classifier        scan.MIMEClassifier
+	MaximumInputBytes uint64
 }
 
 func (adapter CoreScannerInventory) Inventory(ctx context.Context, selected policy.Policy) (scan.Inventory, error) {
@@ -157,8 +158,12 @@ func (adapter CoreScannerInventory) Inventory(ctx context.Context, selected poli
 		return scan.Inventory{}, scannerAdapterError("SCANNER_POLICY_INVALID", "The scanner policy is invalid.", "Use an installed, validated scanner policy.", err)
 	}
 	limits := selected.Limits()
+	maximumInput := limits.MaxInputBytes()
+	if adapter.MaximumInputBytes != 0 {
+		maximumInput = min(maximumInput, adapter.MaximumInputBytes)
+	}
 	return scan.BuildInventory(ctx, adapter.RootPath, scan.InventoryLimits{
-		MaxFiles: limits.MaxFiles(), MaxInputBytes: limits.MaxInputBytes(),
+		MaxFiles: limits.MaxFiles(), MaxInputBytes: maximumInput,
 		MaxPathBytes: scan.MaximumInventoryPathBytes, MaxPrefixBytes: scan.DefaultInventoryPrefixBytes,
 	}, adapter.Classifier)
 }
