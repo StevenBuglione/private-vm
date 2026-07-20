@@ -74,6 +74,29 @@ func TestClaimRevalidatesAndReleasesIdempotently(t *testing.T) {
 	}
 }
 
+func TestRevalidateOnlySessionClaimRequiresOneExactOwnedClaim(t *testing.T) {
+	manager, enrollment, _ := claimFixture(t, fakeDeviceClaimer{handle: &fakeDeviceClaim{}})
+	sessionID := "pvm-0123456789abcdef0123456789abcdef"
+	claim, err := manager.Claim(t.Context(), sessionID, 1000, enrollment)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resolved, err := manager.RevalidateOnlySessionClaim(t.Context(), sessionID, 1000, enrollment)
+	if err != nil || resolved.ID != claim.ID {
+		t.Fatalf("resolved=%#v err=%v", resolved, err)
+	}
+	manager.mu.Lock()
+	duplicate := *manager.claims[claim.ID]
+	duplicate.ID = "claim-duplicate"
+	manager.claims[duplicate.ID] = &duplicate
+	manager.mu.Unlock()
+	_, err = manager.RevalidateOnlySessionClaim(t.Context(), sessionID, 1000, enrollment)
+	var usbError *Error
+	if !errors.As(err, &usbError) || usbError.Code != CodeAmbiguous {
+		t.Fatalf("got %v, want ambiguity", err)
+	}
+}
+
 func TestClaimBlocksConcurrentIdentityOwner(t *testing.T) {
 	handle := &fakeDeviceClaim{}
 	manager, enrollment, _ := claimFixture(t, fakeDeviceClaimer{handle: handle})

@@ -137,6 +137,11 @@ func TestHostWorkflowPrepareExportAndSessionCleanup(t *testing.T) {
 	if err != nil || receipt.State != PrepareDestinationReady {
 		t.Fatalf("prepare=%+v err=%v", receipt, err)
 	}
+	for _, state := range []string{"EXPORTER_BOOTING", "GUEST_AUTHENTICATED", "NO_NETWORK_VERIFIED", "USB_ATTACHED", "DESTINATION_PREPARED"} {
+		if _, err := sessions.TransitionWorkflow(t.Context(), snapshot.ID, 1000, state); err != nil {
+			t.Fatal(err)
+		}
+	}
 	active, err := sessions.Get(snapshot.ID, 1000)
 	if err != nil || active.Phase != session.PhaseActive {
 		t.Fatalf("active=%+v err=%v", active, err)

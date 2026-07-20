@@ -35,6 +35,14 @@ policy-approved reconstruction. Workstation entries require authenticated
 ready Export state. The interface cannot represent a path, mount, device,
 command or QEMU argument.
 
+The semantic workstation-to-USB command is a distinct one-shot authorization:
+it is accepted only by the prepared exporter selected by ADR 0022 and is bridged
+directly into the same `ExportOperation`. That operation exposes its actual
+post-write guest re-read digest only as a non-serializable in-process value and
+only after fsync, unmount, detach, exporter stop, claim release, and absence
+audit all succeed. Any later mismatch or failure destroys the exporter while
+leaving the workstation output unverified and therefore dirty.
+
 The scanner adapter is registered only from the MAC-verified report promotion
 path and permits exactly one report-listed reconstructed output. Its offline VM
 remains actor-owned until the factory is consumed or cleanup invalidates every

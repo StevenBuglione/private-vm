@@ -37,7 +37,13 @@ separate blocking recovery error. Ordinary dirty-stop protection and explicit
 discard remain unchanged.
 
 USB is the only accepted v1 enum. Its provider composes the networkless exporter
-workflow and never mounts the export filesystem on the host. The
+workflow and never mounts the export filesystem on the host. It selects exactly
+one owner-matching active exporter in `DESTINATION_PREPARED`, reloads the exact
+enrollment, and revalidates the sole owned claim both before constructing the
+source and immediately before consuming it. The direct synchronous adapter
+hands each bounded frame to the exporter without a pathname, registry entry, or
+second plaintext byte buffer. Success, failure, cancellation, and timeout all
+destroy that exporter session and release its serialized operation lock. The
 `encrypted-bundle` enum is reserved but rejected before provider preparation or
 source consumption until a separate ADR defines its storage and key contract.
 
@@ -47,9 +53,8 @@ source consumption until a separate ADR defines its storage and key contract.
 - The final receiver, not the CLI or source guest, supplies the persistence
   re-read digest.
 - Destination unavailability fails before workstation bytes are requested.
-- Batch integration must bind the USB exporter implementation to this provider
-  interface and retain its exact enrollment, confirmation, detach, and hash
-  checks.
+- The production daemon binds the semantic transaction to the same confirmed
+  claim and exporter workflow used by explicit USB preparation.
 - A successful destination write whose guest output changes before final
   verification remains dirty and must be exported again or explicitly
   discarded.

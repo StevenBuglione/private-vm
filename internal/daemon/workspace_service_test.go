@@ -56,7 +56,7 @@ func (roles *workspaceServiceRoles) ExportWorkspace(_ context.Context, _ session
 		return nil, roles.exportErr
 	}
 	digest := sha256.Sum256(roles.data)
-	descriptor := &privatevmv1.FileDescriptor{LogicalName: "redacted.txt", SizeBytes: uint64(len(roles.data)), Digest: &privatevmv1.Hash{Algorithm: "sha256", Value: digest[:]}}
+	descriptor := &privatevmv1.FileDescriptor{LogicalName: "redacted.txt", DetectedMime: "text/plain", SizeBytes: uint64(len(roles.data)), Digest: &privatevmv1.Hash{Algorithm: "sha256", Value: digest[:]}}
 	for _, frame := range []*privatevmv1.TransferFrame{
 		{Frame: &privatevmv1.TransferFrame_Begin{Begin: &privatevmv1.TransferBegin{TransferId: outputID, Descriptor_: descriptor}}},
 		{Frame: &privatevmv1.TransferFrame_Chunk{Chunk: &privatevmv1.TransferChunk{Data: append([]byte(nil), roles.data...)}}},

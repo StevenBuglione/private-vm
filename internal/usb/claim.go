@@ -8,6 +8,8 @@ import (
 	"sort"
 	"sync"
 	"time"
+
+	"github.com/StevenBuglione/private-vm/internal/session"
 )
 
 type DeviceClaim interface {
@@ -130,6 +132,40 @@ func (m *ClaimManager) Revalidate(ctx context.Context, claimID, sessionID string
 		return Claim{}, newError(CodeIdentityMismatch, "The claimed USB kernel identity changed.", "Abort the exporter, release the claim and inspect the device again.", nil)
 	}
 	return publicClaim(claim), nil
+}
+
+// RevalidateOnlySessionClaim resolves the sole claim owned by one prepared
+// exporter session and revalidates it against the exact enrollment and current
+// kernel observation. It never exposes claims owned by another user/session.
+func (m *ClaimManager) RevalidateOnlySessionClaim(ctx context.Context, sessionID string, ownerUID uint32, enrollment Enrollment) (Claim, error) {
+	if m == nil || session.ValidateID(sessionID) != nil || enrollment.Validate() != nil {
+		return Claim{}, newError(CodeIdentityMismatch, "The prepared exporter claim selection is invalid.", "Inspect the enrolled USB and prepare one fresh exporter session.", nil)
+	}
+	if err := ctx.Err(); err != nil {
+		return Claim{}, err
+	}
+	m.mu.Lock()
+	claimIDs := make([]string, 0, 1)
+	for claimID, claim := range m.claims {
+		if claim.SessionID == sessionID && claim.OwnerUID == ownerUID {
+			claimIDs = append(claimIDs, claimID)
+		}
+	}
+	m.mu.Unlock()
+	if len(claimIDs) == 0 {
+		return Claim{}, newError(CodeNotEnrolled, "The prepared exporter has no owned USB claim.", "Claim and prepare the exact enrolled USB before exporting.", nil)
+	}
+	if len(claimIDs) != 1 {
+		return Claim{}, newError(CodeAmbiguous, "The prepared exporter has ambiguous USB claims.", "Clean every exporter claim and prepare one exact destination.", nil)
+	}
+	claim, err := m.getOwned(claimIDs[0], sessionID, ownerUID)
+	if err != nil {
+		return Claim{}, err
+	}
+	if claim.EnrollmentID != enrollment.EnrollmentID {
+		return Claim{}, newError(CodeIdentityMismatch, "The prepared exporter claim does not match the current enrollment.", "Clean the exporter and repeat exact enrollment verification and preparation.", nil)
+	}
+	return m.Revalidate(ctx, claim.ID, sessionID, ownerUID, enrollment)
 }
 
 func (m *ClaimManager) Release(ctx context.Context, claimID, sessionID string, ownerUID uint32) error {

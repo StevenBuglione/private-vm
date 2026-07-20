@@ -21,18 +21,19 @@ const (
 )
 
 type ApprovedOutput struct {
-	SourceRole               SourceRole
-	OutputID                 string
-	LogicalName              string
-	MediaType                string
-	Size                     uint64
-	SourceDigest             Digest
-	ReportAuthenticated      bool
-	ReportComplete           bool
-	PolicyApproved           bool
-	Reconstructed            bool
-	ExportStateAuthenticated bool
-	ExportStateReady         bool
+	SourceRole                     SourceRole
+	OutputID                       string
+	LogicalName                    string
+	MediaType                      string
+	Size                           uint64
+	SourceDigest                   Digest
+	ReportAuthenticated            bool
+	ReportComplete                 bool
+	PolicyApproved                 bool
+	Reconstructed                  bool
+	ExportStateAuthenticated       bool
+	ExportStateReady               bool
+	WorkspaceDestinationAuthorized bool
 }
 
 func (o ApprovedOutput) Validate(maxBytes uint64) error {
@@ -55,8 +56,8 @@ func (o ApprovedOutput) Validate(maxBytes uint64) error {
 			return errors.New("approved scanner output lacks complete safe-policy evidence")
 		}
 	case SourceWorkstation:
-		if !o.ExportStateAuthenticated || !o.ExportStateReady {
-			return errors.New("workstation output lacks authenticated ready-state evidence")
+		if !o.ExportStateAuthenticated || o.ExportStateReady == o.WorkspaceDestinationAuthorized {
+			return errors.New("workstation output lacks one authenticated export authorization")
 		}
 	default:
 		return errors.New("approved output source role is invalid")
@@ -203,6 +204,8 @@ type ExportOperation struct {
 	audited           bool
 	running           bool
 	finished          bool
+	verifiedReread    Digest
+	rereadVerified    bool
 }
 
 func NewExportOperation(
@@ -425,6 +428,10 @@ func (o *ExportOperation) Run(ctx context.Context, source ApprovedSource) (recei
 		return o.fail(ctx, "USB exporter cleanup audit failed.", err)
 	}
 	o.audited = true
+	o.mu.Lock()
+	o.verifiedReread = evidence.RereadDigest
+	o.rereadVerified = true
+	o.mu.Unlock()
 	return ExportReceipt{
 		SchemaVersion: ExportReceiptSchemaVersion, EnrollmentID: o.enrollment.EnrollmentID,
 		BytesWritten: written, ScannerRelayHashEqual: true,
@@ -432,6 +439,18 @@ func (o *ExportOperation) Run(ctx context.Context, source ApprovedSource) (recei
 		FileSynced: true, FilesystemSynced: true, AtomicRename: true,
 		USBUnmounted: true, USBDetached: true, ExporterStopped: true, CleanupComplete: true,
 	}, nil
+}
+
+// VerifiedRereadDigest returns the final receiver digest only after the whole
+// one-shot operation, including detach, stop, claim release and absence audit,
+// completed successfully. Digest has no serialization or string escape hatch.
+func (o *ExportOperation) VerifiedRereadDigest() (Digest, bool) {
+	if o == nil {
+		return Digest{}, false
+	}
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	return o.verifiedReread, o.finished && o.rereadVerified
 }
 
 func (o *ExportOperation) Cleanup(ctx context.Context) error {
