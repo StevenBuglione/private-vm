@@ -87,7 +87,7 @@ in the release record.
 Run the fixed source evidence producer inside the pinned development shell:
 
 ```bash
-private-vm-release-acceptance \
+go run -p=1 ./cmd/private-vm-release-acceptance \
   --workdir "$PWD" \
   --json /tmp/private-vm-release-source.json \
   --junit /tmp/private-vm-release-source.junit.xml
@@ -95,6 +95,9 @@ private-vm-release-acceptance \
 
 Its expected source-only terminal result is `RELEASE_GATES_INCOMPLETE`; the
 JSON/JUnit files distinguish passed source checks from unavailable live gates.
+Use new evidence paths for every run. See `docs/43-verification-runbook.md` for
+the 16 GiB host memory cap, evidence assertions and the gates this source-only
+command cannot prove.
 
 ## Documentation
 

@@ -569,13 +569,15 @@ failure, staging cleanup, stable redacted errors and exact 13-asset admission.
 The protected workflow has no arbitrary repository/upload/command input and its
 fresh verifier has no authentication fallback.
 
-`private-vm-release-acceptance` runs the fixed lightweight packaging and release
+`go run -p=1 ./cmd/private-vm-release-acceptance` runs the fixed lightweight packaging and release
 source sequence with `CGO_ENABLED=0`, `GOMAXPROCS=2`, Go `-p=1`,
 `GOMEMLIMIT=1536MiB` and Nix `max-jobs = 1`, writes
 new mode-0600 JSON and JUnit evidence, and stops on the first source failure.
 Protected-environment, publication, anonymous clean-room and distribution-VM
 gates are always recorded as blocking in source-only evidence; the command
 therefore exits nonzero even when every local source check passes.
+The operator command, memory cap and evidence assertions are versioned in
+`docs/43-verification-runbook.md`.
 
 ## Security fixtures
 
