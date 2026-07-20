@@ -260,6 +260,25 @@ func TestMismatchedSuccessCodeFailsBeforeWrite(t *testing.T) {
 	}
 }
 
+func TestSystemPlanPayloadIsBoundedAndTyped(t *testing.T) {
+	t.Parallel()
+	payload := SystemPlanPayload{
+		Action: "install", Version: "1.0.0-rc.1", Applied: false,
+		Changes: []SystemChangePayload{{Operation: "create", Path: "/usr/bin/private-vm"}},
+	}
+	var output bytes.Buffer
+	if err := NewRenderer(true).Success(&output, CodeSystemPlan, payload); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(output.String(), `"code":"SYSTEM_PLAN"`) || !strings.Contains(output.String(), `"applied":false`) {
+		t.Fatalf("unexpected system plan: %s", output.String())
+	}
+	payload.Changes[0].Path = "unsafe\npath"
+	if err := NewRenderer(true).Success(io.Discard, CodeSystemPlan, payload); err == nil {
+		t.Fatal("unsafe plan path was accepted")
+	}
+}
+
 type countingWriter struct {
 	calls  int
 	output bytes.Buffer

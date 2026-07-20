@@ -193,16 +193,19 @@ evidence.
 Polkit adapter tests use only a fixture executable. They assert the exact
 `org.private-vm.usb.prepare` action and `PID,starttime,UID` subject, an empty
 environment, bounded cancellation, rejection of relative executables and other
-actions, and complete stdout/stderr suppression. `ClaimUSB` remains a
-`NOT_IMPLEMENTED` stub and is not treated as a destructive Polkit boundary.
+actions, and complete stdout/stderr suppression. `ClaimUSB` is concrete and is
+not a destructive Polkit boundary; it verifies the enrolled device identity,
+creates an exporter-owned claim, and registers cleanup without invoking
+Polkit. `PrepareUSB` invokes Polkit immediately before mutation.
 
 Contract tests cover `GetVersion` as the sole context-free method, the complete
 unary method/context map, request/session ID and protocol validation, image and
 policy selectors, resource defaulting and bounds, `TransferBegin` as the first
 import frame, stream correlation and first-frame deadline, cancellation/timeout
 mapping (including gRPC terminal status), canceled-create cleanup, immutable
-server configuration capture, RPC sentinel redaction, and the fail-closed USB
-claim stub.
+server configuration capture, RPC sentinel redaction, and the concrete USB
+claim lifecycle, exact-device validation, rollback, and typed
+integration-unavailable failures.
 Completion evidence must continue to cover role rejection, every session-error
 mapping, and safe remediation on every typed error. No test may accept a race by
 unlinking an unverified path.
@@ -273,12 +276,16 @@ overflow-safe host capacity probes, zram-only swap policy, exact loop-to-file
 ownership, the private no-backup marker, rollback at each allocation boundary,
 and repeated cleanup.
 
-Focused production-composition tests additionally prove volatile plan/image/
-storage/runtime ownership, reverse cleanup, partial-runtime timeout ownership,
-scanner/exporter fail-closed behavior, downloader seal-before-absence audit,
-idempotent private socket-directory cleanup, bounded 16-KiB guest torrent
-framing, single first-frame context and oversize/send-failure rejection. Run
-the affected source gate without starting a VM or mutating host networking:
+The production composition root wires concrete role, torrent, scanner,
+exporter, approved-source, and USB workflow providers. Focused constructor and
+integration tests prove volatile plan/image/storage/runtime ownership, reverse
+cleanup, partial-runtime timeout ownership, scanner two-boot and exporter
+workflow behavior, downloader seal-before-absence audit, idempotent private
+socket-directory cleanup, bounded 16-KiB guest torrent framing, single
+first-frame context, and oversize/send-failure rejection. Nil-provider
+`NOT_IMPLEMENTED` guards remain negative construction/test seams and are not
+reachable after successful production startup. Run the affected source gate
+without starting a VM or mutating host networking:
 
 ```bash
 GOMAXPROCS=2 go test -p=1 \
@@ -287,10 +294,11 @@ GOMAXPROCS=2 go test -p=1 \
 
 This focused gate does not prove live network namespace counters, mock-peer
 packets, a real Proton handshake, cached official role images, KVM launch, or
-the scanner/exporter host workflows. Workstation and downloader acceptance also
-requires the role-specific guest VPN RPC implementation to consume the typed
-underlay and fixed probe targets; a host build paired with an older guestd must
-fail the authenticated readiness gate and is not release evidence.
+booted scanner/exporter behavior against real role images and hardware.
+Workstation and downloader acceptance also requires the role-specific guest VPN
+RPC implementation to consume the typed underlay and fixed probe targets; a
+host build paired with an older guestd must fail the authenticated readiness
+gate and is not release evidence.
 
 The D-005 source recovery harness supplies all resource classes in reverse
 order and proves the reconciler nevertheless executes the fixed dependency
@@ -317,11 +325,11 @@ timed-out or canceled recovery. These tests run no recovery command against the
 real host. Process/cgroup, network, VSOCK and USB recovery remains fail-closed,
 not simulated as successful production evidence.
 
-Focused production-composition tests additionally prove volatile plan/image/
-storage/runtime ownership, reverse cleanup, partial-runtime timeout ownership,
-scanner/exporter fail-closed behavior, downloader seal-before-absence audit,
-idempotent private socket-directory cleanup, bounded 16-KiB guest torrent
-framing, single first-frame context and oversize/send-failure rejection.
+The exporter/USB production path is concrete from daemon composition through
+the session-bound host workflow, exporter runtime, exact USB claim, guest
+prepare/export RPCs, and approved-source registry. Focused tests cover rollback,
+cleanup, confirmation freshness, passphrase streaming, transfer/hash agreement,
+and failures at each provider boundary; missing providers still fail closed.
 
 The exporter/USB source gate runs without QEMU, USB mutation or a host mount:
 
@@ -375,6 +383,19 @@ GOMAXPROCS=2 nix develop --offline --command \
 The targets enforce the decoder's 1 MiB journal bound or a 64 KiB QMP fuzz
 input bound and exercise strict unknown-field, trailing-document, message-shape
 and legal-transition validation without launching external processes.
+
+Doctor unit tests cover the exact x86_64 and Linux 6.6 minimum, malformed and
+old kernel identities, network-namespace symlink validation, character-device
+classification and the closed ext4/XFS/Btrfs/tmpfs sparse-capability allowlist.
+A fake runner records every host-tool invocation and rejects drift outside
+`--version`, `mkfs.ext4 -V`, `ip -Version` and `ip netns list`; failure output
+is not projected into diagnostics. QEMU fixtures prove the intentional nonzero
+`-spice help` status is accepted only with Unix-socket, clipboard-disable and
+file-transfer-disable controls. The focused race gate is:
+
+```bash
+GOMAXPROCS=2 go test -race -p=1 ./internal/preflight
+```
 
 ### Volatile-secret evidence
 
@@ -520,6 +541,41 @@ Run locally and optionally on a public documented volunteer/self-hosted runner:
 
 KVM acceptance is required before release but should be reproducible by
 maintainers; do not expose secrets to public PR jobs.
+
+### Packaging and generic-installer boundary
+
+The hook-free DEB/RPM source contract is validated by
+`tools/check_packaging_assets.py`. The Go generic installer is tested against a
+temporary synthetic root with an exact generated bundle. Tests cover closed
+manifest parsing, hash and symlink substitution, dry-run, install, preserved
+configuration/cache, uninstall, non-root refusal, active-daemon refusal,
+cancellation, timeout and activation rollback. No focused source test invokes
+systemd or mutates the host.
+
+Clean Ubuntu, Debian and Fedora VM tests remain release gates. They install the
+same digest-addressed artifacts, resolve real distribution dependencies, start
+and stop the daemon, validate the control socket and Doctor, test upgrade and
+uninstall, and record redacted JUnit/JSON evidence. See
+`docs/40-linux-package-acceptance.md` and
+`docs/41-generic-installer-acceptance.md`.
+
+### Whole-release boundary
+
+REL-004 source tests use fixed package bytes, a typed Git source fake, a typed
+publisher, a typed anonymous fetcher and the existing image-verifier seam. They
+cover protected-source refusal, all three package formats, all six image
+identities, success, failure, cancellation, timeout, draft rollback, rollback
+failure, staging cleanup, stable redacted errors and exact 13-asset admission.
+The protected workflow has no arbitrary repository/upload/command input and its
+fresh verifier has no authentication fallback.
+
+`private-vm-release-acceptance` runs the fixed lightweight packaging and release
+source sequence with `CGO_ENABLED=0`, `GOMAXPROCS=2`, Go `-p=1`,
+`GOMEMLIMIT=1536MiB` and Nix `max-jobs = 1`, writes
+new mode-0600 JSON and JUnit evidence, and stops on the first source failure.
+Protected-environment, publication, anonymous clean-room and distribution-VM
+gates are always recorded as blocking in source-only evidence; the command
+therefore exits nonzero even when every local source check passes.
 
 ## Security fixtures
 

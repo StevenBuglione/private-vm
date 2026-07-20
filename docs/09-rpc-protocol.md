@@ -111,9 +111,9 @@ cumulative profile limit. It never accepts a source path. Malformed framing and
 oversized input are rejected before parsing, and the receiving buffers are
 cleared on every return path.
 Request/session correlation metadata is attached after stream validation. The
-current fail-closed import stub has a ten-second authenticated first-frame and
-overall ceiling; later transfer implementations must add the documented
-per-chunk idle bound without weakening that first-frame bound.
+concrete import handler has a ten-second authenticated first-frame and overall
+ceiling; the role relay additionally bounds frame count, frame size, and total
+bytes without weakening that first-frame bound.
 
 `GetSessionRequest.after_sequence` is an event cursor only when the request is
 used by `StreamEvents`; `GetSession` rejects a nonzero value. The stream

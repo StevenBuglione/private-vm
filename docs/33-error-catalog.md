@@ -42,6 +42,22 @@ CLI API.
 | `OUTPUT_RENDER_FAILED` | 70 | The CLI could not safely encode or write bounded output. Wrapped writer or encoder details are not exposed. |
 | `INTERNAL_ERROR` | 70 | An invalid or unclassified internal result was normalized to the redacted internal-error contract. |
 | `COMPLETION_FAILED` | 70 | Shell completion generation exceeded its bound or could not be safely produced or written. |
+| `SYSTEM_INSTALL_INVALID` | 10 | The generic install intent did not match its typed command contract. |
+| `SYSTEM_INSTALL_FAILED` | 10 | Host compatibility, bundle verification, fixed-path mutation, activation or rollback failed closed. |
+| `SYSTEM_UNINSTALL_INVALID` | 10 | The generic uninstall intent did not match its typed command contract. |
+| `SYSTEM_UNINSTALL_FAILED` | 10 | Installed-manifest verification, deactivation, fixed-path removal or rollback failed closed. |
+| `SYSTEM_ROLLBACK_INCOMPLETE` | 24 | A generic install/uninstall transaction could not prove rollback or staging cleanup complete. |
+| `RELEASE_INVALID` | 12 | A release request, path, tag or immutable identity is outside the frozen contract. |
+| `RELEASE_SOURCE_UNPROTECTED` | 12 | Source is dirty, non-official, not the tagged commit or not reachable from fetched protected main. |
+| `RELEASE_ARTIFACT_INVALID` | 12 | A package, SPDX document, build manifest or release index failed bounded verification. |
+| `RELEASE_PROVENANCE_INVALID` | 12 | A package offline Sigstore bundle failed official repository/workflow/tag verification. |
+| `RELEASE_CONFLICT` | 12 | The immutable GitHub Release already exists and will not be overwritten. |
+| `RELEASE_PUBLISH_FAILED` | 12 | Draft creation, bounded upload or final publication failed closed. |
+| `RELEASE_VERIFY_FAILED` | 12 | Anonymous package/image clean-room verification failed. |
+| `RELEASE_CANCELLED` | 21 | A bounded release transaction was canceled and cleanup was admitted. |
+| `RELEASE_TIMEOUT` | 12 | A release transaction exceeded its finite deadline. |
+| `RELEASE_CLEANUP_INCOMPLETE` | 24 | Local staging or remote draft absence could not be proved. |
+| `RELEASE_GATES_INCOMPLETE` | 12 | Source evidence passed or failed, but one or more live release gates remain blocking. |
 
 ## Stable daemon RPC errors
 
@@ -91,12 +107,12 @@ Every other unary method is rejected before its handler if its method/context
 contract is unknown or invalid. Streaming methods perform the corresponding
 context or first-frame validation in their bounded handlers.
 
-Polkit does not add an error code to this table yet. `ClaimUSB` is currently a
-non-destructive `NOT_IMPLEMENTED` stub and does not invoke `pkcheck`. The only
-permitted helper action is `org.private-vm.usb.prepare`, reserved for the
-implemented destructive prepare step immediately before mutation. Helper
-stdout/stderr is discarded and a future RPC boundary must map denial, timeout,
-or failure to a typed safe code rather than exposing raw `pkcheck` output.
+`ClaimUSB` is non-destructive and does not invoke `pkcheck`; missing claim
+integration returns `USB_INTEGRATION_UNAVAILABLE`. The only permitted helper
+action is `org.private-vm.usb.prepare`, used by the implemented destructive
+prepare step immediately before mutation. Helper stdout/stderr is discarded,
+and denial, timeout, or failure is mapped to a typed safe response without
+exposing raw `pkcheck` output.
 
 ### Daemon startup failure
 
@@ -228,11 +244,32 @@ ordinary, detailed and structural `fmt` verbs cannot reveal that cause.
 ### Host
 
 - `HOST_OS_UNSUPPORTED`
+- `HOST_ARCH_UNSUPPORTED`
+- `KERNEL_STATUS_UNKNOWN`
+- `KERNEL_UNSUPPORTED`
 - `SYSTEMD_REQUIRED`
 - `CGROUP_V2_REQUIRED`
+- `NETNS_UNAVAILABLE`
+- `DEVICE_MAPPER_UNAVAILABLE`
+- `LOOP_CONTROL_UNAVAILABLE`
 - `KVM_UNAVAILABLE`
 - `KVM_PERMISSION_DENIED`
 - `QEMU_UNSUPPORTED`
+- `POLKIT_CHECK_MISSING`
+- `NFTABLES_MISSING`
+- `NFTABLES_UNSUPPORTED`
+- `IPROUTE2_MISSING`
+- `IPROUTE2_UNSUPPORTED`
+- `CRYPTSETUP_MISSING`
+- `CRYPTSETUP_UNSUPPORTED`
+- `LOSETUP_MISSING`
+- `LOSETUP_UNSUPPORTED`
+- `EXT4_TOOLS_MISSING`
+- `EXT4_TOOLS_UNSUPPORTED`
+- `SPICE_VIEWER_MISSING`
+- `SPICE_VIEWER_UNSUPPORTED`
+- `USBGUARD_MISSING`
+- `USBGUARD_UNSUPPORTED`
 - `RUNTIME_NOT_TMPFS`
 - `HOST_IPV6_FORWARDING_STATUS_UNKNOWN`
 - `HOST_IPV6_FORWARDING_DISABLED`
@@ -240,7 +277,19 @@ ordinary, detailed and structural `fmt` verbs cannot reveal that cause.
 - `HIBERNATION_ENABLED`
 - `INSUFFICIENT_MEMORY`
 - `INSUFFICIENT_SCRATCH`
+- `SPARSE_FILE_SUPPORT_UNKNOWN`
 - `ORPHAN_CLEANUP_FAILED`
+
+The following installed-host consistency diagnostics are blocking in strict
+mode and overridable warnings in compatibility mode. Compatibility mode does
+not change any hard diagnostic above.
+
+- `SYSTEMCTL_MISSING`
+- `PRIVATE_VMD_SERVICE_INACTIVE`
+- `USBGUARD_SERVICE_INACTIVE`
+- `CONTROL_SOCKET_INVALID`
+- `DAEMON_CONFIG_INVALID`
+- `POLKIT_POLICY_INVALID`
 
 ### Supply chain
 

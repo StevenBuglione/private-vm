@@ -100,6 +100,28 @@ private-vm doctor [--strict] [--repair-safe] [--json]
 state. It must not change firewall, format disks, enable hibernation settings, or
 enroll USB devices.
 
+Strict mode makes an inactive `private-vmd` or USBGuard service, an invalid
+control socket or daemon configuration, a missing `systemctl`, and a missing or
+expanded Polkit policy blocking installation diagnostics. Compatibility mode
+reports those installation defects as overridable warnings; it never weakens
+the always-blocking kernel, device, swap, resume, capacity, networking or image
+checks. An unencrypted host root remains an explicit defense-in-depth warning
+because writable session state is independently tmpfs-backed or encrypted.
+
+Doctor also requires x86_64, Linux 6.6 or newer, a valid current network
+namespace, device-mapper and loop control character devices, and a reviewed
+sparse-capable scratch filesystem. Its external capability probes are limited
+to fixed version arguments and `ip netns list`; output is bounded, discarded
+from diagnostics and never includes an nftables ruleset. It does not open the
+root-only device-mapper or loop control nodes and does not create a sparse test
+file.
+
+QEMU probing requires q35, VSOCK, VirtIO block/network and USB-host device help,
+plus SPICE help containing Unix-socket, clipboard-disable and file-transfer
+disable controls. Supported QEMU releases intentionally return a nonzero status
+for `-spice help`; Doctor accepts that status only when the complete bounded
+capability output is present.
+
 The read-only report blocks online-role planning when
 `net.ipv6.conf.all.forwarding` is not exactly `1`. The NixOS module declares
 this prerequisite; distribution packages must install an equivalent sysctl
@@ -407,8 +429,15 @@ private-vm system status
 private-vm system install --dry-run
 private-vm system install --accept
 private-vm system uninstall --dry-run
+private-vm system uninstall --accept
 private-vm system diagnostics [--export FILE]
 ```
+
+The generic Linux install and uninstall commands require exactly one of
+`--dry-run` and `--accept`. Both verify the closed bundle or installed manifest
+and produce the same exact mutation plan; `--accept` additionally records that
+the plan was applied. Uninstall preserves configuration, image cache, enrolled
+identity state and user exports.
 
 `system diagnostics` displays a redacted diagnostic-bundle manifest. With
 `--export`, the user must review that manifest before the bounded bundle is

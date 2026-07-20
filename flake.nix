@@ -16,7 +16,7 @@
       ];
       forAllSystems = nixpkgs.lib.genAttrs supportedSystems;
       pkgsFor = system: import nixpkgs { inherit system; };
-      projectVersion = "0.0.0-dev";
+      projectVersion = nixpkgs.lib.strings.removeSuffix "\n" (builtins.readFile ./VERSION);
       sourceCommit = self.rev or (self.dirtyRev or "unknown");
       sourceDirty = if self ? rev then "false" else "true";
       sourceLastModifiedDate = self.lastModifiedDate or "19700101000000";
@@ -123,6 +123,31 @@
           inherit pkgs sourceCommit sourceDirty;
           version = projectVersion;
           src = self;
+        };
+
+      linuxPackagesFor =
+        system:
+        let
+          pkgs = pkgsFor system;
+        in
+        import ./nix/linux-packages.nix {
+          inherit pkgs;
+          application = privateVMFor system;
+          version = projectVersion;
+          sourceDateEpoch = self.lastModified or 0;
+        };
+
+      genericArchiveFor =
+        system:
+        let
+          pkgs = pkgsFor system;
+        in
+        import ./nix/generic-archive.nix {
+          inherit pkgs;
+          src = self;
+          application = privateVMFor system;
+          version = projectVersion;
+          sourceDateEpoch = self.lastModified or 0;
         };
 
       guestdFor =
@@ -1095,7 +1120,9 @@
                   enable = true;
                   group = "pvm-custom";
                   package = customApplication;
+                  authorizedUsers = [ "pvm-test-user" ];
                 };
+                users.users.pvm-test-user.isNormalUser = true;
                 system.stateVersion = "26.05";
               }
             ];
@@ -1115,11 +1142,12 @@
             ];
           };
           service = host.config.systemd.services.private-vmd;
-          policies = builtins.filter (
-            package: nixpkgs.lib.hasPrefix "private-vm-polkit-policy" package.name
+          integrations = builtins.filter (
+            package: nixpkgs.lib.hasPrefix "private-vm-host-integration" package.name
           ) host.config.environment.systemPackages;
           requiredPath = with pkgs; [
             host.config.security.polkit.package.bin
+            systemd
             qemu
             cryptsetup
             nftables
@@ -1137,8 +1165,22 @@
         assert nixpkgs.lib.hasInfix "--group pvm-custom" service.serviceConfig.ExecStart;
         assert service.serviceConfig.RuntimeDirectoryMode == "0750";
         assert service.serviceConfig.StateDirectoryMode == "0700";
+        assert builtins.elem "pvm-custom" host.config.users.users.pvm-test-user.extraGroups;
+        assert builtins.length integrations == 1;
+        assert builtins.elem (builtins.head integrations) host.config.services.udev.packages;
+        assert nixpkgs.lib.all (module: builtins.elem module host.config.boot.kernelModules) [
+          "kvm"
+          "vhost_vsock"
+          "tun"
+          "dm_mod"
+          "loop"
+        ];
         assert host.config.boot.kernel.sysctl."net.ipv6.conf.all.forwarding" == 1;
-        assert builtins.length policies == 1;
+        assert host.config.services.usbguard.enable;
+        assert host.config.services.usbguard.implicitPolicyTarget == "block";
+        assert host.config.services.usbguard.presentDevicePolicy == "keep";
+        assert host.config.services.usbguard.insertedDevicePolicy == "block";
+        assert host.config.services.usbguard.restoreControllerDeviceState;
         assert nixpkgs.lib.all (package: nixpkgs.lib.elem package service.path) requiredPath;
         assert builtins.length (nixpkgs.lib.splitString "<action id=" policySource) == 2;
         assert nixpkgs.lib.hasInfix "<action id=\"org.private-vm.usb.prepare\">" policySource;
@@ -1151,6 +1193,11 @@
             exec_start = service.serviceConfig.ExecStart;
             runtime_mode = service.serviceConfig.RuntimeDirectoryMode;
             state_mode = service.serviceConfig.StateDirectoryMode;
+            authorized_users = host.config.services.private-vm.authorizedUsers;
+            kernel_modules = host.config.boot.kernelModules;
+            usbguard_present_policy = host.config.services.usbguard.presentDevicePolicy;
+            usbguard_inserted_policy = host.config.services.usbguard.insertedDevicePolicy;
+            usbguard_restore_controller_state = host.config.services.usbguard.restoreControllerDeviceState;
             daemon_path = map (package: package.name) service.path;
             policy_sha256 = builtins.hashString "sha256" policySource;
           }
@@ -1178,6 +1225,11 @@
             guestd-scanner = guestdFor system "scanner";
             guestd-exporter = guestdFor system "exporter";
           };
+          linuxDistributionPackages = nixpkgs.lib.optionalAttrs (system == "x86_64-linux") {
+            deb = (linuxPackagesFor system).deb;
+            rpm = (linuxPackagesFor system).rpm;
+            generic-archive = genericArchiveFor system;
+          };
           imagePackages = nixpkgs.lib.optionalAttrs (system == "x86_64-linux") {
             image-workstation-basic = workstationBasic.config.system.build.images.qemu-efi;
             closure-workstation-basic =
@@ -1199,7 +1251,7 @@
               exporter.config.system.build.images.qemu-efi.passthru.config.system.build.toplevel;
           };
         in
-        binaryPackages // imagePackages
+        binaryPackages // linuxDistributionPackages // imagePackages
       );
 
       apps = forAllSystems (system: {
@@ -1307,6 +1359,9 @@
               export PATH="${pkgs.actionlint}/bin:${pkgs.zizmor}/bin:$PATH"
               python3 tools/test_workflow_policy.py
               python3 tools/check_workflow_policy.py
+            '';
+            package-contract = sourceCheck "private-vm-package-contract" ''
+              python3 tools/check_packaging_assets.py
             '';
           };
         in

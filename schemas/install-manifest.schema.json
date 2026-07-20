@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://private-vm.dev/schema/install-manifest-v1.json",
+  "title": "private-vm generic Linux installation manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": { "const": 1 },
+    "product": { "const": "private-vm" },
+    "version": { "type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[A-Za-z0-9.+-]+$" },
+    "os": { "const": "linux" },
+    "architecture": { "const": "amd64" },
+    "files": {
+      "type": "array",
+      "minItems": 17,
+      "maxItems": 17,
+      "items": { "$ref": "#/$defs/file" }
+    }
+  },
+  "required": ["schema_version", "product", "version", "os", "architecture", "files"],
+  "$defs": {
+    "file": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "source": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9._/-]+$" },
+        "destination": { "type": "string", "minLength": 2, "maxLength": 256, "pattern": "^/(etc|usr)/[A-Za-z0-9._/-]+$" },
+        "mode": { "enum": [292, 384, 493] },
+        "size": { "type": "integer", "minimum": 1, "maximum": 134217728 },
+        "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "preserve": { "type": "boolean" }
+      },
+      "required": ["source", "destination", "mode", "size", "sha256", "preserve"]
+    }
+  }
+}
