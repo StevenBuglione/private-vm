@@ -379,6 +379,12 @@ func stringPointer(value string) *string { return &value }
 
 type productionCleanScanner struct{}
 
+type scannerScratchVerifierFunc func(context.Context) error
+
+func (function scannerScratchVerifierFunc) Verify(ctx context.Context) error { return function(ctx) }
+
+var verifiedScannerScratch scannerScratchVerifier = scannerScratchVerifierFunc(func(context.Context) error { return nil })
+
 func (productionCleanScanner) Scan(ctx context.Context, reader io.Reader, expected uint64) (scan.ClamResult, error) {
 	written, err := io.Copy(io.Discard, io.LimitReader(reader, int64(expected)+1))
 	if err != nil || uint64(written) != expected || ctx.Err() != nil {
@@ -416,6 +422,7 @@ func TestProductionReconstructionApprovesOneTextOutputAndCleansIt(t *testing.T) 
 			ParentPath: parent, Tmpfs: true, PrivateMountNamespace: true, WorkerUID: os.Geteuid(), WorkerGID: os.Getegid(),
 		},
 		classifier: classifier, scanner: productionCleanScanner{}, toolchain: productionScannerToolchainFixture(),
+		scratch: verifiedScannerScratch,
 		outputs: make(map[string]*scan.ReconstructedOutput),
 	}
 	result, err := adapter.Reconstruct(t.Context(), inventory, summary, selected)
@@ -478,6 +485,7 @@ func TestProductionArchiveTraversalBecomesBlockingCompleteFinding(t *testing.T) 
 	adapter := &productionScannerReconstruction{
 		root: quarantine, sandbox: scan.ExtractionSandbox{ParentPath: parent, Tmpfs: true, PrivateMountNamespace: true, WorkerUID: os.Geteuid(), WorkerGID: os.Getegid()},
 		classifier: scan.ConservativeMIMEClassifier{}, scanner: productionCleanScanner{}, toolchain: productionScannerToolchainFixture(),
+		scratch: verifiedScannerScratch,
 		outputs: make(map[string]*scan.ReconstructedOutput),
 	}
 	result, err := adapter.Reconstruct(t.Context(), inventory, summary, selected)
@@ -648,6 +656,7 @@ func productionArchiveFixture(t *testing.T, name string, payload []byte, memberS
 			ParentPath: parent, Tmpfs: true, PrivateMountNamespace: true, WorkerUID: os.Geteuid(), WorkerGID: os.Getegid(),
 		},
 		classifier: classifier, scanner: memberScanner, outputs: make(map[string]*scan.ReconstructedOutput),
+		scratch: verifiedScannerScratch,
 	}
 	return adapter, inventory, summary, selected, parent
 }

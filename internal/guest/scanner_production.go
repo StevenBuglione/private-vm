@@ -33,10 +33,12 @@ const (
 	productionScannerToolchainPath  = "/etc/private-vm/scanner-toolchain.json"
 	productionScannerQuarantine     = "/mnt/quarantine"
 	productionScannerDevice         = "/dev/disk/by-id/virtio-quarantine"
-	productionScannerSandbox        = "/run/private-vm/scanner-sandbox"
+	productionScannerScratchMount   = "/run/private-vm/scanner-scratch"
+	productionScannerSandbox        = "/run/private-vm/scanner-scratch/worker"
 	productionScannerClamdSocket    = "/run/clamav/clamd.ctl"
 	productionScannerOfflineUnit    = "private-vm-scanner-stage-offline.service"
 	maximumScannerMetadataBytes     = 256 << 10
+	maximumScannerScratchBytes      = 512 << 20
 )
 
 var (
@@ -60,25 +62,27 @@ var (
 )
 
 type ProductionScannerConfig struct {
-	StateDirectory string
-	PhasePath      string
-	BootModePath   string
-	PolicyPath     string
-	ToolchainPath  string
-	QuarantineRoot string
-	QuarantineDev  string
-	SandboxRoot    string
-	ClamdSocket    string
-	Systemctl      string
-	Clamscan       string
-	File           string
-	PDFInfo        string
-	Ghostscript    string
-	LibreOffice    string
-	FFmpeg         string
-	FFprobe        string
-	Now            func() time.Time
-	Command        ScannerCommandRunner
+	StateDirectory  string
+	PhasePath       string
+	BootModePath    string
+	PolicyPath      string
+	ToolchainPath   string
+	QuarantineRoot  string
+	QuarantineDev   string
+	SandboxMount    string
+	SandboxRoot     string
+	SandboxMaxBytes uint64
+	ClamdSocket     string
+	Systemctl       string
+	Clamscan        string
+	File            string
+	PDFInfo         string
+	Ghostscript     string
+	LibreOffice     string
+	FFmpeg          string
+	FFprobe         string
+	Now             func() time.Time
+	Command         ScannerCommandRunner
 }
 
 type ScannerCommandRunner interface {
@@ -129,7 +133,8 @@ func DefaultProductionScannerConfig() ProductionScannerConfig {
 		PhasePath:      productionScannerPhasePath, BootModePath: productionScannerBootModePath,
 		PolicyPath:    productionScannerPolicyPath,
 		ToolchainPath: productionScannerToolchainPath, QuarantineRoot: productionScannerQuarantine,
-		QuarantineDev: productionScannerDevice, SandboxRoot: productionScannerSandbox,
+		QuarantineDev: productionScannerDevice, SandboxMount: productionScannerScratchMount,
+		SandboxRoot: productionScannerSandbox, SandboxMaxBytes: maximumScannerScratchBytes,
 		ClamdSocket: productionScannerClamdSocket,
 		Systemctl:   "/run/current-system/sw/bin/systemctl", Clamscan: "/run/current-system/sw/bin/clamscan",
 		File: "/run/current-system/sw/bin/file", PDFInfo: "/run/current-system/sw/bin/pdfinfo",
@@ -146,12 +151,16 @@ func NewProductionScannerService(identity Identity, reportKey *Token, configurat
 	if err := validateProductionScannerConfig(configuration); err != nil {
 		return nil, err
 	}
-	if err := os.MkdirAll(configuration.SandboxRoot, 0o700); err != nil {
-		return nil, scannerAdapterUnavailable("scanner tmpfs sandbox")
+	scratch := productionScannerScratchVerifier{
+		mountRoot: configuration.SandboxMount, workerRoot: configuration.SandboxRoot,
+		maximumBytes: configuration.SandboxMaxBytes, workerUID: uint32(os.Geteuid()), workerGID: uint32(os.Getegid()),
 	}
-	if info, err := os.Stat(configuration.SandboxRoot); err != nil || !info.IsDir() || info.Mode().Perm() != 0o700 {
-		return nil, scannerAdapterUnavailable("scanner tmpfs sandbox")
+	verifyContext, cancelVerify := context.WithTimeout(context.Background(), 5*time.Second)
+	if err := scratch.Verify(verifyContext); err != nil {
+		cancelVerify()
+		return nil, err
 	}
+	cancelVerify()
 	for _, executable := range []string{configuration.Systemctl, configuration.Clamscan} {
 		if err := validateScannerExecutable(executable); err != nil {
 			return nil, err
@@ -219,7 +228,7 @@ func NewProductionScannerService(identity Identity, reportKey *Token, configurat
 	reconstruction := &productionScannerReconstruction{
 		root: configuration.QuarantineRoot, sandbox: sandbox, classifier: classifier, scanner: clamd,
 		pdf: pdf, office: office, media: media, documentProbe: documentProbe, mediaProbe: mediaProbe,
-		toolchain: toolchain, outputs: make(map[string]*scan.ReconstructedOutput),
+		toolchain: toolchain, scratch: scratch, outputs: make(map[string]*scan.ReconstructedOutput),
 	}
 	baseTools, err := toolchain.evidence("clamav", "file")
 	if err != nil {
@@ -264,8 +273,14 @@ func normalizeProductionScannerConfig(configuration ProductionScannerConfig) Pro
 	if configuration.QuarantineDev == "" {
 		configuration.QuarantineDev = defaults.QuarantineDev
 	}
+	if configuration.SandboxMount == "" {
+		configuration.SandboxMount = defaults.SandboxMount
+	}
 	if configuration.SandboxRoot == "" {
 		configuration.SandboxRoot = defaults.SandboxRoot
+	}
+	if configuration.SandboxMaxBytes == 0 {
+		configuration.SandboxMaxBytes = defaults.SandboxMaxBytes
 	}
 	if configuration.ClamdSocket == "" {
 		configuration.ClamdSocket = defaults.ClamdSocket
@@ -293,7 +308,7 @@ func validateProductionScannerConfig(configuration ProductionScannerConfig) erro
 	paths := []string{
 		configuration.StateDirectory, configuration.PhasePath, configuration.BootModePath,
 		configuration.PolicyPath, configuration.ToolchainPath,
-		configuration.QuarantineRoot, configuration.QuarantineDev, configuration.SandboxRoot, configuration.ClamdSocket,
+		configuration.QuarantineRoot, configuration.QuarantineDev, configuration.SandboxMount, configuration.SandboxRoot, configuration.ClamdSocket,
 		configuration.Systemctl, configuration.Clamscan, configuration.File, configuration.PDFInfo,
 		configuration.Ghostscript, configuration.LibreOffice, configuration.FFmpeg, configuration.FFprobe,
 	}
@@ -301,6 +316,10 @@ func validateProductionScannerConfig(configuration ProductionScannerConfig) erro
 		if !filepath.IsAbs(path) || filepath.Clean(path) != path || path == "/" || strings.ContainsRune(path, '\x00') {
 			return scannerAdapterUnavailable("fixed production paths")
 		}
+	}
+	if filepath.Dir(configuration.SandboxRoot) != configuration.SandboxMount || filepath.Base(configuration.SandboxRoot) != "worker" ||
+		configuration.SandboxMaxBytes == 0 || configuration.SandboxMaxBytes > maximumScannerScratchBytes {
+		return scannerScratchUnverified()
 	}
 	if os.Geteuid() <= 0 || os.Getegid() <= 0 {
 		return scannerAdapterUnavailable("unprivileged scanner worker")
@@ -950,6 +969,7 @@ type productionScannerReconstruction struct {
 	documentProbe scan.DocumentProbe
 	mediaProbe    scan.MediaProbe
 	toolchain     productionScannerToolchain
+	scratch       scannerScratchVerifier
 	outputs       map[string]*scan.ReconstructedOutput
 	closed        bool
 }
@@ -965,8 +985,12 @@ type productionReconstructionRun struct {
 }
 
 func (adapter *productionScannerReconstruction) Reconstruct(ctx context.Context, inventory scan.Inventory, summary scan.ScanSummary, selected policy.Policy) (ScannerReconstruction, error) {
-	if adapter == nil || selected.Validate() != nil || selected.Mode() != policy.ModeSafe || adapter.scanner == nil || adapter.classifier == nil {
+	if adapter == nil || selected.Validate() != nil || selected.Mode() != policy.ModeSafe || adapter.scanner == nil || adapter.classifier == nil || adapter.scratch == nil {
 		return ScannerReconstruction{}, scannerAdapterUnavailable("reconstruction")
+	}
+	if err := adapter.scratch.Verify(ctx); err != nil {
+		_ = adapter.Cleanup(context.Background())
+		return ScannerReconstruction{}, err
 	}
 	adapter.mu.Lock()
 	if adapter.closed || len(adapter.outputs) != 0 {
