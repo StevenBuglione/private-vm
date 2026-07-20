@@ -228,6 +228,39 @@ func (backend *linuxBackend) ApplyHostPolicy(ctx context.Context, spec topologyS
 	return backend.stdinSuccess(ctx, backend.paths.NFT, []string{"-f", "-"}, rules)
 }
 
+func (backend *linuxBackend) AuditPolicy(ctx context.Context, spec topologySpec) (PolicyAudit, error) {
+	if ctx == nil {
+		return PolicyAudit{}, ErrBackendUnavailable
+	}
+	host, err := backend.auditPolicyTable(ctx, "", spec.hostTable, "accept")
+	if err != nil || !host {
+		return PolicyAudit{}, backendError(err)
+	}
+	namespace, err := backend.auditPolicyTable(ctx, spec.namespace, spec.namespaceTable, "drop")
+	if err != nil || !namespace {
+		return PolicyAudit{}, backendError(err)
+	}
+	return PolicyAudit{NamespacePolicyPresent: true, HostPolicyPresent: true, ForbiddenEgressZero: true}, nil
+}
+
+func (backend *linuxBackend) auditPolicyTable(ctx context.Context, namespace, tableName, primaryPolicy string) (bool, error) {
+	arguments := []string{"-j", "list", "table", "inet", tableName}
+	path := backend.paths.NFT
+	if namespace != "" {
+		arguments = append([]string{"netns", "exec", namespace, backend.paths.NFT}, arguments...)
+		path = backend.paths.IP
+	}
+	result, err := backend.run(ctx, path, arguments, nil)
+	defer clear(result.stdout)
+	if err != nil {
+		return false, backendError(err)
+	}
+	if result.exitCode != 0 {
+		return false, ErrCommandFailed
+	}
+	return parsePolicyAudit(result.stdout, tableName, primaryPolicy)
+}
+
 func (backend *linuxBackend) DisableEgress(ctx context.Context, spec topologySpec) error {
 	links, err := backend.linkNames(ctx, "")
 	if err != nil || !links[spec.hostVeth] {

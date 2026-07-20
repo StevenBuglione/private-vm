@@ -650,6 +650,15 @@ an error, generic exit status `1` cannot claim absence, and repeated exact
 inventory of already absent resources performs no mutation. These tests do not
 exercise host privileges or a real credential.
 
+Production counter-auditor source tests feed bounded synthetic `nft -j` records
+through the real parser. They prove exact host/namespace table selection,
+versioned ownership, primary and later fail-closed audit-chain presence, every
+IPv4/IPv6/DNS/private-range/unrelated-egress counter at zero, output destruction,
+and rejection of missing, malformed, nonzero, stale and unowned evidence.
+Cancellation and deadline failures preserve their typed context result; all
+other failures are redacted. These source tests do not claim that live namespace
+packet counters have run.
+
 NET-003 source tests prove that the guest kill switch is installed before any
 underlay/tunnel configuration, permits only `proton0`, the exact UDP endpoint
 and required neighbor discovery, and contains no clear-interface DNS or TCP

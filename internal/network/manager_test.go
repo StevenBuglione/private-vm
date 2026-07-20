@@ -74,6 +74,7 @@ type fakeBackend struct {
 	release           chan struct{}
 	collisions        int
 	pretendDeleteVeth int
+	auditProof        PolicyAudit
 
 	namespace       bool
 	veth            bool
@@ -85,7 +86,12 @@ type fakeBackend struct {
 	lastSpec        topologySpec
 }
 
-func newFakeBackend() *fakeBackend { return &fakeBackend{fail: make(map[string]int)} }
+func newFakeBackend() *fakeBackend {
+	return &fakeBackend{
+		fail:       make(map[string]int),
+		auditProof: PolicyAudit{NamespacePolicyPresent: true, HostPolicyPresent: true, ForbiddenEgressZero: true},
+	}
+}
 
 func (backend *fakeBackend) step(ctx context.Context, operation string) error {
 	backend.mu.Lock()
@@ -180,6 +186,15 @@ func (backend *fakeBackend) ApplyHostPolicy(ctx context.Context, _ topologySpec,
 	backend.hostPolicy = true
 	backend.mu.Unlock()
 	return backend.step(ctx, "apply_host_policy")
+}
+
+func (backend *fakeBackend) AuditPolicy(ctx context.Context, _ topologySpec) (PolicyAudit, error) {
+	if err := backend.step(ctx, "audit_policy"); err != nil {
+		return PolicyAudit{}, err
+	}
+	backend.mu.Lock()
+	defer backend.mu.Unlock()
+	return backend.auditProof, nil
 }
 
 func (backend *fakeBackend) DisableEgress(ctx context.Context, _ topologySpec) error {
@@ -284,6 +299,66 @@ func createTestNetwork(t *testing.T, implementation *fakeBackend) (*Manager, *Ha
 		t.Fatal(err)
 	}
 	return manager, handle, store, plan
+}
+
+func TestPolicyAuditRequiresLiveOwnedZeroCounters(t *testing.T) {
+	implementation := newFakeBackend()
+	manager, handle, _, _ := createTestNetwork(t, implementation)
+	t.Cleanup(func() { _ = handle.Cleanup(context.Background()) })
+
+	proof, err := handle.AuditPolicy(context.Background())
+	if err != nil || !proof.NamespacePolicyPresent || !proof.HostPolicyPresent || !proof.ForbiddenEgressZero {
+		t.Fatalf("live policy audit = %#v, %v", proof, err)
+	}
+	implementation.mu.Lock()
+	implementation.auditProof.ForbiddenEgressZero = false
+	implementation.mu.Unlock()
+	proof, err = handle.AuditPolicy(context.Background())
+	if !errors.Is(err, ErrPolicyAuditFailed) || proof != (PolicyAudit{}) {
+		t.Fatalf("nonzero counter proof escaped: %#v, %v", proof, err)
+	}
+
+	implementation.mu.Lock()
+	implementation.auditProof.ForbiddenEgressZero = true
+	implementation.mu.Unlock()
+	manager.mu.Lock()
+	delete(manager.states, testSessionID)
+	manager.mu.Unlock()
+	before := implementation.operationCount("audit_policy")
+	if _, err := handle.AuditPolicy(context.Background()); !errors.Is(err, ErrPolicyAuditFailed) {
+		t.Fatalf("stale handle audit = %v", err)
+	}
+	if implementation.operationCount("audit_policy") != before {
+		t.Fatal("stale handle reached the nftables auditor")
+	}
+	manager.mu.Lock()
+	manager.states[testSessionID] = handle.state
+	manager.mu.Unlock()
+}
+
+func TestPolicyAuditCancellationTimeoutAndCleanup(t *testing.T) {
+	implementation := newFakeBackend()
+	_, handle, _, _ := createTestNetwork(t, implementation)
+	canceled, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := handle.AuditPolicy(canceled); !errors.Is(err, context.Canceled) {
+		t.Fatalf("canceled audit = %v", err)
+	}
+
+	implementation.blockOperation = "audit_policy"
+	implementation.entered = make(chan struct{})
+	implementation.release = make(chan struct{})
+	deadline, deadlineCancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer deadlineCancel()
+	if _, err := handle.AuditPolicy(deadline); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("timed out audit = %v", err)
+	}
+	if err := handle.Cleanup(context.Background()); err != nil {
+		t.Fatalf("cleanup after timed out audit: %v", err)
+	}
+	if !implementation.clean() {
+		t.Fatal("policy audit timeout left network ownership behind")
+	}
 }
 
 func TestCreateHandoffAndCleanupAreSealedAndComplete(t *testing.T) {

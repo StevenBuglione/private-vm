@@ -324,17 +324,29 @@ func runtimeQEMUSpec(binary string, request HostRuntimeRequest, cid uint32, dire
 
 type networkPolicyAuditor struct {
 	sessionID string
-	handle    *network.Handle
+	handle    networkPolicyAuditHandle
 }
 
-func (auditor networkPolicyAuditor) Verify(_ context.Context, sessionID string) (EgressProof, error) {
-	if auditor.handle == nil || sessionID != auditor.sessionID {
+type networkPolicyAuditHandle interface {
+	AuditPolicy(context.Context) (network.PolicyAudit, error)
+}
+
+func (auditor networkPolicyAuditor) Verify(ctx context.Context, sessionID string) (EgressProof, error) {
+	if ctx == nil || isNilLike(auditor.handle) || sessionID != auditor.sessionID {
 		return EgressProof{}, ErrNetworkedNotVerified
 	}
-	inspection := auditor.handle.Inspect()
-	ready := inspection.SchemaVersion == 1 && inspection.Ready && inspection.TAPReady &&
-		inspection.IPv4EndpointCount+inspection.IPv6EndpointCount > 0
-	return EgressProof{NamespacePolicyPresent: ready, HostPolicyPresent: ready, ForbiddenEgressZero: ready}, nil
+	proof, err := auditor.handle.AuditPolicy(ctx)
+	if err != nil {
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return EgressProof{}, err
+		}
+		return EgressProof{}, ErrNetworkedNotVerified
+	}
+	return EgressProof{
+		NamespacePolicyPresent: proof.NamespacePolicyPresent,
+		HostPolicyPresent:      proof.HostPolicyPresent,
+		ForbiddenEgressZero:    proof.ForbiddenEgressZero,
+	}, nil
 }
 
 type runtimeSocketDirectories struct {
