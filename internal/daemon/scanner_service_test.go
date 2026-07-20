@@ -498,6 +498,12 @@ func approvedScannerTestReport(sessionID string) scan.ScanReport {
 			OutputID: "scan-out-" + strings.Repeat("d", 32), LogicalName: "fixture.safe.pdf", SourceSHA256: strings.Repeat("c", 64),
 			SizeBytes: 20, SHA256: strings.Repeat("e", 64), DetectedMIME: "application/pdf", Transformation: "pdf-raster-rebuild-v1", RescanVerdict: "CLAMAV_CLEAN",
 		}},
-		Tools: []scan.ToolEvidence{{Name: "clamav", Version: "1.5.1"}}, Result: "approved", Complete: true,
+		Tools: []scan.ToolEvidence{
+			{Name: "clamav", Version: "1.5.1"},
+			{Name: "file", Version: "5.46"},
+			{Name: "ghostscript", Version: "10.05.1"},
+			{Name: "poppler-utils", Version: "25.06.0"},
+		},
+		Result: "approved", Complete: true,
 	}
 }
