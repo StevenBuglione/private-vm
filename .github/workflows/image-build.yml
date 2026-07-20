@@ -110,9 +110,55 @@ jobs:
           free -h
           test -z "$(git status --short)"
       - name: Build one canonical image
-        run: nix build ".#${{ matrix.image_target }}" --no-link --print-build-logs
+        id: canonical_image
+        run: |
+          image_output_path="$(
+            nix build ".#${{ matrix.image_target }}" \
+              --no-link \
+              --print-build-logs \
+              --print-out-paths
+          )"
+          if [[ -z "$image_output_path" || "$image_output_path" == *$'\n'* || "$image_output_path" == *$'\r'* ]]; then
+            echo "canonical image build must emit exactly one output path" >&2
+            exit 1
+          fi
+          case "$image_output_path" in
+            /nix/store/*)
+              store_name="${image_output_path#/nix/store/}"
+              ;;
+            *)
+              echo "canonical image output is not an absolute Nix store path" >&2
+              exit 1
+              ;;
+          esac
+          if [[ -z "$store_name" || "$store_name" == */* || "$store_name" == "." || "$store_name" == ".." ]]; then
+            echo "canonical image output is not one direct Nix store entry" >&2
+            exit 1
+          fi
+          test -e "$image_output_path"
+          printf 'image_output_path=%s\n' "$image_output_path" >> "$GITHUB_OUTPUT"
       - name: Report canonical image closure
-        run: nix path-info -Sh ".#${{ matrix.image_target }}"
+        env:
+          PVM_IMAGE_OUTPUT_PATH: ${{ steps.canonical_image.outputs.image_output_path }}
+        run: |
+          if [[ -z "$PVM_IMAGE_OUTPUT_PATH" || "$PVM_IMAGE_OUTPUT_PATH" == *$'\n'* || "$PVM_IMAGE_OUTPUT_PATH" == *$'\r'* ]]; then
+            echo "canonical image output path is missing or ambiguous" >&2
+            exit 1
+          fi
+          case "$PVM_IMAGE_OUTPUT_PATH" in
+            /nix/store/*)
+              store_name="${PVM_IMAGE_OUTPUT_PATH#/nix/store/}"
+              ;;
+            *)
+              echo "canonical image output is not an absolute Nix store path" >&2
+              exit 1
+              ;;
+          esac
+          if [[ -z "$store_name" || "$store_name" == */* || "$store_name" == "." || "$store_name" == ".." ]]; then
+            echo "canonical image output is not one direct Nix store entry" >&2
+            exit 1
+          fi
+          nix path-info -Sh "$PVM_IMAGE_OUTPUT_PATH"
       - name: Run image contract check
         if: matrix.contract_check != ''
         run: nix build ".#checks.x86_64-linux.${{ matrix.contract_check }}" --no-link --print-build-logs

@@ -28,6 +28,11 @@ PINNED_RELEASE_PUBLISH_ACTIONS = [
     "actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6",
 ]
 PINNED_RELEASE_VERIFY_ACTIONS = PINNED_RELEASE_PUBLISH_ACTIONS[:2]
+NON_IMAGE_NIX_TARGETS = [
+    ".#checks.x86_64-linux.runtime-fuzz",
+    ".#checks.x86_64-linux.host-module-contract",
+    ".#checks.x86_64-linux.static-binaries",
+]
 RELEASE_PUBLISH_PERMISSIONS = {
     "contents": "read",
     "packages": "write",
@@ -35,6 +40,49 @@ RELEASE_PUBLISH_PERMISSIONS = {
     "attestations": "write",
 }
 SLSA_PROVENANCE_V1 = "https://slsa.dev/provenance/v1"
+CANONICAL_IMAGE_BUILD_RUN = r'''image_output_path="$(
+  nix build ".#${{ matrix.image_target }}" \
+    --no-link \
+    --print-build-logs \
+    --print-out-paths
+)"
+if [[ -z "$image_output_path" || "$image_output_path" == *$'\n'* || "$image_output_path" == *$'\r'* ]]; then
+  echo "canonical image build must emit exactly one output path" >&2
+  exit 1
+fi
+case "$image_output_path" in
+  /nix/store/*)
+    store_name="${image_output_path#/nix/store/}"
+    ;;
+  *)
+    echo "canonical image output is not an absolute Nix store path" >&2
+    exit 1
+    ;;
+esac
+if [[ -z "$store_name" || "$store_name" == */* || "$store_name" == "." || "$store_name" == ".." ]]; then
+  echo "canonical image output is not one direct Nix store entry" >&2
+  exit 1
+fi
+test -e "$image_output_path"
+printf 'image_output_path=%s\n' "$image_output_path" >> "$GITHUB_OUTPUT"'''
+CANONICAL_IMAGE_CLOSURE_RUN = r'''if [[ -z "$PVM_IMAGE_OUTPUT_PATH" || "$PVM_IMAGE_OUTPUT_PATH" == *$'\n'* || "$PVM_IMAGE_OUTPUT_PATH" == *$'\r'* ]]; then
+  echo "canonical image output path is missing or ambiguous" >&2
+  exit 1
+fi
+case "$PVM_IMAGE_OUTPUT_PATH" in
+  /nix/store/*)
+    store_name="${PVM_IMAGE_OUTPUT_PATH#/nix/store/}"
+    ;;
+  *)
+    echo "canonical image output is not an absolute Nix store path" >&2
+    exit 1
+    ;;
+esac
+if [[ -z "$store_name" || "$store_name" == */* || "$store_name" == "." || "$store_name" == ".." ]]; then
+  echo "canonical image output is not one direct Nix store entry" >&2
+  exit 1
+fi
+nix path-info -Sh "$PVM_IMAGE_OUTPUT_PATH"'''
 IMAGE_MATRIX = {
     "workstation-basic": {
         "image_target": "image-workstation-basic",
@@ -290,6 +338,39 @@ def validate_workflow_text(source: str, name: str = "workflow") -> None:
             _validate_action(step, step_location)
 
 
+def validate_ci_workflow_text(source: str, name: str = "ci.yml") -> None:
+    """Validate the active source CI Nix gate composition."""
+    try:
+        document = yaml.load(source, Loader=yaml.BaseLoader)
+    except yaml.YAMLError as error:
+        raise PolicyError(f"{name}: invalid YAML: {error}") from error
+    document = _mapping(document, name)
+    jobs = _mapping(document.get("jobs"), f"{name}.jobs")
+    nix_job = _mapping(jobs.get("nix"), f"{name}.jobs.nix")
+    raw_steps = nix_job.get("steps")
+    if not isinstance(raw_steps, list):
+        raise PolicyError(f"{name}.jobs.nix.steps: expected a list")
+    gates: list[dict[str, Any]] = []
+    for index, raw_step in enumerate(raw_steps):
+        step = _mapping(raw_step, f"{name}.jobs.nix.steps[{index}]")
+        if step.get("name") == "Flake evaluation and non-image Nix gates":
+            gates.append(step)
+    if len(gates) != 1:
+        raise PolicyError(f"{name}: source Nix gates must have one reviewed step")
+    command = str(gates[0].get("run", ""))
+    if command.count("nix flake check") != 1 or "--no-build" not in command:
+        raise PolicyError(f"{name}: source Nix gates must evaluate the complete flake once")
+    if command.count("nix build") != 1:
+        raise PolicyError(f"{name}: non-image checks must use one combined nix build")
+    if "--no-link" not in command or "--print-build-logs" not in command:
+        raise PolicyError(f"{name}: combined non-image build must retain bounded build flags")
+    for target in NON_IMAGE_NIX_TARGETS:
+        if command.count(target) != 1:
+            raise PolicyError(
+                f"{name}: combined non-image build must contain exact target {target} once"
+            )
+
+
 def validate_image_workflow_text(source: str, name: str = "image-build.yml") -> None:
     """Validate the active REL-002 build-only image matrix."""
     try:
@@ -400,7 +481,32 @@ def validate_image_workflow_text(source: str, name: str = "image-build.yml") -> 
     if str(named_steps["Reclaim Nix outputs"].get("if")) != "always()":
         raise PolicyError(f"{name}: final Nix reclamation must run on every outcome")
 
-    build_run = str(named_steps["Build one canonical image"].get("run", ""))
+    build_step = named_steps["Build one canonical image"]
+    if (
+        set(build_step) != {"name", "id", "run"}
+        or build_step.get("id") != "canonical_image"
+        or str(build_step.get("run", "")).strip() != CANONICAL_IMAGE_BUILD_RUN
+    ):
+        raise PolicyError(
+            f"{name}: canonical image build step must emit and validate one reviewed Nix store path"
+        )
+    closure_step = named_steps["Report canonical image closure"]
+    if (
+        set(closure_step) != {"name", "env", "run"}
+        or _mapping(
+            closure_step.get("env"),
+            f"{name}.jobs.image.steps.Report canonical image closure.env",
+        )
+        != {
+            "PVM_IMAGE_OUTPUT_PATH": "${{ steps.canonical_image.outputs.image_output_path }}"
+        }
+        or str(closure_step.get("run", "")).strip() != CANONICAL_IMAGE_CLOSURE_RUN
+    ):
+        raise PolicyError(
+            f"{name}: closure report must consume only the validated canonical store path"
+        )
+
+    build_run = str(build_step.get("run", ""))
     primary_run = str(named_steps["Boot primary smoke test under TCG"].get("run", ""))
     secondary_run = str(named_steps["Boot secondary smoke test under TCG"].get("run", ""))
     for location, command in (
@@ -816,6 +922,8 @@ def validate_repository(root: Path) -> None:
         source = path.read_text()
         relative_name = str(path.relative_to(root))
         validate_workflow_text(source, relative_name)
+        if path.name == "ci.yml":
+            validate_ci_workflow_text(source, relative_name)
         if path.name == "image-build.yml":
             validate_image_workflow_text(source, relative_name)
         if path.name == "release.yml":

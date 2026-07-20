@@ -178,7 +178,7 @@
           "name": "One canonical image per fresh public runner",
           "given": "the active image-build matrix on a public repository",
           "when": "a canonical image input changes",
-          "then": "six independent ubuntu-24.04 jobs each build exactly one reviewed image output with serialized Nix limits"
+          "then": "six independent ubuntu-24.04 jobs each build exactly one reviewed image output with serialized Nix limits, validate one existing direct /nix/store output path and report that exact path's closure without reevaluating the flake target"
         },
         {
           "id": "CI-IMG-002",
