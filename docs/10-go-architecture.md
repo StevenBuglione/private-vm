@@ -29,8 +29,10 @@ remains responsible for its bounded, idempotent cleanup.
 typed semantic intent. Commands with selectors, paths, policies or destructive
 modes cannot dispatch an empty or arbitrary parameter map. Convenience aliases
 construct the same intent and command ID as their canonical workflow entry
-point. The default invoker fails closed with `NOT_IMPLEMENTED` until the owning
-backlog task installs a tested orchestrator implementation.
+point. The production invoker dispatches the documented session, workspace,
+VPN, torrent, scanner, and USB commands to typed daemon clients. The generic
+default/fallback invoker still fails closed with `NOT_IMPLEMENTED` when an
+embedding omits a required command provider.
 
 Torrent commands use the Unix daemon protocol in production. Input is read and
 destroyed by the CLI boundary, streamed in 16-KiB frames, and projected to an

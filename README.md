@@ -75,12 +75,14 @@ creating this package.
 
 This is not yet an operational security product. Configuration, diagnostics,
 the authenticated host daemon, volatile session records, typed QEMU/QMP
-lifecycle, ephemeral storage primitives, and the authenticated role-restricted
-guest channel are implemented and unit/integration tested. End-to-end role
-orchestration, VPN/torrent/scanner/USB workflows, remote publication,
-clean-distribution package tests, host installation and the complete acceptance
-runbook remain in progress.
-Unfinished security-sensitive commands intentionally fail as not implemented.
+lifecycle, ephemeral storage primitives, authenticated role-restricted guest
+channels, role orchestration, VPN/torrent/scanner workflows, and exact-identity
+USB claim/prepare/export are implemented and covered by source, unit, and
+integration tests. The live image/KVM, real-Proton, physical-USB, reboot,
+remote-publication, clean-distribution package, host-installation, and complete
+acceptance gates remain in progress. Intentional fail-closed gaps, including
+encrypted-bundle workspace export and automatic doctor repair, remain reported
+as unsupported rather than simulated as successful.
 
 ## License
 

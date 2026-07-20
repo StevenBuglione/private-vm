@@ -98,10 +98,11 @@ The daemon runtime directory is `root:<configured-group>` mode `0750`, its
 persistent state directory is mode `0700`, and the daemon creates
 `/run/private-vm/control.sock` as `root:<configured-group>` mode `0660`. The
 module installs the Polkit policy independently of a custom application-package
-override. Its sole action authorizes the implemented destructive USB prepare
-transition immediately before the exact validated device is erased. Ordinary
-session management remains governed by the daemon socket group and per-session
-owner checks.
+override. Its sole action is used only by the implemented destructive USB
+prepare transition, immediately before mutation. USB discovery, enrollment,
+claim, planning, release, and ordinary session management do not prompt; they
+remain governed by the daemon socket group, exact identity checks, and
+per-session owner checks.
 
 The service receives the configured group explicitly and has a pinned PATH for
 all read-only Doctor probes (`pkcheck`, QEMU, cryptsetup, nftables, iproute2,

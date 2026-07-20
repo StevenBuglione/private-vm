@@ -107,12 +107,12 @@ Every other unary method is rejected before its handler if its method/context
 contract is unknown or invalid. Streaming methods perform the corresponding
 context or first-frame validation in their bounded handlers.
 
-Polkit does not add an error code to this table yet. `ClaimUSB` is currently a
-non-destructive `NOT_IMPLEMENTED` stub and does not invoke `pkcheck`. The only
-permitted helper action is `org.private-vm.usb.prepare`, reserved for the
-implemented destructive prepare step immediately before mutation. Helper
-stdout/stderr is discarded and a future RPC boundary must map denial, timeout,
-or failure to a typed safe code rather than exposing raw `pkcheck` output.
+`ClaimUSB` is non-destructive and does not invoke `pkcheck`; missing claim
+integration returns `USB_INTEGRATION_UNAVAILABLE`. The only permitted helper
+action is `org.private-vm.usb.prepare`, used by the implemented destructive
+prepare step immediately before mutation. Helper stdout/stderr is discarded,
+and denial, timeout, or failure is mapped to a typed safe response without
+exposing raw `pkcheck` output.
 
 ### Daemon startup failure
 
