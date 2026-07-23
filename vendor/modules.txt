@@ -186,7 +186,7 @@ github.com/letsencrypt/boulder/goodkey
 github.com/letsencrypt/boulder/identifier
 github.com/letsencrypt/boulder/probs
 github.com/letsencrypt/boulder/revocation
-# github.com/mdlayher/socket v0.6.0
+# github.com/mdlayher/socket v0.6.1
 ## explicit; go 1.25.0
 github.com/mdlayher/socket
 # github.com/mdlayher/vsock v1.3.0
