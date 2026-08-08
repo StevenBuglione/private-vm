@@ -168,7 +168,7 @@ github.com/inconshreveable/mousetrap
 # github.com/jedisct1/go-minisign v0.0.0-20211028175153-1c139d1cc84b
 ## explicit; go 1.17
 github.com/jedisct1/go-minisign
-# github.com/klauspost/compress v1.19.0
+# github.com/klauspost/compress v1.19.2
 ## explicit; go 1.24
 github.com/klauspost/compress
 github.com/klauspost/compress/fse
