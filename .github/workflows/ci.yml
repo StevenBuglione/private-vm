@@ -57,7 +57,7 @@ jobs:
         with:
           persist-credentials: false
           fetch-depth: 0
-      - uses: DeterminateSystems/nix-installer-action@ef8a148080ab6020fd15196c2084a2eea5ff2d25 # v22
+      - uses: DeterminateSystems/nix-installer-action@3138316df39ed29be04236d7ffc686fa525866aa # v23
       - name: Flake evaluation and non-image Nix gates
         run: |
           nix flake check --no-build --print-build-logs
@@ -93,7 +93,7 @@ jobs:
         with:
           persist-credentials: false
           fetch-depth: 0
-      - uses: DeterminateSystems/nix-installer-action@ef8a148080ab6020fd15196c2084a2eea5ff2d25 # v22
+      - uses: DeterminateSystems/nix-installer-action@3138316df39ed29be04236d7ffc686fa525866aa # v23
       - name: Validate workflow security policy
         run: nix build .#checks.x86_64-linux.workflow-policy --print-build-logs
       - name: Reject shell product logic
